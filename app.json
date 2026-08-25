@@ -1,25 +1,47 @@
 {
   "expo": {
-    "name": "CyclicTriviaApp",
-    "slug": "CyclicTriviaApp",
+    "name": "Cyclic",
+    "slug": "cyclic-trivia",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "scheme": "cyclic",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#070B1F",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.cyclictrivia.app"
     },
     "android": {
+      "package": "com.cyclictrivia.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "monochromeImage": "./assets/android-icon-monochrome.png",
+        "backgroundColor": "#070B1F"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    }
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "./plugins/withDevHttps",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-logo.png",
+          "imageWidth": 240,
+          "resizeMode": "contain",
+          "backgroundColor": "#070B1F",
+          "dark": {
+            "image": "./assets/splash-logo.png",
+            "backgroundColor": "#070B1F"
+          }
+        }
+      ],
+      "expo-secure-store"
+    ]
   }
 }

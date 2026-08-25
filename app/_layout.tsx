@@ -1,0 +1,36 @@
+import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+import { ConfirmProvider } from '../src/components/ConfirmDialog';
+import { I18nProvider } from '../src/i18n/I18nProvider';
+import { LicenseProvider } from '../src/session/LicenseSession';
+import { bg } from '../src/theme/colors';
+
+export default function RootLayout() {
+  return (
+    <SafeAreaProvider>
+      <StatusBar style="light" />
+      {/* Bọc ngoài Stack để mọi màn đọc được phiên license mà không phải
+          truyền qua route params.
+
+          I18nProvider nằm TRONG LicenseProvider vì ngôn ngữ mặc định suy ra từ
+          sponsor của license - đảo thứ tự là useLicense() sẽ ném lỗi. */}
+      <LicenseProvider>
+        <I18nProvider>
+          {/* ConfirmProvider nằm TRONG I18nProvider để chỗ gọi truyền được câu
+              chữ đã dịch, và bọc ngoài Stack để hộp thoại phủ lên mọi màn. */}
+          <ConfirmProvider>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: bg.base },
+                animation: 'fade',
+              }}
+            />
+          </ConfirmProvider>
+        </I18nProvider>
+      </LicenseProvider>
+    </SafeAreaProvider>
+  );
+}

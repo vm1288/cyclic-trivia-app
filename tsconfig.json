@@ -2,5 +2,9 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true
-  }
+  },
+  // designs/ chứa bản thiết kế tham chiếu do Claude Designs sinh ra, không phải
+  // code chạy thật (nó import ảnh theo đường dẫn khác và dùng kiểu JSX cũ).
+  // Giữ lại để đối chiếu, nhưng không đưa vào typecheck.
+  "exclude": ["node_modules", "designs"]
 }
