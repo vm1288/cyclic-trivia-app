@@ -47,8 +47,29 @@ export async function downloadSponsorLogo(url: string): Promise<string | null> {
 }
 
 /**
- * Xoá logo đã tải. Gọi khi bỏ license khỏi máy, để lần đăng ký sau bằng
- * license của sponsor khác không còn dấu vết thương hiệu cũ.
+ * Xoá logo của MỘT license khi gỡ nó khỏi máy.
+ *
+ * CHỖ DỄ SAI: hai license cùng một sponsor dùng CHUNG một file (tên file lấy
+ * từ URL trên server). Xoá vô điều kiện sẽ làm license còn lại mất logo. Vì
+ * vậy chỗ gọi phải truyền vào những uri vẫn đang được dùng để giữ lại.
+ */
+export async function deleteSponsorLogo(
+  uri: string | null | undefined,
+  stillInUse: (string | null | undefined)[],
+): Promise<void> {
+  if (!uri) return;
+  if (stillInUse.some((other) => other === uri)) return;
+
+  try {
+    const file = new File(uri);
+    if (file.exists) file.delete();
+  } catch {
+    /* không xoá được thì cũng không có gì để làm thêm */
+  }
+}
+
+/**
+ * Xoá toàn bộ logo đã tải. Chỉ dùng khi gỡ SẠCH mọi license khỏi máy.
  */
 export async function clearSponsorLogos(): Promise<void> {
   try {

@@ -73,6 +73,7 @@ export default function RegisterScreen() {
       licenseCode: trimmed,
       activated: result.isActivated,
       languageCode: result.languageCode ?? null,
+      sponsorName: result.sponsorName ?? null,
       sponsorLogoUri,
     });
 

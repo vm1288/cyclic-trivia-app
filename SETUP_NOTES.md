@@ -240,3 +240,46 @@ Git Bash biến `/sdcard/...` thành đường dẫn Windows. Dùng PowerShell, 
 adb -s emulator-5554 shell screencap -p /sdcard/s.png
 adb -s emulator-5554 pull /sdcard/s.png .\s.png
 ```
+
+---
+
+## Metro kẹt module graph sau khi sửa nhiều file
+
+Triệu chứng: `ReferenceError: Property 'X' doesn't exist` dù code hoàn toàn đúng, và **force-stop app KHÔNG chữa được**.
+
+Nguyên nhân: sửa chỗ *dùng* một symbol và chỗ *import* ở **hai lần edit khác nhau**. Metro áp bản cập nhật giữa chừng, vỡ, rồi giữ nguyên module graph hỏng đó. Error boundary của app cũng giữ lại màn hình trắng.
+
+Cách chữa: **khởi động lại Metro**, không phải khởi động lại app.
+
+```bash
+netstat -ano | grep ':8081.*LISTENING'   # lay PID roi kill
+npx expo start --port 8081
+```
+
+Đã dính 3 lần trong một ngày. Sau khi sửa nhiều file cùng lúc, cứ khởi động lại Metro cho chắc.
+
+---
+
+## Cài package mới thì phải khởi động lại Metro
+
+`npx expo install <gì đó>` xong mà Metro vẫn đang chạy thì nó không thấy package mới → `Unable to resolve`. Khởi động lại Metro (thêm `--clear` nếu vẫn không thấy).
+
+Package **thuần JavaScript** (`react-native-qrcode-svg`, `@microsoft/signalr`) chỉ cần vậy. Package **native** (`expo-secure-store`, `expo-file-system`) thì phải `prebuild` + build lại APK — dùng `scripts/rebuild-native.ps1`.
+
+---
+
+## Chồng hai Modal trên Android
+
+Thứ tự lớp **không đoán trước được** — hộp thoại mở sau có thể nằm *dưới* cái mở trước và không bấm được.
+
+Nếu cần hỏi xác nhận từ trong một sheet: **đóng sheet trước**, hỏi, rồi mở lại sheet nếu người dùng huỷ. Xem `app/index.tsx`, chỗ `onRemove` của `SwitchGameSheet`.
+
+Cũng nhớ: `Modal` nằm **ngoài** `SafeAreaView` của màn hình, nên phải tự chừa `useSafeAreaInsets().bottom` — thiếu thì nút cuối sheet bị thanh điều hướng che.
+
+---
+
+## Chữ nghiêng bị cắt cụt trên Android
+
+`<Text>` chữ nghiêng nằm trong `View` có `alignItems: 'center'` sẽ co lại vừa nội dung, mà Android **đo hụt bề rộng** của nét xiên rồi cắt phần thừa. Triệu chứng: "NEW GAME" hiện thành "NEW".
+
+Cách chữa: cho Text chiếm trọn bề ngang — `alignSelf: 'stretch'` + `textAlign: 'center'`. Cũng bỏ `letterSpacing` âm, nó cộng thêm vào sai số.

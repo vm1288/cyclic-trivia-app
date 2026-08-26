@@ -41,6 +41,8 @@ export type ActivationCheckResult = {
    * Có thể null khi sponsor chưa có logo.
    */
   sponsorLogoUrl?: string | null;
+  /** Tên sponsor (CricTriv, FootieTriv...) - dán nhãn trong danh sách license. */
+  sponsorName?: string | null;
 };
 
 export function checkActivationCode(

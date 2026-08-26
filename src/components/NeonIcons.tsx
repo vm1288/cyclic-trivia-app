@@ -98,4 +98,13 @@ export const TrophyIcon = ({ color, size = 26 }: IconProps) => (
   </Svg>
 );
 
+/** Gỡ license khỏi máy. */
+export const TrashIcon = ({ color, size = 20 }: IconProps) => (
+  <Svg {...base(size)} stroke={color}>
+    <Path d="M4 6.5h16M9.5 6.5V5a1.5 1.5 0 0 1 1.5-1.5h2A1.5 1.5 0 0 1 14.5 5v1.5" />
+    <Path d="M6.5 6.5 7.4 19a1.5 1.5 0 0 0 1.5 1.4h6.2a1.5 1.5 0 0 0 1.5-1.4l.9-12.5" />
+    <Path d="M10.4 10v6.5M13.6 10v6.5" />
+  </Svg>
+);
+
 export type NeonIcon = (props: IconProps) => React.ReactElement;

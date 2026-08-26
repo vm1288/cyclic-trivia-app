@@ -190,6 +190,21 @@ export type GameSnapshot = {
     DurationMinutes: number;
     IsGameOver: boolean;
   };
+  /**
+   * Server tạo sẵn ĐỦ số ghế ngay lúc tạo ván, với nickname mặc định
+   * ("1st player"...). Ghế nào có người nhận là ghế có `IsSetupNickName: true`
+   * - đừng đếm theo độ dài mảng, nó luôn bằng NumberOfPlayers.
+   */
+  Players: {
+    Id: string;
+    NickName: string;
+    Ordering: number;
+    CharacterId: string;
+    PlayerColor: string;
+    IsConnected: boolean;
+    IsSetupNickName: boolean;
+    IsHost: boolean;
+  }[];
 };
 
 export async function getGameState(gameId: string): Promise<ApiResult<GameSnapshot>> {
@@ -221,6 +236,48 @@ export async function getGameState(gameId: string): Promise<ApiResult<GameSnapsh
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Mã phòng + link QR của một ván.
+ *
+ * Ván tạo từ app KHÔNG tự có mã phòng: mã vốn chỉ được cấp trong gói SignalR
+ * `JoinSession` mà trình duyệt Main Device gửi lên. Endpoint này làm đúng phần
+ * việc đó cho app.
+ *
+ * Idempotent - gọi lại trả về đúng mã cũ, nên mở lại lobby vẫn hiện mã mà
+ * người chơi đã chép ra giấy.
+ */
+export type RoomCode = {
+  RoomCode: string;
+  SessionId: string;
+  /** Gốc URL của server, để ghép link vào ghế. Có dấu / ở cuối. */
+  SiteUrl: string;
+  /**
+   * KHÔNG dùng làm QR cho ván tạo từ app - đây là trang "người quét đầu tiên
+   * dựng ván" của luồng web cũ, nó sẽ tạo THÊM một ván nữa. Xem `seatJoinUrl`.
+   */
+  JoinUrl: string;
+};
+
+/**
+ * MỘT link dùng chung cho mọi người chơi: server tự phát một ghế trống rồi
+ * chuyển tiếp sang `/player/start/{playerId}`.
+ *
+ * Trước đây phải mỗi ghế một link, vì `/player/start/{playerId}` mang playerId
+ * ngay trong URL. Endpoint `/player/join/{sessionId}` sinh ra để có chỗ phát ghế.
+ *
+ * Là link HTTP chứ KHÔNG phải deep link `cyclic://`: người chơi quét bằng camera
+ * điện thoại và chơi trên trình duyệt, phần lớn không cài app.
+ *
+ * Quét lại từ cùng một trình duyệt sẽ về đúng ghế cũ (server nhớ bằng cookie),
+ * không chiếm thêm ghế.
+ */
+export const roomJoinUrl = (siteUrl: string, sessionId: string) =>
+  `${siteUrl}player/join/${sessionId}`;
+
+export function ensureRoomCode(gameId: string, token: string): Promise<ApiResult<RoomCode>> {
+  return postForm<RoomCode>(`/public/game/${gameId}/room-code`, {}, token);
 }
 
 /** GUID nằm ở CUỐI chuỗi, sau tiền tố. */

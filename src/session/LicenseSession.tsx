@@ -1,18 +1,23 @@
 import * as SecureStore from 'expo-secure-store';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
-import { clearSponsorLogos } from './sponsorLogo';
+import { clearSponsorLogos, deleteSponsorLogo } from './sponsorLogo';
 
 /**
- * Phiên license của MÁY NÀY.
+ * Các license đã kích hoạt trên MÁY NÀY, và license đang dùng.
+ *
+ * Một máy giữ được NHIỀU license vì mỗi lần kích hoạt tạo một `Host` riêng ở
+ * server, có token và deviceId riêng, và `MaxDevices` đếm theo từng license -
+ * nên hai license không đụng nhau. Đổi license = đổi sản phẩm: logo, ngôn ngữ
+ * mặc định, bàn cờ và bộ câu hỏi đều đổi theo.
  *
  * Lưu trong SecureStore (Keystore của Android) chứ không phải AsyncStorage: ở
  * đây có JWT và mã license đã mua - AsyncStorage là file thường, máy đã root
  * hoặc bản backup đọc được hết.
  *
- * Gói tất cả vào MỘT khoá dưới dạng JSON thay vì mỗi trường một khoá: các
- * trường này chỉ có ý nghĩa khi đi cùng nhau (token gắn với deviceId gắn với
- * hostId), tách ra thì có lúc ghi được nửa chừng rồi hỏng, để lại phiên nửa vời.
+ * Gói tất cả vào MỘT khoá dưới dạng JSON thay vì mỗi license một khoá: danh
+ * sách và con trỏ "đang dùng cái nào" phải luôn khớp nhau, tách ra thì có lúc
+ * ghi được nửa chừng rồi hỏng.
  */
 
 const KEY = 'cyclic.license.session';
@@ -21,6 +26,7 @@ export type LicenseSession = {
   token: string;
   /** Do server sinh - xem ghi chú trong api/activation.ts */
   deviceId: string;
+  /** Khoá chính để phân biệt các license trên máy: mỗi license một host. */
   hostId: string;
   licenseCode: string;
   /**
@@ -31,31 +37,30 @@ export type LicenseSession = {
   /**
    * Ngôn ngữ chính của sponsor gắn với license (vd "en-GB"), do server trả về.
    * Đây là ngôn ngữ MẶC ĐỊNH của app - xem I18nProvider.
-   *
-   * Có thể null: license cũ lưu trước khi có trường này, hoặc server không tra
-   * được sponsor. Lúc đó rơi về ngôn ngữ của máy.
    */
   languageCode?: string | null;
+  /** Tên sponsor (CricTriv, FootieTriv...) để dán nhãn trong danh sách. */
+  sponsorName?: string | null;
   /**
-   * Đường dẫn file logo sponsor ĐÃ TẢI VỀ MÁY (file:// ...), không phải URL trên
-   * server. Xem `sponsorLogo.ts` để biết vì sao tải về.
-   *
-   * null = chưa tải được hoặc sponsor không có logo → dùng logo Cyclic mặc định.
+   * Đường dẫn file logo sponsor ĐÃ TẢI VỀ MÁY (file:// ...), không phải URL
+   * trên server. Xem `sponsorLogo.ts` để biết vì sao tải về.
    */
   sponsorLogoUri?: string | null;
   /**
-   * Ván mà máy này vừa tạo và chưa rời khỏi.
+   * Ván mà license NÀY vừa tạo và chưa rời khỏi.
    *
-   * VÌ SAO LƯU Ở CLIENT: server có `Hosts.CurrentGameSessionId` nhưng nó **chỉ
-   * được ghi, không bao giờ được xoá** - hỏi server thì ván đã kết thúc từ lâu
-   * vẫn trả về như đang mở. Nên client giữ id, rồi mỗi lần mở màn hình chính
-   * hỏi `/api/game/{id}/state` để xác nhận ván còn sống; hết ván thì xoá đi.
+   * Phải nằm trong từng license, không phải một trường dùng chung: đổi sang
+   * license khác mà vẫn thấy RESUME GAME của ván thuộc license cũ thì bấm vào
+   * sẽ mở nhầm phòng.
    *
-   * Nằm chung khoá với phần license vì cùng là trạng thái của MÁY này, và ghi
-   * chung một lần thì không có cảnh ghi được nửa chừng.
+   * Server có `Hosts.CurrentGameSessionId` nhưng nó **chỉ được ghi, không bao
+   * giờ được xoá**, nên đây chỉ là con trỏ; trạng thái thật hỏi
+   * `/public/host/current-game`.
    */
   currentGameId?: string | null;
 };
+
+type Stored = { sessions: LicenseSession[]; activeHostId: string | null };
 
 export type LicenseState =
   /** Chưa đọc xong SecureStore - đừng vẽ gì phụ thuộc vào license lúc này */
@@ -68,83 +73,185 @@ export type LicenseState =
   | { status: 'active'; session: LicenseSession };
 
 type LicenseContextValue = LicenseState & {
+  /** Mọi license trên máy, kể cả cái chưa kích hoạt xong. */
+  all: LicenseSession[];
+  /** Thêm mới hoặc cập nhật một license, rồi chuyển sang dùng nó. */
   save: (session: LicenseSession) => Promise<void>;
+  /** Đổi sang license khác theo hostId. */
+  switchTo: (hostId: string) => Promise<void>;
+  /** Gỡ một license khỏi máy. */
+  remove: (hostId: string) => Promise<void>;
   markActivated: () => Promise<void>;
-  clear: () => Promise<void>;
-  /** Ghi/xoá ván đang mở. Truyền null khi ván kết thúc hoặc bị bỏ. */
+  /** Ghi/xoá ván đang mở CỦA LICENSE ĐANG DÙNG. */
   setCurrentGame: (gameId: string | null) => void;
+  /** Xoá sạch mọi license khỏi máy. */
+  clear: () => Promise<void>;
 };
 
 const LicenseContext = createContext<LicenseContextValue | null>(null);
 
-function toState(session: LicenseSession | null): LicenseState {
-  if (!session) return { status: 'none' };
-  return session.activated ? { status: 'active', session } : { status: 'pending', session };
+/**
+ * Đọc dữ liệu đã lưu, chấp nhận cả DẠNG CŨ (một license duy nhất).
+ *
+ * Bản trước lưu thẳng một object `{token, deviceId, ...}`. Máy đã cài bản đó
+ * mà nâng cấp sẽ đọc phải dạng cũ - không chuyển đổi thì người dùng mất
+ * license và phải nhập lại mã.
+ */
+function parseStored(raw: string | null): Stored {
+  const empty: Stored = { sessions: [], activeHostId: null };
+  if (!raw) return empty;
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<Stored> & Partial<LicenseSession>;
+
+    if (Array.isArray(parsed.sessions)) {
+      const sessions = parsed.sessions.filter((s) => s?.token && s?.hostId);
+      const activeHostId =
+        parsed.activeHostId && sessions.some((s) => s.hostId === parsed.activeHostId)
+          ? parsed.activeHostId
+          : (sessions[0]?.hostId ?? null);
+      return { sessions, activeHostId };
+    }
+
+    // Dạng cũ: một license nằm thẳng ở gốc.
+    if (parsed.token && parsed.deviceId) {
+      const legacy = parsed as LicenseSession;
+      // Bản cũ chưa chắc có hostId; thiếu thì lấy deviceId làm khoá thay thế
+      // để không mất license.
+      const hostId = legacy.hostId || legacy.deviceId;
+      return { sessions: [{ ...legacy, hostId }], activeHostId: hostId };
+    }
+  } catch {
+    /* dữ liệu hỏng thì coi như chưa có, đừng để app chết ở màn đầu tiên */
+  }
+
+  return empty;
+}
+
+function toState(store: Stored): LicenseState {
+  const active = store.sessions.find((s) => s.hostId === store.activeHostId);
+  if (!active) return { status: 'none' };
+  return active.activated ? { status: 'active', session: active } : { status: 'pending', session: active };
 }
 
 export function LicenseProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<LicenseState>({ status: 'loading' });
+  const [store, setStore] = useState<Stored | null>(null);
 
   useEffect(() => {
     let alive = true;
-
     (async () => {
       try {
         const raw = await SecureStore.getItemAsync(KEY);
-        const parsed = raw ? (JSON.parse(raw) as LicenseSession) : null;
-        // Dữ liệu hỏng (đổi cấu trúc, ghi dở) thì coi như chưa có, đừng để app
-        // chết ở màn hình đầu tiên.
-        const valid = parsed && parsed.token && parsed.deviceId ? parsed : null;
-        if (alive) setState(toState(valid));
+        if (alive) setStore(parseStored(raw));
       } catch {
-        if (alive) setState({ status: 'none' });
+        if (alive) setStore({ sessions: [], activeHostId: null });
       }
     })();
-
     return () => {
       alive = false;
     };
   }, []);
 
-  const save = useCallback(async (session: LicenseSession) => {
-    await SecureStore.setItemAsync(KEY, JSON.stringify(session));
-    setState(toState(session));
+  const persist = useCallback((next: Stored) => {
+    setStore(next);
+    // Ghi xuống đĩa là việc phụ, không chặn UI; state đã đúng ngay lập tức.
+    void SecureStore.setItemAsync(KEY, JSON.stringify(next));
   }, []);
 
+  const save = useCallback(
+    async (session: LicenseSession) => {
+      const current = store ?? { sessions: [], activeHostId: null };
+      // Kích hoạt lại cùng một license thì THAY THẾ chứ không thêm bản trùng.
+      const others = current.sessions.filter((s) => s.hostId !== session.hostId);
+      persist({ sessions: [...others, session], activeHostId: session.hostId });
+    },
+    [store, persist],
+  );
+
+  const switchTo = useCallback(
+    async (hostId: string) => {
+      if (!store || !store.sessions.some((s) => s.hostId === hostId)) return;
+      persist({ ...store, activeHostId: hostId });
+    },
+    [store, persist],
+  );
+
+  const remove = useCallback(
+    async (hostId: string) => {
+      if (!store) return;
+
+      const target = store.sessions.find((s) => s.hostId === hostId);
+      if (!target) return;
+
+      const rest = store.sessions.filter((s) => s.hostId !== hostId);
+
+      /*
+       * Gỡ license đang dùng thì phải chọn cái khác thay, không để con trỏ trỏ
+       * vào chỗ trống - lúc đó `toState` trả 'none' và app tưởng máy chưa đăng
+       * ký gì, dù vẫn còn license khác.
+       */
+      const activeHostId =
+        store.activeHostId === hostId ? (rest[0]?.hostId ?? null) : store.activeHostId;
+
+      persist({ sessions: rest, activeHostId });
+
+      // Xoá file logo, nhưng chỉ khi không license nào còn dùng nó: hai license
+      // cùng sponsor dùng chung một file.
+      await deleteSponsorLogo(
+        target.sponsorLogoUri,
+        rest.map((s) => s.sponsorLogoUri),
+      );
+    },
+    [store, persist],
+  );
+
   const markActivated = useCallback(async () => {
-    setState((current) => {
-      if (current.status !== 'pending') return current;
-      const next = { ...current.session, activated: true };
-      // Ghi xuống đĩa là việc phụ, không chặn UI; state đã đúng ngay lập tức.
-      void SecureStore.setItemAsync(KEY, JSON.stringify(next));
-      return { status: 'active', session: next };
+    if (!store) return;
+    persist({
+      ...store,
+      sessions: store.sessions.map((s) =>
+        s.hostId === store.activeHostId ? { ...s, activated: true } : s,
+      ),
     });
-  }, []);
+  }, [store, persist]);
+
+  const setCurrentGame = useCallback(
+    (gameId: string | null) => {
+      if (!store) return;
+      const active = store.sessions.find((s) => s.hostId === store.activeHostId);
+      if (!active || active.currentGameId === gameId) return;
+
+      persist({
+        ...store,
+        sessions: store.sessions.map((s) =>
+          s.hostId === store.activeHostId ? { ...s, currentGameId: gameId } : s,
+        ),
+      });
+    },
+    [store, persist],
+  );
 
   const clear = useCallback(async () => {
     await SecureStore.deleteItemAsync(KEY);
     // Xoá luôn logo đã tải: license mới có thể thuộc sponsor khác, để lại logo
     // cũ thì màn hình chính hiện sai thương hiệu.
     await clearSponsorLogos();
-    setState({ status: 'none' });
+    setStore({ sessions: [], activeHostId: null });
   }, []);
 
-  const setCurrentGame = useCallback((gameId: string | null) => {
-    setState((current) => {
-      if (current.status !== 'active' && current.status !== 'pending') return current;
-      if (current.session.currentGameId === gameId) return current;
-
-      const next = { ...current.session, currentGameId: gameId };
-      // Ghi xuống đĩa là việc phụ, không chặn UI.
-      void SecureStore.setItemAsync(KEY, JSON.stringify(next));
-      return { ...current, session: next };
-    });
-  }, []);
-
-  const value = useMemo<LicenseContextValue>(
-    () => ({ ...state, save, markActivated, clear, setCurrentGame }),
-    [state, save, markActivated, clear, setCurrentGame],
-  );
+  const value = useMemo<LicenseContextValue>(() => {
+    const state: LicenseState = store === null ? { status: 'loading' } : toState(store);
+    return {
+      ...state,
+      all: store?.sessions ?? [],
+      save,
+      switchTo,
+      remove,
+      markActivated,
+      setCurrentGame,
+      clear,
+    };
+  }, [store, save, switchTo, remove, markActivated, setCurrentGame, clear]);
 
   return <LicenseContext.Provider value={value}>{children}</LicenseContext.Provider>;
 }

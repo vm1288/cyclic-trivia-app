@@ -30,6 +30,7 @@ import {
   NewGameIcon,
 } from '../src/components/NeonIcons';
 import { StageBackground } from '../src/components/StageBackground';
+import { SwitchGameSheet } from '../src/components/SwitchGameSheet';
 import { useT } from '../src/i18n/I18nProvider';
 import { useLicense } from '../src/session/LicenseSession';
 import { neon, tagline, text } from '../src/theme/colors';
@@ -82,6 +83,7 @@ export default function HomeScreen() {
 
   type OpenGame = { id: string; players: number; minutes: number; joined: number };
   const [openGame, setOpenGame] = useState<OpenGame | null>(null);
+  const [switchOpen, setSwitchOpen] = useState(false);
 
   /**
    * Hỏi SERVER xem có ván nào đang mở không - server là nguồn sự thật, vì id
@@ -271,11 +273,11 @@ export default function HomeScreen() {
             ) : null}
 
             {/*
-              Vạch ngăn giữa nhóm nút VỀ VÁN CHƠI (tạo/tiếp tục/bỏ ván) và các
-              mục còn lại. Khi có hai nút cùng nói về ván, chúng dễ bị đọc lẫn
-              vào JOIN A GAME ngay bên dưới.
+              Vạch ngăn CHỈ xuất hiện khi nhóm trên có HAI nút (RESUME GAME +
+              tạo ván khác). Lúc chỉ có một nút thì không có nhóm nào để tách,
+              vạch trở thành đường kẻ trang trí vô nghĩa giữa các nút cùng cấp.
             */}
-            <GlowDivider style={styles.groupDivider} />
+            {openGame ? <GlowDivider style={styles.groupDivider} /> : null}
 
             {MENU.map((item) => (
               <NeonButton
@@ -286,9 +288,76 @@ export default function HomeScreen() {
                 onPress={() => router.push(item.href)}
               />
             ))}
+
+            {/*
+              Chỉ hiện khi máy đã có license - chưa đăng ký thì chưa có game
+              nào để đổi, và nút REGISTER GAME ở trên đã là đường vào rồi.
+
+              Nhãn đổi theo số license: mới có một cái thì "Switch" là sai, chưa
+              có gì để chuyển sang.
+            */}
+            {activated ? (
+              <Pressable
+                onPress={() => setSwitchOpen(true)}
+                accessibilityRole="button"
+                hitSlop={10}
+                style={styles.switchLink}
+              >
+                <Text style={styles.switchText}>
+                  {license.all.length > 1 ? t('home.switchGame') : t('home.addGame')}
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         </ScrollView>
       </SafeAreaView>
+
+      <SwitchGameSheet
+        visible={switchOpen}
+        sessions={license.all}
+        activeHostId={activated ? license.session.hostId : null}
+        onClose={() => setSwitchOpen(false)}
+        onSelect={async (hostId) => {
+          setSwitchOpen(false);
+          await license.switchTo(hostId);
+        }}
+        onRemove={async (hostId) => {
+          const target = license.all.find((s) => s.hostId === hostId);
+          if (!target) return;
+
+          /*
+           * Đóng sheet TRƯỚC khi hỏi xác nhận: cả hai đều là Modal, chồng hai
+           * Modal lên nhau trên Android cho thứ tự lớp không đoán trước được -
+           * hộp xác nhận có thể nằm dưới sheet và không bấm được.
+           */
+          setSwitchOpen(false);
+
+          const ok = await confirm({
+            title: t('switch.removeTitle', {
+              name: target.sponsorName || t('switch.unnamed', { code: target.licenseCode }),
+            }),
+            message: t('switch.removeBody'),
+            cancelLabel: t('common.cancel').toUpperCase(),
+            confirmLabel: t('switch.removeConfirm').toUpperCase(),
+            destructive: true,
+          });
+
+          if (!ok) {
+            // Huỷ thì trả người dùng về đúng chỗ họ đang đứng.
+            setSwitchOpen(true);
+            return;
+          }
+
+          await license.remove(hostId);
+          // Còn license khác thì mở lại sheet để thấy kết quả; hết sạch thì ở
+          // lại màn hình chính, lúc đó nút đã tự về REGISTER GAME.
+          if (license.all.length > 1) setSwitchOpen(true);
+        }}
+        onAdd={() => {
+          setSwitchOpen(false);
+          router.push('/register');
+        }}
+      />
     </View>
   );
 }
@@ -350,4 +419,15 @@ const styles = StyleSheet.create({
   // Quầng loang của GlowDivider cao gấp 12 lần sợi chính và tràn ra ngoài
   // khung, nên chừa khoảng dọc rộng hơn một vạch phẳng cùng vai trò.
   groupDivider: { marginVertical: 10 },
+
+  // Link chữ, không phải nút: đây là hành động hiếm và không nên tranh chỗ với
+  // bốn nút neon ngay trên nó.
+  switchLink: { alignSelf: 'center', marginTop: 6, paddingVertical: 6 },
+  switchText: {
+    color: 'rgba(198,212,240,0.85)',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textDecorationLine: 'underline',
+  },
 });
