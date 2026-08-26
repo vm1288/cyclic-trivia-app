@@ -57,17 +57,62 @@ Trên máy thật thì dùng `localhost`, **không** phải `10.0.2.2` - xem nga
 
 ### Nối app với server CyclicTrivia lúc dev
 
-Server chạy ở `https://localhost:7025` (profile `https` trong `CyclicTrivia/Properties/launchSettings.json`, mở cả 7025 HTTPS và 5276 HTTP). Địa chỉ nằm ở [src/api/config.ts](src/api/config.ts).
+**Dev dùng HTTP cổng 5276, KHÔNG dùng HTTPS.** Địa chỉ là một hằng số trong [src/api/config.ts](src/api/config.ts).
 
-Server **chỉ bind vào `127.0.0.1`**, không phải `0.0.0.0` — nên trỏ app vào IP LAN sẽ không tới được. Bắt buộc forward qua cáp:
+**Mọi thiết bị đều dùng `http://localhost:5276`** — máy thật lẫn emulator, vì tất cả đi qua `adb reverse`. Không có nhánh riêng cho emulator, và app KHÔNG tự dò host (xem ghi chú trong `config.ts`: `hostUri` và `scriptURL` đều `undefined` trong dev-client này).
 
 ```bash
-adb -s R5GL607M1TW reverse tcp:7025 tcp:7025
+adb -s <serial> reverse tcp:5276 tcp:5276   # server
+adb -s <serial> reverse tcp:8081 tcp:8081   # Metro
 ```
 
-> Quên lệnh này thì app báo **"Cannot reach the server"**. Đây là thứ dễ quên nhất mỗi khi cắm lại máy hoặc restart adb — `adb reverse --list` để kiểm tra.
+> Quên `adb reverse` thì app báo **"Cannot reach the server"**. Dễ quên nhất mỗi khi cắm lại máy hoặc restart adb — `adb reverse --list` để kiểm tra.
 
-**Vì sao HTTPS chạy được dù chứng chỉ là self-signed**
+#### Chạy BA VAI cùng lúc (1 chủ phòng + 2 khách)
+
+Chủ phòng trên máy thật, hai khách trên hai emulator. Server chạy profile `https` bình thường — không cần profile riêng.
+
+AVD thứ hai (`CyclicPhone2`) tạo bằng cách **nhân bản** `CyclicPhone`:
+
+```bash
+# copy ca thu muc .avd va file .ini trong %USERPROFILE%\.androidvd,
+# roi sua path trong CyclicPhone2.ini va config.ini cho khop ten moi
+emulator -avd CyclicPhone2 -gpu host -memory 4096 -no-snapshot -no-boot-anim -port 5556
+```
+
+> ⚠️ **Không chạy được hai instance của CÙNG một AVD** trừ khi **cả hai** cùng có cờ `-read-only`. Bản không read-only giữ khoá độc quyền và bản thứ hai sẽ báo *"Another emulator instance is running"*. Nhân bản AVD gọn hơn, vì `-read-only` không giữ lại app đã cài.
+>
+> ⚠️ `avdmanager create avd -d pixel_5` **hỏng** trên máy này (`Could not load devices from ...devices.xml`). Nhân bản thư mục là đường vòng đã chạy được.
+
+Sau khi boot, mỗi emulator cần cài APK, đặt `adb reverse`, rồi mở dev-client:
+
+```bash
+adb -s emulator-5556 install -r android/app/build/outputs/apk/debug/app-debug.apk
+adb -s emulator-5556 reverse tcp:5276 tcp:5276
+adb -s emulator-5556 reverse tcp:8081 tcp:8081
+```
+
+#### ⚠️ Vì sao bỏ HTTPS lúc dev — và cái bẫy 401 đi kèm
+
+HTTPS *có* chạy được (mọi máy đi qua `adb reverse` nên tên `localhost` vẫn khớp SAN của chứng chỉ). Bỏ nó đi là để **rút một tầng phải bảo trì**: chứng chỉ hết hạn thì phải xuất lại, prebuild lại, build lại APK.
+
+Nhưng chuyển sang HTTP làm lộ ra một lỗi khác, **rất khó lần**:
+
+```
+request HTTP kèm Authorization: Bearer ...
+  -> app.UseHttpsRedirection() tra ve 307 sang https://localhost:7025
+  -> client di theo redirect, nhung DOI ORIGIN (khac scheme + khac cong)
+     nen no BO header Authorization (dung chuan, HttpClient lan fetch deu vay)
+  -> server nhan request khong co token -> 401
+```
+
+Triệu chứng đánh lừa: endpoint **ẩn danh** (`/public/get-config/`, `/api/room/{code}`) chạy bình thường, còn endpoint cần token thì 401 **với một token hoàn toàn hợp lệ** — rất dễ đi tìm nhầm sang phía token/middleware.
+
+Đã sửa: `Program.cs` chỉ gọi `UseHttpsRedirection()` khi **không** phải Development. Production không đổi.
+
+**Chứng chỉ dev giờ không còn bắt buộc** để app gọi được server. [plugins/withDevHttps.js](plugins/withDevHttps.js) giữ lại vẫn có ích: nó bật `cleartextTrafficPermitted="true"` cho bản debug (thứ khiến HTTP chạy được mà **không phải build lại APK**), và vẫn cho phép quay lại HTTPS nếu cần.
+
+**Vì sao HTTPS chạy được dù chứng chỉ là self-signed** *(vẫn đúng nếu bạn quay lại dùng HTTPS)*
 
 Chứng chỉ do `dotnet dev-certs` sinh ra tự ký, Android từ chối theo mặc định — và lỗi duy nhất app thấy được là "Network request failed", không hề nhắc tới TLS.
 
@@ -87,7 +132,11 @@ rồi prebuild + build lại. Plugin là config plugin chứ không phải file 
 
 ---
 
-**`adb reverse` KHÔNG hoạt động trên emulator này** (nhưng chạy tốt trên máy thật qua USB). Đã thử và xác minh: `adb reverse tcp:8081 tcp:8081` chạy thành công, `adb reverse --list` liệt kê đúng mapping, nhưng gọi vào `127.0.0.1:8081` từ máy ảo **không trả về gì**. Trong khi `10.0.2.2:8081` trả `HTTP/1.1 200 OK`. → Luôn dùng `10.0.2.2`, đừng mất thời gian với `adb reverse`.
+**`adb reverse` CÓ hoạt động trên emulator** — đo lại 2026-08-26 trên emulator 36.6.11, hai máy ảo chạy song song, cả hai đều gọi được server qua `localhost:5276` sau khi `adb -s <serial> reverse tcp:5276 tcp:5276`.
+
+> ⚠️ Mục này trước đây ghi **ngược lại** ("adb reverse KHÔNG hoạt động, luôn dùng `10.0.2.2`"). Kết luận cũ dựa trên một lần thử với cổng 8081 và đã dẫn tôi đi vòng: dựng profile server bind `0.0.0.0`, viết code tự dò host qua `hostUri`/`scriptURL` — tất cả đều thừa. Nếu gặp lại triệu chứng "emulator không tới được server", hãy **kiểm tra `adb reverse --list` trước**, đừng vội kết luận là emulator không hỗ trợ.
+
+`10.0.2.2` vẫn dùng được cho **Metro** (nạp bundle). Nhưng nó chỉ tới được dịch vụ bind `0.0.0.0`; server CyclicTrivia bind `127.0.0.1` nên `10.0.2.2:5276` **không** tới được — đó là lý do phải đi bằng `adb reverse`.
 
 Kiểm tra nhanh emulator có với được Metro không (không có `curl` trên máy ảo, dùng `nc`):
 

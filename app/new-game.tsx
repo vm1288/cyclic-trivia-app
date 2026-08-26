@@ -12,8 +12,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
-  createGame,
+  createGameUseSession,
   getGameConfig,
+  hostSeat,
+  openRoom,
   playersForDuration,
   stripGamePrefix,
   type GameConfig,
@@ -26,11 +28,13 @@ import { StageBackground } from '../src/components/StageBackground';
 import { apiErrorText } from '../src/i18n/apiError';
 import { useT } from '../src/i18n/I18nProvider';
 import { useLicense } from '../src/session/LicenseSession';
+import { usePlayer } from '../src/session/PlayerSession';
 import { cell, cellGlow, cta, neon, text, type CellVariant } from '../src/theme/colors';
 
 export default function NewGameScreen() {
   const router = useRouter();
   const license = useLicense();
+  const player = usePlayer();
   const t = useT();
 
   const [config, setConfig] = useState<GameConfig | null>(null);
@@ -99,15 +103,37 @@ export default function NewGameScreen() {
     setBusy(true);
 
     /*
+     * BA lượt gọi, phải đúng thứ tự - xem khối ghi chú "Tạo ván: chuỗi BA BƯỚC"
+     * trong `src/api/game.ts` để biết vì sao không gộp được.
+     */
+
+    // 1. Mở phòng trước. `createGameUseSession` tra hostId ra từ
+    //    `GameSetup-{sessionId}`, nên không có bước này thì nó trả "Not found".
+    const room = await openRoom(session.token);
+    if (!room.isSuccess) {
+      setBusy(false);
+      setError(apiErrorText(room, t));
+      return;
+    }
+
+    /*
+     * 2. Tạo ván.
+     *
      * Ngôn ngữ gửi lên là ngôn ngữ ĐẦY ĐỦ của sponsor (vd "en-GB"), không phải
      * mã rút gọn dùng cho giao diện: server lấy nó để chọn bộ câu hỏi, mà bộ
      * câu hỏi gắn với bản ghi trong bảng `Languages`.
      */
-    const result = await createGame(players, duration, session.languageCode ?? '', dice, session.token);
-
-    setBusy(false);
+    const result = await createGameUseSession(
+      room.SessionId,
+      players,
+      duration,
+      session.languageCode ?? '',
+      dice,
+      session.token,
+    );
 
     if (!result.isSuccess) {
+      setBusy(false);
       setError(apiErrorText(result, t));
       return;
     }
@@ -121,10 +147,37 @@ export default function NewGameScreen() {
      */
     license.setCurrentGame(gameId);
 
-    // `replace` chứ không `push`: back từ lobby phải về thẳng màn hình chính,
-    // không quay lại màn dựng ván (ván đã tạo rồi, quay lại đó là vô nghĩa và
-    // dễ khiến người dùng bấm tạo thêm một ván nữa).
-    router.replace({ pathname: '/lobby', params: { gameId } });
+    // 3. Lấy token NGƯỜI CHƠI cho ghế 0 (ghế `isHost`).
+    const seat = await hostSeat(gameId, session.token);
+    setBusy(false);
+
+    if (!seat.isSuccess) {
+      setError(apiErrorText(seat, t));
+      return;
+    }
+
+    await player.saveSeat({
+      gameId,
+      roomCode: room.RoomCode,
+      playerId: seat.PlayerId,
+      token: seat.Token,
+      nickname: null,
+      characterId: null,
+    });
+
+    /*
+     * Người tạo phòng cũng là MỘT NGƯỜI CHƠI, nên phải nhận ghế như mọi người:
+     * đặt tên, chọn nhân vật. Không làm thì ghế 0 trống mãi và `/ready` sẽ từ
+     * chối với "Not everyone has taken a seat yet" - nút START GAME không bao
+     * giờ bấm được.
+     *
+     * `next=/lobby` vì họ là chủ phòng: xong ghế thì về lobby để lấy mã phòng,
+     * QR, nút mời và nút bắt đầu. Khách thì `seat.tsx` mặc định về `/waiting`.
+     *
+     * `replace` chứ không `push`: back phải về thẳng màn hình chính, không quay
+     * lại màn dựng ván (ván đã tạo rồi, quay lại đó dễ khiến bấm tạo thêm ván).
+     */
+    router.replace({ pathname: '/seat', params: { next: '/lobby', gameId } });
   }
 
   return (

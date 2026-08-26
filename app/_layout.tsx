@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ConfirmProvider } from '../src/components/ConfirmDialog';
 import { I18nProvider } from '../src/i18n/I18nProvider';
 import { LicenseProvider } from '../src/session/LicenseSession';
+import { PlayerProvider } from '../src/session/PlayerSession';
 import { bg } from '../src/theme/colors';
 
 export default function RootLayout() {
@@ -17,19 +18,25 @@ export default function RootLayout() {
           I18nProvider nằm TRONG LicenseProvider vì ngôn ngữ mặc định suy ra từ
           sponsor của license - đảo thứ tự là useLicense() sẽ ném lỗi. */}
       <LicenseProvider>
-        <I18nProvider>
-          {/* ConfirmProvider nằm TRONG I18nProvider để chỗ gọi truyền được câu
-              chữ đã dịch, và bọc ngoài Stack để hộp thoại phủ lên mọi màn. */}
-          <ConfirmProvider>
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                contentStyle: { backgroundColor: bg.base },
-                animation: 'fade',
-              }}
-            />
-          </ConfirmProvider>
-        </I18nProvider>
+        {/* PlayerProvider giữ GHẾ TRONG VÁN, tách hẳn với license.
+            Người vào phòng bằng mã không có license nào, nên nó phải nằm
+            NGOÀI mọi thứ phụ thuộc vào license - đặt ở đây để cả hai đường
+            vào (chủ phòng và khách) đọc chung một kho ghế. */}
+        <PlayerProvider>
+          <I18nProvider>
+            {/* ConfirmProvider nằm TRONG I18nProvider để chỗ gọi truyền được câu
+                chữ đã dịch, và bọc ngoài Stack để hộp thoại phủ lên mọi màn. */}
+            <ConfirmProvider>
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  contentStyle: { backgroundColor: bg.base },
+                  animation: 'fade',
+                }}
+              />
+            </ConfirmProvider>
+          </I18nProvider>
+        </PlayerProvider>
       </LicenseProvider>
     </SafeAreaProvider>
   );

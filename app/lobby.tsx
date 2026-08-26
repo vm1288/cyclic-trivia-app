@@ -16,7 +16,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ensureRoomCode,
   getGameState,
+  markPlayersReady,
   roomJoinUrl,
+  startGame,
   type GameSnapshot,
   type RoomCode,
 } from '../src/api/game';
@@ -44,6 +46,9 @@ import { neon, text } from '../src/theme/colors';
  * vòng này - xem NEXT_STEPS.md.
  */
 const POLL_MS = 3000;
+
+/** Bằng đúng bản web (`beginCountdown` trong main.js). Đọc ghi chú ở `beginStart`. */
+const COUNTDOWN_SECONDS = 10;
 
 export default function LobbyScreen() {
   const params = useLocalSearchParams<{ gameId?: string }>();
@@ -135,12 +140,101 @@ export default function LobbyScreen() {
 
   const joinUrl = room ? roomJoinUrl(room.SiteUrl, room.SessionId) : '';
 
+  /*
+   * ─── Bắt đầu ván: HAI lượt gọi, cách nhau một nhịp đếm ngược ──────────────
+   *
+   *   /ready  -> đẩy mọi điện thoại sang màn chờ (GameState)
+   *   (10 giây "WHO GOES FIRST?")
+   *   /start  -> nổ vòng đua ai đi trước (QuestionForTurn)
+   *
+   * ⚠️ ĐỪNG bỏ nhịp đếm ngược để "cho nhanh". Nó không phải trang trí: đó là
+   * lúc điện thoại người chơi báo đã nhận `PlayerStart`, mà server cần cờ đó
+   * mới ghi được câu hỏi vòng đua vào flow của họ. Gọi liền tay hai lệnh thì
+   * người mất kết nối đúng lúc đó sẽ không lấy lại được câu hỏi. Bản web cũng
+   * đúng 10 giây (`beginCountdown` trong main.js).
+   *
+   * ⚠️ Dùng **token license** (`session.token`), KHÔNG phải token người chơi:
+   * hai route này kiểm `game.HostId` chứ không kiểm ghế.
+   *
+   * App KHÔNG gửi `GameStart`/`WhosTurn` - server tự arm watchdog cho cả hai
+   * sau khi vòng đua có người thắng (GAME_RULES mục 8).
+   */
+  const [phase, setPhase] = useState<'idle' | 'readying' | 'countdown' | 'starting'>('idle');
+  const [seconds, setSeconds] = useState(COUNTDOWN_SECONDS);
+  const [startError, setStartError] = useState<string | null>(null);
+
+  async function beginStart() {
+    if (!gameId || !session || phase !== 'idle') return;
+
+    setStartError(null);
+    setPhase('readying');
+
+    const ready = await markPlayersReady(gameId, session.token);
+    if (!ready.isSuccess) {
+      // Hay gặp nhất: "Not everyone has taken a seat yet" - kể cả khi danh sách
+      // trông đã đủ, vì poll có thể đang hiện dữ liệu cũ vài giây.
+      setPhase('idle');
+      setStartError(apiErrorText(ready, t));
+      return;
+    }
+
+    setSeconds(COUNTDOWN_SECONDS);
+    setPhase('countdown');
+  }
+
+  const fireStart = useCallback(async () => {
+    if (!gameId || !session) return;
+
+    setPhase('starting');
+
+    const result = await startGame(gameId, session.token);
+    if (!result.isSuccess) {
+      setPhase('idle');
+      setStartError(apiErrorText(result, t));
+      return;
+    }
+
+    // Chủ phòng cũng là một người chơi, nên từ đây họ xem cùng màn với khách.
+    router.replace('/waiting');
+  }, [gameId, session, router, t]);
+
+  useEffect(() => {
+    if (phase !== 'countdown') return;
+
+    if (seconds <= 0) {
+      void fireStart();
+      return;
+    }
+
+    const timer = setTimeout(() => setSeconds((value) => value - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [phase, seconds, fireStart]);
+
+
   async function invite() {
     if (!room) return;
-    // Share có sẵn trong RN, không cần thư viện: mở đúng bảng chia sẻ của hệ
-    // điều hành nên gửi được qua Zalo/WhatsApp/SMS/bất cứ app nào người dùng có.
+
+    /*
+     * `Share` có sẵn trong RN, không cần thư viện: nó mở đúng bảng chia sẻ của
+     * hệ điều hành, nên gửi được qua Zalo/WhatsApp/SMS/bất cứ app nào máy có.
+     *
+     * Tin nhắn mang CẢ HAI đường vào, và mã phòng đứng trước:
+     *   - có app  -> đọc mã rồi gõ vào màn VÀO PHÒNG
+     *   - chưa có -> bấm link chơi trên trình duyệt như cũ
+     *
+     * ⚠️ ĐỪNG thay link web bằng deep link `cyclic://`. Người chưa cài app sẽ
+     * nhận một link chết, và phần lớn ứng dụng nhắn tin không biến chuỗi đó
+     * thành link bấm được - nhìn như tin nhắn hỏng. Muốn một link chạy cho cả
+     * hai thì phải là App Link thật (tên miền thật + assetlinks.json), mà
+     * `localhost:7025` lúc dev thì không làm được.
+     *
+     * Người dùng bấm huỷ không phải lỗi - `Share.share` trả về
+     * `{action: 'dismissedAction'}` chứ không ném, nên không cần bắt gì thêm.
+     */
     await Share.share({
       message: t('lobby.inviteMessage', { code: room.RoomCode, url: joinUrl }),
+      // Android dùng cho tiêu đề bảng chọn; iOS bỏ qua.
+      title: t('lobby.inviteTitle'),
     });
   }
 
@@ -276,12 +370,10 @@ export default function LobbyScreen() {
               </View>
 
               <Pressable
-                onPress={() => {
-                  /* TODO: cần GameStart + WhosTurn - xem NEXT_STEPS.md */
-                }}
-                disabled={!everyoneIn}
+                onPress={beginStart}
+                disabled={!everyoneIn || phase !== 'idle'}
                 accessibilityRole="button"
-                accessibilityState={{ disabled: !everyoneIn }}
+                accessibilityState={{ disabled: !everyoneIn || phase !== 'idle' }}
                 style={({ pressed }) => [
                   styles.ctaWrap,
                   pressed && everyoneIn && styles.pressed,
@@ -305,10 +397,33 @@ export default function LobbyScreen() {
               </Pressable>
 
               {!everyoneIn ? <Text style={styles.note}>{t('lobby.startBlocked')}</Text> : null}
+              {startError ? <Text style={styles.error}>{startError}</Text> : null}
             </>
           )}
         </ScrollView>
       </SafeAreaView>
+
+      {/*
+        Màn đếm ngược "WHO GOES FIRST?".
+
+        Là một lớp phủ tuyệt đối, KHÔNG phải `Modal`: trên Android thứ tự lớp
+        giữa các Modal không đoán trước được (xem SETUP_NOTES), mà app đã có
+        ConfirmDialog cũng là Modal. Lớp phủ thường thì không bao giờ chui
+        xuống dưới.
+      */}
+      {phase !== 'idle' ? (
+        <View style={styles.overlay}>
+          <Text style={styles.overlayTitle}>{t('lobby.whoGoesFirst')}</Text>
+          <Text style={styles.overlayBody}>{t('lobby.whoGoesFirstBody')}</Text>
+          {phase === 'countdown' ? (
+            <Text style={styles.overlayCount}>{t('lobby.startingIn', { seconds })}</Text>
+          ) : (
+            <View style={styles.overlaySpinner}>
+              <ActivityIndicator color={lobbyColors.amber} size="large" />
+            </View>
+          )}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -448,4 +563,46 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   error: { color: '#FF4D6A', fontSize: 13, lineHeight: 19 },
+
+  // Phủ kín màn hình, nền gần như đặc: lúc này người chơi phải nhìn vào đồng hồ
+  // đếm ngược, không phải vào danh sách ghế phía sau.
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(4,6,26,0.96)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    gap: 18,
+  },
+  overlayTitle: {
+    alignSelf: 'stretch',
+    textAlign: 'center',
+    fontSize: 30,
+    lineHeight: 38,
+    fontWeight: '800',
+    fontStyle: 'italic',
+    color: '#F2F6FF',
+    textShadowColor: 'rgba(140,200,255,0.6)',
+    textShadowRadius: 16,
+    textShadowOffset: { width: 0, height: 0 },
+  },
+  overlayBody: {
+    fontSize: 15,
+    lineHeight: 23,
+    color: lobbyColors.dim,
+    textAlign: 'center',
+  },
+  overlayCount: {
+    fontSize: 44,
+    fontWeight: '800',
+    color: lobbyColors.amber,
+    textShadowColor: 'rgba(255,198,30,0.55)',
+    textShadowRadius: 18,
+    textShadowOffset: { width: 0, height: 0 },
+  },
+  overlaySpinner: { marginTop: 8 },
 });

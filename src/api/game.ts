@@ -81,6 +81,86 @@ export function createGame(
   );
 }
 
+/*
+ * ─── Tạo ván: chuỗi BA BƯỚC ────────────────────────────────────────────────
+ *
+ * ⚠️ ĐỪNG dùng `createGame` ở trên cho luồng app. Nó thiếu ba thứ, và cả ba đều
+ * chỉ lộ ra ở mãi cuối luồng:
+ *
+ *   1. không gắn `sessionId` vào ván  -> không cấp được mã phòng, không ai vào được
+ *   2. không đặt `isHost` cho ghế nào -> `/host-seat` trả "This game has no host seat"
+ *   3. không trả `firstPlayerId`
+ *
+ * `createGameUseSession` làm cả ba. Nhưng nó tra hostId ra từ
+ * `GameSetup-{sessionId}` trong cache, nên PHẢI mở phòng trước.
+ *
+ *   openRoom            -> SessionId + RoomCode
+ *   createGameUseSession-> gameId + firstPlayerId (ghế 0, isHost = true)
+ *   hostSeat            -> token NGƯỜI CHƠI cho ghế đó
+ *
+ * `createGame` giữ lại vì bản web cũ còn gọi, đừng xoá.
+ */
+
+/**
+ * Mở phòng TRƯỚC khi ván tồn tại.
+ *
+ * Đăng ký `GameSetup-{sessionId}` -> hostId rồi cấp mã phòng. Bỏ trống
+ * `sessionId` thì server tự sinh - đó là cách dùng bình thường của app.
+ */
+export function openRoom(
+  token: string,
+): Promise<ApiResult<{ SessionId: string; RoomCode: string; SiteUrl: string }>> {
+  return postForm('/public/room/open', { sessionId: '' }, token);
+}
+
+/**
+ * Tạo ván gắn vào phòng vừa mở.
+ *
+ * Server dựng luôn đủ `numberOfPlayers` ghế kèm bộ thẻ bài cho từng ghế, và
+ * đặt `isHost = true` cho ghế `Ordering = 0`. App không phải tạo gì thêm.
+ *
+ * `data` là gameId ĐÃ GẮN TIỀN TỐ - dùng `stripGamePrefix`.
+ */
+export function createGameUseSession(
+  sessionId: string,
+  numberOfPlayers: number,
+  durationId: string,
+  languageCode: string,
+  dice: string,
+  token: string,
+): Promise<ApiResult<{ data: string; firstPlayerId: string }>> {
+  return postForm(
+    '/public/createGameUseSession',
+    {
+      sessionId,
+      numberOfPlayers,
+      duration: durationId,
+      languageLocal: languageCode || 'en-GB',
+      dice,
+    },
+    token,
+  );
+}
+
+/**
+ * Token NGƯỜI CHƠI cho ghế của người tạo phòng.
+ *
+ * Người tạo phòng giữ HAI token khác nhau và không thay thế cho nhau được:
+ *   - token license ("authcode") -> định danh THIẾT BỊ giữ license
+ *   - token này ("player")       -> định danh GHẾ trong ván
+ *
+ * `submitNickname` đọc playerId ra từ token, nên đưa nhầm token license vào là
+ * server đi tìm một player không tồn tại.
+ *
+ * `IsClaimed: true` = ghế đã đặt tên rồi (mở lại lobby), khỏi hỏi lại.
+ */
+export function hostSeat(
+  gameId: string,
+  token: string,
+): Promise<ApiResult<{ PlayerId: string; Token: string; IsClaimed: boolean }>> {
+  return postForm(`/public/game/${gameId}/host-seat`, {}, token);
+}
+
 /**
  * Số người chơi hợp lệ ứng với một mốc thời lượng.
  *
@@ -244,6 +324,10 @@ export type GameSnapshot = {
      */
     CurrentCountRollDice: number;
     TotalRollDice: number;
+    /** Xem `GAME_SETUP`. */
+    GameSetup: number;
+    /** Xem `CASE_ACTION`. */
+    CurrentAction: number;
   };
   /**
    * Server tạo sẵn ĐỦ số ghế ngay lúc tạo ván, với nickname mặc định
@@ -290,6 +374,21 @@ export type GameBoard = {
 
 /** Ảnh nền bàn cờ. Server trả đường dẫn tương đối. */
 export const boardImageUrl = (path: string) => `${API_BASE_URL}${path}`;
+
+/**
+ * `GameSessionModel.GameSetup` ở server. Giá trị số, không phải chuỗi.
+ *
+ * ⚠️ `Started` là **0**, không phải giá trị cuối. Đừng viết `GameSetup > 0` để
+ * kiểm tra "đã bắt đầu chưa" - nó cho kết quả ngược.
+ *
+ * Và `Started` chỉ bật lên khi vòng đua "ai đi trước" đã có NGƯỜI THẮNG, chứ
+ * không phải lúc bấm nút START GAME. Muốn biết vòng đua đang chạy thì xem
+ * `CurrentAction === CASE_ACTION.QuestionForTurn`.
+ */
+export const GAME_SETUP = { Started: 0, Instruction: 1, SetNickname: 2 } as const;
+
+/** `CaseAction` ở server (`Hubs/PacketType.cs`). Chỉ khai báo cái app đang dùng. */
+export const CASE_ACTION = { QuestionForTurn: 20 } as const;
 
 /**
  * Ảnh nhân vật, lấy thẳng từ server.
