@@ -182,37 +182,134 @@ export async function getCurrentGame(token: string): Promise<ApiResult<CurrentGa
  * Tên trường viết HOA chữ đầu: DTO là class C# và server dùng
  * `DefaultContractResolver` nên giữ nguyên tên thuộc tính.
  */
+/**
+ * Một lá bài trong tay người chơi.
+ *
+ * `CardId` là chuỗi cố định trong `Helper.AllCards` ở server ("Joker",
+ * "Skipper", "Eliminator", "Changer") - KHÔNG phải GUID, và không nằm trong
+ * bảng nào cả. Dùng nó để tra hình/màu, đừng dùng `Name` (có thể dịch).
+ *
+ * `Quantity` là số lá cùng loại đang cầm. Trần: 3 mỗi loại, riêng Joker là 1.
+ */
+export type GameCard = {
+  Id: string;
+  CardId: 'Joker' | 'Skipper' | 'Eliminator' | 'Changer';
+  Name: string;
+  /** 'J' | 'S' | 'E' | 'C' */
+  Code: string;
+  Quantity: number;
+  Ordering: number;
+  IsUsed: boolean;
+};
+
+export type GamePlayer = {
+  Id: string;
+  NickName: string;
+  Ordering: number;
+  CharacterId: string;
+  /** 'male' | 'female' - ghép vào tên file ảnh nhân vật. */
+  Gender: string;
+  PlayerColor: string;
+  /** Điểm tích luỹ. Đây là con số to hiện trên ô người chơi. */
+  Point: number;
+  /** 0-5. Đủ 5 sao đổi được một lá bài mới (GAME_RULES mục 6). */
+  Stars: number;
+  /** Đang đứng ở ô nào. Khớp với Board.Squares[].StepIndex. */
+  CurrentStepIndex: number;
+  IsConnected: boolean;
+  IsSetupNickName: boolean;
+  IsHost: boolean;
+  Cards: GameCard[];
+};
+
 export type GameSnapshot = {
   Game: {
     Id: string;
+    HostId: string;
     NumberOfPlayers: number;
     /** 0 = thể thức Leaderboard Challenge, tính theo lượt tung xúc xắc. */
     DurationMinutes: number;
     IsGameOver: boolean;
+    IsGamePause: boolean;
+    /**
+     * Ai đang tới lượt. `Guid.Empty` khi chưa xác định xong (vòng đua "ai đi
+     * trước" chưa có kết quả).
+     */
+    CurrentTurnPlayerId: string;
+    PlayerTurnIndex: number;
+    /**
+     * 0 = ván chưa thật sự bắt đầu. Bản web dùng đúng biến này để phân biệt
+     * "vào ván mới" với "quay lại ván đang dở" (`CurrentCountRollDice == 0`
+     * trong mainControl.js).
+     */
+    CurrentCountRollDice: number;
+    TotalRollDice: number;
   };
   /**
    * Server tạo sẵn ĐỦ số ghế ngay lúc tạo ván, với nickname mặc định
    * ("1st player"...). Ghế nào có người nhận là ghế có `IsSetupNickName: true`
    * - đừng đếm theo độ dài mảng, nó luôn bằng NumberOfPlayers.
    */
-  Players: {
-    Id: string;
-    NickName: string;
-    Ordering: number;
-    CharacterId: string;
-    PlayerColor: string;
-    IsConnected: boolean;
-    IsSetupNickName: boolean;
-    IsHost: boolean;
-  }[];
+  Players: GamePlayer[];
+  /** Chỉ có khi gọi với `includeBoard`. Xem `getGameState`. */
+  Board?: GameBoard | null;
 };
 
-export async function getGameState(gameId: string): Promise<ApiResult<GameSnapshot>> {
+/**
+ * Hình bàn cờ.
+ *
+ * `Geometry` là các đa giác VẼ TAY đè lên ảnh nền `BackgroundImage`, cùng hệ
+ * toạ độ `ViewBox`. Nghĩa là muốn đặt quân cờ đúng ô thì phải hiển thị đúng ảnh
+ * đó với đúng tỉ lệ - co giãn lệch một chút là quân cờ lệch ô.
+ *
+ * `Geometry` NULL với bàn `rectangle`: loại đó server không vẽ sẵn mà client tự
+ * sinh từ `Hoz_step`/`Ver_step` (`renderSteps()` trong board.js của bản web).
+ * Dữ liệu thật hiện có: `crictriv` và `footietriv` đều là oval.
+ */
+export type GameBoard = {
+  BoardGameId: string;
+  BoardType: string;
+  Hoz_step: number | null;
+  Ver_step: number | null;
+  Squares: { StepIndex: number; StepNumber: number; Title: string; SquareColor: string }[];
+  Geometry: {
+    ViewBox: string;
+    BackgroundImage: string;
+    Polygons: {
+      Index: string;
+      StepIndex: number;
+      /**
+       * Mặt bên của khối ô, thứ tạo cảm giác nổi 3D. KHÔNG phải mặt trên - đặt
+       * quân cờ lên nó là quân đứng ở sườn ô. Lọc bỏ khi tính tâm ô.
+       */
+      IsTileBase: boolean;
+      Points: string;
+    }[];
+  } | null;
+};
+
+/** Ảnh nền bàn cờ. Server trả đường dẫn tương đối. */
+export const boardImageUrl = (path: string) => `${API_BASE_URL}${path}`;
+
+/**
+ * Ảnh nhân vật, lấy thẳng từ server.
+ *
+ * Hậu tố `-0` là khung đứng yên - đúng khung mà bản web dùng cho ô người chơi
+ * (`SelectPlayersPartialHtml.cshtml`, `PlayerHomeScreen.js`). Các khung `-1`,
+ * `-male`, `-female` dành cho animation và màn chọn nhân vật.
+ */
+export const characterImageUrl = (characterId: string) =>
+  `${API_BASE_URL}/images/character/${characterId}-0.png`;
+
+export async function getGameState(
+  gameId: string,
+  includeBoard = false,
+): Promise<ApiResult<GameSnapshot>> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
   try {
     const response = await fetch(
-      `${API_BASE_URL}/api/game/${gameId}/state?includeBoard=false`,
+      `${API_BASE_URL}/api/game/${gameId}/state?includeBoard=${includeBoard}`,
       { signal: controller.signal },
     );
     if (!response.ok) {
@@ -278,6 +375,36 @@ export const roomJoinUrl = (siteUrl: string, sessionId: string) =>
 
 export function ensureRoomCode(gameId: string, token: string): Promise<ApiResult<RoomCode>> {
   return postForm<RoomCode>(`/public/game/${gameId}/room-code`, {}, token);
+}
+
+/**
+ * BƯỚC 1 của nút START GAME: đẩy mọi điện thoại sang màn chờ.
+ *
+ * ĐỪNG gộp hai bước này lại. Giữa chúng là 10 giây đếm ngược "WHO GOES FIRST?"
+ * mà bản web cũng có - và khoảng nghỉ đó không phải trang trí: nó là lúc điện
+ * thoại người chơi báo đã nhận `PlayerStart`, mà server lại cần cờ đó mới ghi
+ * được câu hỏi vòng đua vào flow của họ. Gọi liền tay hai lệnh thì người mất
+ * kết nối đúng lúc đó sẽ không lấy lại được câu hỏi.
+ */
+export function markPlayersReady(gameId: string, token: string): Promise<ApiResult<{}>> {
+  return postForm(`/public/game/${gameId}/ready`, {}, token);
+}
+
+/**
+ * BƯỚC 2: nổ vòng đua "ai đi trước".
+ *
+ * Từ đây server tự chạy hết ván, không cần bàn cờ - người trả lời đúng đầu tiên
+ * làm server sắp lại thứ tự lượt rồi tự phát `GameStart` và `WhosTurn`. App
+ * KHÔNG cần gửi hai cái đó (xem GAME_RULES mục 8).
+ *
+ * `AlreadyRunning: true` = vòng đua đã chạy sẵn, không phải lỗi - coi như thành
+ * công và đi tiếp.
+ */
+export function startGame(
+  gameId: string,
+  token: string,
+): Promise<ApiResult<{ AlreadyRunning?: boolean }>> {
+  return postForm(`/public/game/${gameId}/start`, {}, token);
 }
 
 /** GUID nằm ở CUỐI chuỗi, sau tiền tố. */
