@@ -15,12 +15,25 @@ import { bg } from '../theme/colors';
  * `cover` gần như không cắt gì trên máy mục tiêu. Trên máy tỉ lệ khác thì cắt
  * đều hai đầu; giữ `backgroundColor` cùng tông ở dưới để mép cắt không lộ.
  */
-const STAGE = require('../../assets/brand/main-background.png');
+const STAGE = {
+  /** Mặc định: dùng cho mọi màn ngoài ván chơi. */
+  main: require('../../assets/brand/main-background.png'),
+  /**
+   * Chỉ dùng TRONG PHÒNG CHƠI (`app/game.tsx`).
+   *
+   * Nền chính có bệ phát sáng và tường chấm rất nổi - hợp với các màn chỉ có
+   * vài nút, nhưng trong ván thì nó chen với bàn cờ và bộ bài. Bản `alt` trầm
+   * hơn, để bàn cờ là thứ bắt mắt duy nhất.
+   */
+  alt: require('../../assets/brand/main-background-alt.png'),
+} as const;
 
-export function StageBackground() {
+export type StageVariant = keyof typeof STAGE;
+
+export function StageBackground({ variant = 'main' }: { variant?: StageVariant } = {}) {
   return (
     <View style={styles.root} pointerEvents="none">
-      <Image source={STAGE} resizeMode="cover" style={styles.image} />
+      <Image source={STAGE[variant]} resizeMode="cover" style={styles.image} />
 
       {/* Làm tối phần đỉnh để logo và thanh trạng thái luôn đủ tương phản, kể
           cả khi ảnh bị cắt lệch trên máy tỉ lệ lạ. */}

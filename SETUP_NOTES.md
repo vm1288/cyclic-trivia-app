@@ -309,6 +309,22 @@ npx expo start --port 8081
 
 ---
 
+## ⚠️ Sửa animation xong PHẢI khởi động lại app, đừng tin fast refresh
+
+Đã dính: chỉnh biên độ một animation Reanimated rồi đo lại ngay sau fast
+refresh, kết quả cho biên độ **giảm** (9.9) trong khi lẽ ra phải tăng. Nạp lại
+sạch app thì ra đúng (46.3).
+
+Fast refresh dựng lại component nhưng **giá trị của `useSharedValue` và vòng
+`withRepeat` đang chạy thì không**, nên animation vẫn chạy theo tham số CŨ.
+Kết luận đo được sẽ sai hướng và rất dễ tưởng là code mới hỏng.
+
+```bash
+adb -s <serial> shell am force-stop com.cyclictrivia.app
+```
+
+---
+
 ## Cài package mới thì phải khởi động lại Metro
 
 `npx expo install <gì đó>` xong mà Metro vẫn đang chạy thì nó không thấy package mới → `Unable to resolve`. Khởi động lại Metro (thêm `--clear` nếu vẫn không thấy).

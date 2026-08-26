@@ -1,4 +1,12 @@
+import { useEffect } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, {
   Circle,
@@ -65,6 +73,16 @@ export const PawnIcon = ({ color = boardColors.green, size = 14 }: { color?: str
   <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
     <Path d="M12 3a3.4 3.4 0 0 1 2.1 6.1c1.6 1 2.6 2.6 2.6 4.3H7.3c0-1.7 1-3.3 2.6-4.3A3.4 3.4 0 0 1 12 3z" />
     <Path d="M6.4 16.2h11.2l1.4 4.6H5z" />
+  </Svg>
+);
+
+export const ChatIcon = ({ size = 24, color = boardColors.blueSoft }: { size?: number; color?: string }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7}
+       strokeLinejoin="round">
+    <Path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7A2.5 2.5 0 0 1 17.5 16H10l-4.4 3.4V16H6.5A2.5 2.5 0 0 1 4 13.5z" />
+    {[8.6, 12, 15.4].map((x, i) => (
+      <Circle key={i} cx={x} cy={10} r={1.25} fill={color} stroke="none" />
+    ))}
   </Svg>
 );
 
@@ -139,6 +157,58 @@ const ChangerIcon = ({ size = 30 }: { size?: number }) => (
   </Svg>
 );
 
+/**
+ * Pha một màu hex về phía trắng.
+ *
+ * Dùng để dựng viền gradient kiểu ống neon: sáng ở hai mép, đậm ở giữa - cùng
+ * công thức `mid → stroke → mid` mà `src/theme/colors.ts` dùng cho các nút.
+ */
+function lighten(hex: string, amount: number): string {
+  const clean = hex.replace('#', '');
+  if (clean.length !== 6) return hex;
+  const mix = (v: number) => Math.round(v + (255 - v) * amount);
+  const r = mix(parseInt(clean.slice(0, 2), 16));
+  const g = mix(parseInt(clean.slice(2, 4), 16));
+  const b = mix(parseInt(clean.slice(4, 6), 16));
+  return `rgb(${r},${g},${b})`;
+}
+
+/**
+ * Viền phát sáng NHỊP NHÀNG cho người đang tới lượt.
+ *
+ * ⚠️ Chạy bằng Reanimated (UI thread), KHÔNG bằng React state - đây là quy ước
+ * bắt buộc của dự án (xem AGENTS.md). JS thread của app này sẽ bận vì poll và
+ * sau đó là packet SignalR; nhịp sáng chạy trên JS thread sẽ giật.
+ *
+ * Là một lớp phủ riêng chứ không phải style của chính thẻ: `boxShadow` là chuỗi
+ * nên không nội suy được, còn `opacity` của một lớp phủ thì có.
+ *
+ * ⚠️ Bên dưới lớp này **đừng để viền xanh TĨNH**. Đã dính một lần: viền tĩnh
+ * cùng màu làm nhịp sáng chìm hẳn, nhìn chỉ thấy một viền xanh đứng yên dù
+ * animation vẫn chạy (đo được biên độ ~29/255). Để nền trung tính thì màu xanh
+ * hiện lên rồi tắt đi theo nhịp, không thể nhầm.
+ */
+export const TurnPulse = ({ radius = 10 }: { radius?: number }) => {
+  const glow = useSharedValue(0.12);
+
+  useEffect(() => {
+    glow.value = withRepeat(
+      withTiming(1, { duration: 780, easing: Easing.inOut(Easing.quad) }),
+      -1,
+      true,
+    );
+  }, [glow]);
+
+  const style = useAnimatedStyle(() => ({ opacity: glow.value }));
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.turnPulse, { borderRadius: radius }, style]}
+    />
+  );
+};
+
 /* ── bài ───────────────────────────────────────────── */
 
 /**
@@ -149,11 +219,18 @@ const ChangerIcon = ({ size = 30 }: { size?: number }) => (
  * người chơi hết bài thì hàng chấm sẽ biến mất.
  */
 export const CARD_STYLES = {
-  Joker:      { accent: boardColors.purple, glow: 'rgba(200,107,255,0.55)', tint: 'rgba(52,18,96,0.85)',  max: 1, Icon: JokerIcon },
-  Skipper:    { accent: boardColors.blueSoft, glow: 'rgba(47,143,255,0.55)', tint: 'rgba(12,44,100,0.85)', max: 3, Icon: SkipperIcon },
-  Eliminator: { accent: '#F9B23F',           glow: 'rgba(245,158,11,0.55)', tint: 'rgba(84,48,4,0.85)',   max: 3, Icon: EliminatorIcon },
-  Changer:    { accent: '#FF7FB8',           glow: 'rgba(255,95,168,0.55)', tint: 'rgba(88,12,52,0.85)',  max: 3, Icon: ChangerIcon },
+  Joker:      { accent: boardColors.purple,  glow: 'rgba(200,107,255,0.55)', tint: '#2A1150', max: 1, Icon: JokerIcon },
+  Skipper:    { accent: boardColors.blueSoft, glow: 'rgba(47,143,255,0.55)', tint: '#0A2450', max: 3, Icon: SkipperIcon },
+  Eliminator: { accent: '#F9B23F',            glow: 'rgba(245,158,11,0.55)', tint: '#452703', max: 3, Icon: EliminatorIcon },
+  Changer:    { accent: '#FF7FB8',            glow: 'rgba(255,95,168,0.55)', tint: '#4A0A2C', max: 3, Icon: ChangerIcon },
 } as const;
+
+/*
+ * ⚠️ `tint` phải là màu ĐẶC (hex), không phải `rgba(...)` trong suốt.
+ *
+ * Trước đây dùng rgba nên nền chấm halftone của màn hình xuyên qua thân lá bài,
+ * nhìn rất rối. Lá bài cần là một mặt phẳng đục để icon và chữ nổi lên.
+ */
 
 export type CardKey = keyof typeof CARD_STYLES;
 
@@ -171,11 +248,41 @@ export const HandTile = ({
   dimmed: boolean;
 }) => {
   const style = CARD_STYLES[cardKey];
+
+  /*
+   * Hết lá loại này -> làm NHẠT, không làm TỐI.
+   *
+   * Trước đây thẻ hết bài bị phủ tối chồng lên nền vốn đã tối, thành ra không
+   * đọc nổi tên thẻ. Nhạt đi vẫn nói được "không dùng được" mà vẫn nhìn rõ
+   * mình đang thiếu lá nào.
+   */
+  const empty = count === 0;
+
   return (
-    <View style={[styles.handCard, { borderColor: style.glow }, dimmed && styles.handDim]}>
-      <LinearGradient colors={[style.tint, 'rgba(9,11,28,0.94)']} style={fill} />
-      <style.Icon />
-      <Text style={[styles.handName, { color: style.accent }]} numberOfLines={1}>
+    <View
+      style={[
+        styles.handCard,
+        { borderColor: empty ? 'rgba(150,170,215,0.30)' : style.glow },
+      ]}
+    >
+      <LinearGradient
+        colors={empty ? ['#141A32', '#090B1C'] : [style.tint, '#090B1C']}
+        style={fill}
+      />
+      {/*
+        Làm mờ bằng một LỚP PHỦ, không phải `opacity` của cả thẻ.
+        `opacity` làm cả lá bài trong suốt và nền màn hình lại xuyên qua - đúng
+        thứ vừa phải sửa. Thẻ đã hết bài thì KHÔNG phủ thêm, nếu không sẽ tối
+        chồng tối.
+      */}
+      {dimmed && !empty ? <View style={[fill, styles.handDim]} /> : null}
+      <View style={empty ? styles.handIconEmpty : undefined}>
+        <style.Icon />
+      </View>
+      <Text
+        style={[styles.handName, { color: empty ? 'rgba(198,212,240,0.75)' : style.accent }]}
+        numberOfLines={1}
+      >
         {label}
       </Text>
       <View style={styles.pipRow}>
@@ -186,7 +293,7 @@ export const HandTile = ({
               styles.pip,
               i < count
                 ? { backgroundColor: style.accent, boxShadow: `0 0 6px ${style.glow}` }
-                : { backgroundColor: 'rgba(120,140,200,0.16)' },
+                : { backgroundColor: 'rgba(200,215,255,0.30)' },
             ]}
           />
         ))}
@@ -214,8 +321,18 @@ export const Stars = ({ filled, size = 10 }: { filled: number; size?: number }) 
         key={i}
         style={{
           fontSize: size,
-          lineHeight: size * 1.2,
-          color: i < filled ? boardColors.amber : 'rgba(255,198,30,0.28)',
+          /*
+           * 1.45 chứ không phải 1.2: glyph ★ thò xuống dưới đường cơ sở, để
+           * lineHeight sát quá thì bị cắt mất chân - thấy rõ ở ô người chơi khi
+           * tăng cỡ sao lên.
+           */
+          lineHeight: size * 1.45,
+          /*
+           * Chưa có: XÁM SÁNG, cùng tông với chấm rỗng của thẻ bài - vàng mờ
+           * dễ bị nhìn thành "sao đã có nhưng tối", xám thì rõ là chưa có.
+           * Đã có: vàng sáng hơn amber gốc cho nổi trên nền tối.
+           */
+          color: i < filled ? '#FFD23F' : 'rgba(200,215,255,0.30)',
         }}
       >
         ★
@@ -240,12 +357,25 @@ export const PlayerTile = ({
   isTurn: boolean;
   emptyLabel: string;
 }) => (
-  <View
-    style={[
-      styles.playerTile,
-      isTurn && { borderColor: boardColors.green, boxShadow: '0 0 10px rgba(46,232,95,0.45)' },
+  <LinearGradient
+    /*
+     * Viền GRADIENT theo màu nhân vật - React Native không có `borderImage`,
+     * nên cách duy nhất là một lớp gradient bọc ngoài, chừa 1.5px làm viền,
+     * rồi đặt thân thẻ (nền đục) lên trên.
+     *
+     * Sáng ở hai mép, đậm ở giữa: bắt chước ống neon thật, cùng công thức
+     * `mid → stroke → mid` của các nút trong app.
+     */
+    colors={[
+      lighten(player.PlayerColor || '#2F8FFF', 0.5),
+      player.PlayerColor || '#2F8FFF',
+      lighten(player.PlayerColor || '#2F8FFF', 0.5),
     ]}
+    start={{ x: 0, y: 0 }}
+    end={{ x: 1, y: 1 }}
+    style={styles.playerRim}
   >
+  <View style={[styles.playerTile, isTurn && styles.playerTileTurn]}>
     <View style={styles.playerMedia}>
       <View style={[fill, { backgroundColor: 'rgba(24,30,60,0.9)' }]} />
       {player.CharacterId ? (
@@ -255,60 +385,144 @@ export const PlayerTile = ({
           resizeMode="contain"
         />
       ) : null}
-      <View style={[styles.scoreChip, { backgroundColor: player.PlayerColor || boardColors.blue }]}>
-        <Text style={styles.scoreChipText}>{player.Point}</Text>
+
+      {/*
+        Vệt đen mờ dần từ đáy lên, dừng ngay trên chỗ đặt tên.
+        Không có nó thì tên trắng nằm đè lên bụng nhân vật sáng màu và không
+        đọc nổi - nhân vật nào cũng có mảng sáng ở giữa thân.
+      */}
+      <LinearGradient
+        colors={['transparent', 'rgba(4,6,16,0.72)', 'rgba(4,6,16,0.96)']}
+        locations={[0, 0.4, 1]}
+        style={styles.playerScrim}
+      />
+
+      {/*
+        Tên ĐÈ LÊN ảnh nhân vật, chừa sẵn đúng HAI dòng và không bao giờ tràn
+        sang dòng thứ ba (`numberOfLines={2}`). Chiều cao cố định giữ mọi ô cao
+        bằng nhau dù tên một chữ hay hai dòng - không thì dải trên so le và bàn
+        cờ bị đẩy lên xuống mỗi lần có người đổi tên.
+      */}
+      {/*
+        Bọc trong View căn ĐÁY: `Text` không căn dọc được, nên tên một dòng
+        trong khung cao hai dòng sẽ dính lên đỉnh khung - tức nằm giữa bụng
+        nhân vật thay vì sát mép dưới.
+      */}
+      <View style={styles.playerNameBox}>
+        <Text style={styles.playerName} numberOfLines={2} ellipsizeMode="tail">
+          {player.IsSetupNickName ? player.NickName : emptyLabel}
+        </Text>
       </View>
     </View>
-    <View style={styles.playerNameRow}>
-      <Text style={styles.playerName} numberOfLines={1}>
-        {player.IsSetupNickName ? player.NickName : emptyLabel}
-      </Text>
-    </View>
+
+    {/* Điểm nằm TRÊN hàng sao, căn giữa, không nền. */}
+    <Text style={[styles.playerScore, { color: player.PlayerColor || boardColors.blue }]}>
+      {player.Point}
+    </Text>
+
     <View style={styles.playerStars}>
-      <Stars filled={player.Stars} />
-      <Text style={styles.playerStarsText}>{player.Stars}/5</Text>
+      {/*
+        Cỡ 13, KHÔNG to hơn: ô chỉ rộng 20% màn hình, năm ngôi sao cỡ 15 là
+        tràn và bị mép ô cắt mất sao ngoài cùng.
+      */}
+      <Stars filled={player.Stars} size={13} />
     </View>
   </View>
+
+  {/*
+    Nhịp sáng nằm NGOÀI thân thẻ, ngay trong lớp viền gradient.
+    Để bên trong thì `overflow: 'hidden'` của thân thẻ (cần có, nếu không ảnh
+    nhân vật đè lên viền ở hai góc trên) sẽ cắt luôn quầng sáng.
+  */}
+  {isTurn ? <TurnPulse radius={10} /> : null}
+  </LinearGradient>
 );
 
 const styles = StyleSheet.create({
-  playerTile: {
-    flex: 1,
+  playerRim: {
+    // KHÔNG `flex: 1`: bề ngang do ô cha quyết định (game.tsx cấp đúng 20%).
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: boardColors.hair,
-    backgroundColor: boardColors.panel,
+    padding: 1.5,
+  },
+  playerTile: {
+    borderRadius: 9,
+    /*
+     * Nền gần như đen, khớp với đuôi vệt tối phủ dưới tên (`rgba(4,6,16,.96)`)
+     * -> vùng tên, điểm và sao liền một mảng, không thấy đường gãy màu.
+     */
+    backgroundColor: '#04060F',
+    /*
+     * ⚠️ PHẢI cắt: ảnh nhân vật lấp đầy ô nên hai góc trên của nó đè lên viền
+     * gradient bo tròn. `TurnPulse` đã chuyển ra ngoài nên không bị cắt theo.
+     */
     overflow: 'hidden',
+    /*
+     * ⚠️ KHÔNG `overflow: 'hidden'`.
+     *
+     * Nó cắt luôn `boxShadow` nên viền xanh lúc tới lượt chỉ đổi màu mà KHÔNG
+     * phát sáng. Bo góc đã có `borderRadius`, còn ảnh nhân vật thì `contain`
+     * nên vốn không tràn ra ngoài.
+     */
   },
-  playerMedia: { height: 74, position: 'relative' },
-  playerNameRow: {
-    height: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(110,140,210,0.18)',
-  },
-  playerName: { fontSize: 10, fontWeight: '700', color: '#EAF1FF' },
-  scoreChip: {
+  // Thấp hơn một chút so với bản đầu (74) để nhân vật có khoảng thở.
+  // Quầng sáng hai lớp: lõi gắt sát viền + vầng loang nhẹ, cùng hệ với các
+  // hiệu ứng neon khác của app (xem src/theme/colors.ts).
+  // Thân thẻ không còn viền riêng (viền là lớp gradient bọc ngoài), nên
+  // trạng thái tới lượt chỉ do lớp `TurnPulse` thể hiện.
+  playerTileTurn: {},
+  /** Lớp phủ nhịp sáng - xem `TurnPulse`. */
+  turnPulse: {
     position: 'absolute',
-    left: 0,
-    bottom: 5,
-    height: 17,
-    paddingHorizontal: 7,
-    borderTopRightRadius: 5,
-    borderBottomRightRadius: 5,
-    justifyContent: 'center',
+    top: -1,
+    left: -1,
+    right: -1,
+    bottom: -1,
+    borderWidth: 2,
+    borderColor: boardColors.green,
+    boxShadow: '0 0 12px rgba(46,232,95,0.9), 0 0 26px rgba(46,232,95,0.45)',
+    zIndex: 2,
   },
-  scoreChipText: { fontSize: 11, fontWeight: '700', color: text.primary },
+  /*
+   * Cao hơn trước vì TÊN giờ nằm đè bên trong ô ảnh, không còn hàng riêng.
+   * Phần nhân vật thực tế vẫn bằng cũ: 76 trừ đi ~26 của hai dòng tên.
+   */
+  playerMedia: { height: 76, position: 'relative', paddingTop: 6, overflow: 'hidden' },
+  playerScrim: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 48 },
+  playerNameBox: {
+    position: 'absolute',
+    left: 3,
+    right: 3,
+    bottom: 3,
+    // Chừa đúng hai dòng chữ 10px (lineHeight 12); tên ngắn dồn xuống đáy.
+    height: 24,
+    justifyContent: 'flex-end',
+  },
+  playerName: {
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.9)',
+    textShadowRadius: 4,
+    textShadowOffset: { width: 0, height: 1 },
+  },
+  playerScore: {
+    // Sát vào hàng sao: lineHeight của ★ đã chừa sẵn khoảng trống phía trên.
+    height: 17,
+    lineHeight: 17,
+    marginBottom: -2,
+    fontSize: 14,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
   playerStars: {
     height: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
+    paddingBottom: 3,
   },
-  playerStarsText: { fontSize: 9, fontWeight: '700', color: 'rgba(198,212,240,0.8)' },
 
   handCard: {
     flex: 1,
@@ -320,8 +534,9 @@ const styles = StyleSheet.create({
     gap: 5,
     overflow: 'hidden',
   },
-  // Bài của người khác: mờ đi để không ai tưởng bấm được.
-  handDim: { opacity: 0.55 },
+  // Phủ tối lên thân lá bài, giữ nguyên độ đục. Xem ghi chú ở HandTile.
+  handDim: { backgroundColor: 'rgba(6,8,20,0.38)' },
+  handIconEmpty: { opacity: 0.5 },
   handName: { fontSize: 9.5, fontWeight: '700', letterSpacing: 0.6 },
   pipRow: { flexDirection: 'row', gap: 4 },
   pip: { width: 6, height: 6, borderRadius: 3 },

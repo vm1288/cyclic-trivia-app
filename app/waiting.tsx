@@ -74,6 +74,20 @@ export default function WaitingScreen() {
   const started = snapshot?.Game.GameSetup === GAME_SETUP.Started;
   const live = racing || started;
 
+  /*
+   * Ván đã chạy -> sang màn bàn cờ.
+   *
+   * `replace` chứ không `push`: back từ bàn cờ phải về màn hình chính, không
+   * quay lại phòng chờ của một ván đã bắt đầu.
+   *
+   * Chuyển hướng nằm trong effect chứ không đặt thẳng trong thân component -
+   * điều hướng lúc đang render là một side effect, React sẽ cảnh báo và có thể
+   * chạy hai lần.
+   */
+  useEffect(() => {
+    if (live) router.replace('/game');
+  }, [live, router]);
+
   if (!seat) {
     return (
       <View style={styles.root}>
@@ -146,12 +160,7 @@ export default function WaitingScreen() {
             </View>
           )}
 
-          {/*
-            Ván đã chạy nhưng app CHƯA có màn bàn cờ - nói thẳng ra chỗ này thay
-            vì để người dùng nhìn một danh sách ghế đứng im và tưởng app treo.
-            Khi có `app/game.tsx` thì đổi khối này thành router.replace('/game').
-          */}
-          {live ? <Text style={styles.liveNote}>{t('waiting.noBoardYet')}</Text> : null}
+          {live ? <Text style={styles.liveNote}>{t('waiting.opening')}</Text> : null}
         </ScrollView>
       </SafeAreaView>
     </View>

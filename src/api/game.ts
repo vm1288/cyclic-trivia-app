@@ -355,7 +355,34 @@ export type GameBoard = {
   BoardType: string;
   Hoz_step: number | null;
   Ver_step: number | null;
-  Squares: { StepIndex: number; StepNumber: number; Title: string; SquareColor: string }[];
+  /**
+   * Một ô, đã ghép sẵn phần hiển thị.
+   *
+   * `SquareColor` là chuỗi CSS `linear-gradient(...)` chứ không phải mã màu -
+   * `BoardCanvas` tự đọc nó ra gradient của SVG.
+   *
+   * ⚠️ Ô `StepIndex = -1` là ô Start: **không có polygon nào** và các trường
+   * màu đều RỖNG. Đừng đi tìm hình cho nó.
+   */
+  Squares: {
+    StepIndex: number;
+    StepNumber: number;
+    Title: string;
+    /** CSS gradient. Rỗng ở ô Start. */
+    SquareColor: string;
+    /** Màu đặc của mặt bên (khối 3D). */
+    TileBaseBackground: string;
+    /** Màu viền ô. */
+    TileBaseBoxShadow: string;
+    /** URL icon, server ghép sẵn với `SiteURL` - phải qua `assetUrl`. */
+    Background: string;
+    /** `X = 0` nghĩa là chưa chỉnh tay: tự căn giữa icon trong ô. */
+    X: number;
+    Y: number;
+    Width: number;
+    Height: number;
+    Angle: number;
+  }[];
   Geometry: {
     ViewBox: string;
     BackgroundImage: string;
@@ -374,6 +401,25 @@ export type GameBoard = {
 
 /** Ảnh nền bàn cờ. Server trả đường dẫn tương đối. */
 export const boardImageUrl = (path: string) => `${API_BASE_URL}${path}`;
+
+/**
+ * Đưa một URL tài nguyên của server về đúng origin mà app đang gọi.
+ *
+ * ⚠️ CẦN, đừng bỏ. `Square.Background` (icon của ô) được server ghép sẵn với
+ * `SiteURL` trong appsettings - hiện là `https://localhost:7025/`. Nhưng app
+ * lúc dev nói chuyện qua `http://localhost:5276`, nên dùng nguyên URL đó thì
+ * icon **không tải được** và bàn cờ hiện ra trống trơn, không báo lỗi gì.
+ *
+ * Không phải mẹo tạm: `SiteURL` là địa chỉ server tự nghĩ về mình, còn
+ * `API_BASE_URL` là địa chỉ client thật sự với tới được. Hai cái đó khác nhau
+ * bất cứ khi nào có proxy, port-forward hay tên miền nội bộ - chuẩn hoá về phía
+ * client mới đúng.
+ */
+export function assetUrl(raw: string): string {
+  if (!raw) return raw;
+  const path = raw.match(/^https?:\/\/[^/]+(\/.*)$/)?.[1];
+  return path ? `${API_BASE_URL}${path}` : `${API_BASE_URL}${raw.startsWith('/') ? '' : '/'}${raw}`;
+}
 
 /**
  * `GameSessionModel.GameSetup` ở server. Giá trị số, không phải chuỗi.
