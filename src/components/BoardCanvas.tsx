@@ -344,6 +344,22 @@ export const BoardCanvas = memo(({ board, players, currentTurnPlayerId }: Props)
     return { viewBox, aspect: vw / vh, background, centres, defs, tiles, icons };
   }, [board, geometry]);
 
+  /*
+   * ⚠️ CHƯA HỖ TRỢ `BoardType = 'rectangle'` - bàn đó sẽ ra TRẮNG TRƠN.
+   *
+   * `BoardGeometryService.Get` ở server chỉ sinh `Geometry` cho `oval`; với
+   * `rectangle` nó trả `null` một cách hợp lệ, vì loại đó bản web KHÔNG dùng
+   * polygon vẽ tay mà sinh toạ độ procedural từ `Hoz_step` × `Ver_step`
+   * (`renderSteps()` trong `wwwroot/js/board.js`).
+   *
+   * Trong DB đang có ba nhóm: `crictriv` và `footietriv` là oval, còn một nhóm
+   * `rectangle` (8 × 4, 25 ô). Chọn nhóm nào là do sponsor gắn với license, nên
+   * chỉ cần một license trỏ vào nhóm đó là gặp ngay.
+   *
+   * Việc phải làm: thêm nhánh sinh polygon cho `rectangle` rồi rẽ theo
+   * `board.BoardType`. Mọi thứ khác của màn (dải người chơi, quân cờ, bài, xúc
+   * xắc) không phụ thuộc loại board.
+   */
   if (!geometry || !layers) return null;
 
   const { viewBox, aspect, background, centres, defs, tiles, icons } = layers;
