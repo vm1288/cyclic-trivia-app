@@ -247,9 +247,9 @@ const CHAR_BOX_RATIO = 0.92;
  * ⚠️ Từng để 120 - đúng công thức của bản web (`boardCharHeight = stepHeight +
  * 30`), nhưng trên điện thoại thì nhân vật che mất chữ trên ô, và bộ 12 con mới
  * còn nặng nề hơn vì nhiều con vẽ nằm ngang nên chiếm cả bề ngang ô bên cạnh.
- * Hạ một nửa.
+ * Hạ xuống 60 rồi nới lại 20% cho dễ nhìn.
  */
-const CHAR_HEIGHT = 60;
+const CHAR_HEIGHT = 72;
 
 /** Độ cao cú nhảy, tính theo chiều cao nhân vật. */
 const HOP_RISE = 0.55;
@@ -436,27 +436,6 @@ function BoardCharacter({
       pointerEvents="none"
       style={[{ position: 'absolute', left: 0, top: 0, width: charWidth, height: boxHeight }, style]}
     >
-      {/*
-        Bóng dưới chân, mang màu người chơi để phân biệt khi nhiều người cùng ô.
-
-        ⚠️ Mép DƯỚI của bóng nằm đúng đường chân (`boxHeight * (1 - footRatio)`),
-        không được trừ thêm gì nữa. Bản trước trừ `boxHeight * 0.03`, và với bộ
-        nhân vật đã cắt sát (`footRatio = 1.0`) thì số đó thành ÂM - bóng thò
-        hẳn xuống dưới ảnh và hiện ra thành một đốm màu rời, thay vì nấp sau
-        chân. Bộ cũ không lộ vì nó còn khoảng trong suốt dưới chân che đi.
-      */}
-      <View
-        style={{
-          position: 'absolute',
-          left: charWidth * 0.2,
-          bottom: boxHeight * (1 - footRatio),
-          width: charWidth * 0.6,
-          height: boxHeight * 0.09,
-          borderRadius: boxHeight * 0.05,
-          backgroundColor: player.PlayerColor || '#2EE85F',
-          opacity: 0.4,
-        }}
-      />
       {/* Mắt mở - luôn hiện, nằm dưới. */}
       <Image
         source={{ uri: characterImageUrl(player.CharacterId) }}
