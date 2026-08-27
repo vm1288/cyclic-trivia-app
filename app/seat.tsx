@@ -2,7 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { characterImageUrl, getGameState } from '../src/api/game';
+import { assetUrl, getGameState, type GameCharacter } from '../src/api/game';
 import { submitNickname } from '../src/api/room';
 import { FormScreen } from '../src/components/FormScreen';
 import { NeonButton } from '../src/components/NeonButton';
@@ -23,23 +23,6 @@ import { neon, text } from '../src/theme/colors';
  * Luật chép theo bản web (`player-views/SetNicknameView.js`), đừng nới ra:
  * tên bắt buộc, **tối đa 10 ký tự**, giới tính mặc định "male".
  */
-
-/**
- * Sáu nhân vật và màu của chúng.
- *
- * Màu KHÔNG phải để trang trí: server tự gán `PlayerColor` theo `characterId`
- * (`Constants.animalMapColors`), và đó là màu quân cờ trên bàn. Danh sách này
- * phải khớp đúng, lệch một mã màu là ô người chơi trong ván hiện một màu còn
- * quân cờ một màu khác.
- */
-const CHARACTERS = [
-  { id: 'one', color: '#FEDD4A' },
-  { id: 'two', color: '#A73C0D' },
-  { id: 'three', color: '#FE0902' },
-  { id: 'four', color: '#B3E847' },
-  { id: 'five', color: '#C98AED' },
-  { id: 'six', color: '#48D0FF' },
-] as const;
 
 const NICKNAME_MAX = 10;
 
@@ -63,7 +46,17 @@ export default function SeatScreen() {
   const next = params.next === '/lobby' ? '/lobby' : '/waiting';
 
   const [nickname, setNickname] = useState('');
-  const [characterId, setCharacterId] = useState<string>('one');
+  /*
+   * Danh sách nhân vật LẤY TỪ SERVER, không hardcode.
+   *
+   * ⚠️ Bộ nhân vật phụ thuộc BOARD: CricTriv dùng 12 con thú, Cyclic Trivia và
+   * FootieTriv giữ 6 con cũ. Bản trước hardcode `one`..`six` kèm mã màu chép
+   * tay từ `Constants.animalMapColors` - vừa sai với CricTriv, vừa là chỗ dễ
+   * lệch màu giữa ô người chơi và quân cờ. Giờ cả id lẫn màu đều do server cấp
+   * trong `Board.Characters`.
+   */
+  const [characters, setCharacters] = useState<GameCharacter[]>([]);
+  const [characterId, setCharacterId] = useState<string>('');
   const [gender, setGender] = useState<'male' | 'female'>('male');
   const [taken, setTaken] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -80,8 +73,16 @@ export default function SeatScreen() {
   const loadTaken = useCallback(async () => {
     if (!seat) return;
 
-    const state = await getGameState(seat.gameId);
+    // `includeBoard` để lấy `Board.Characters` - danh sách nhân vật của board này.
+    const state = await getGameState(seat.gameId, true);
     if (!state.isSuccess) return;
+
+    const list = state.Board?.Characters ?? [];
+    if (list.length > 0) {
+      setCharacters(list);
+      // Chưa chọn gì thì lấy con đầu tiên của bộ, không đoán `one`.
+      setCharacterId((current) => (current ? current : list[0].Id));
+    }
 
     setTaken(
       state.Players.filter((p) => p.IsSetupNickName && p.Id !== seat.playerId).map(
@@ -98,9 +99,9 @@ export default function SeatScreen() {
   // để nút gửi không bao giờ ở trạng thái chắc chắn trượt.
   useEffect(() => {
     if (!taken.includes(characterId)) return;
-    const free = CHARACTERS.find((c) => !taken.includes(c.id));
-    if (free) setCharacterId(free.id);
-  }, [taken, characterId]);
+    const free = characters.find((c) => !taken.includes(c.Id));
+    if (free) setCharacterId(free.Id);
+  }, [taken, characterId, characters]);
 
   async function submit() {
     const trimmed = nickname.trim();
@@ -194,20 +195,20 @@ export default function SeatScreen() {
       <SectionHeader title={t('seat.pickCharacter')} />
 
       <View style={styles.grid}>
-        {CHARACTERS.map((character) => {
-          const isTaken = taken.includes(character.id);
-          const active = characterId === character.id;
+        {characters.map((character) => {
+          const isTaken = taken.includes(character.Id);
+          const active = characterId === character.Id;
 
           return (
             <Pressable
-              key={character.id}
-              onPress={() => setCharacterId(character.id)}
+              key={character.Id}
+              onPress={() => setCharacterId(character.Id)}
               disabled={isTaken || busy}
               accessibilityRole="radio"
               accessibilityState={{ selected: active, disabled: isTaken }}
               style={[
                 styles.character,
-                { borderColor: character.color },
+                { borderColor: character.Color },
                 /*
                  * Ô đang chọn phải khác hẳn, không chỉ sáng hơn.
                  *
@@ -222,12 +223,12 @@ export default function SeatScreen() {
               ]}
             >
               <Image
-                source={{ uri: characterImageUrl(character.id) }}
+                source={{ uri: assetUrl(character.Image) }}
                 style={styles.characterImage}
                 resizeMode="contain"
               />
               {active && !isTaken ? (
-                <View style={[styles.tick, { backgroundColor: character.color }]}>
+                <View style={[styles.tick, { backgroundColor: character.Color }]}>
                   <Text style={styles.tickMark}>✓</Text>
                 </View>
               ) : null}

@@ -355,6 +355,34 @@ export type GameSnapshot = {
  * theo `StepIndex`. Dùng nhầm một cái là cả bàn cờ xoay đi một ô. Bàn `oval`
  * không dính vì polygon đã mang sẵn `StepIndex`.
  */
+export type GameCharacter = {
+  /** Ghi vào `Players.CharacterId`, và cũng là chỗ ghép đường dẫn ảnh. */
+  Id: string;
+  Color: string;
+  /** "Leo, the Lion". */
+  Name: string;
+  /** "Leo". */
+  ShortName: string;
+  /** Đường dẫn tương đối tới khung đứng yên - phải qua `assetUrl`. */
+  Image: string;
+  /**
+   * `false` khi `{id}-1.png` chỉ là bản sao của khung đứng yên chứ không phải
+   * khung mắt nhắm thật. Lúc đó ĐỪNG tải nó - phí ~450KB mỗi người chơi.
+   */
+  HasBlink: boolean;
+  /**
+   * Bề ngang chia chiều cao của ảnh ĐÃ CẮT VIỀN.
+   *
+   * ⚠️ Cần thật. Bộ 12 con của CricTriv có nhiều con vẽ NẰM NGANG (komodo 1.58,
+   * hippo 1.29, rhino 1.28) trong khi 6 con cũ đều đứng dọc (0.57..0.87). Đoán
+   * khung theo chiều cao rồi `contain` là con nằm ngang bị co lại và CĂN GIỮA
+   * khung - chân nó lơ lửng phía trên ô.
+   */
+  Aspect: number;
+  /** Chân nằm ở đâu theo chiều cao ảnh: 0.88 với bộ cũ, 1.0 với bộ mới. */
+  FootRatio: number;
+};
+
 export type GameBoard = {
   BoardGameId: string;
   BoardType: string;
@@ -388,6 +416,15 @@ export type GameBoard = {
     Height: number;
     Angle: number;
   }[];
+  /**
+   * Nhân vật chơi được trên board NÀY, theo thứ tự hiện trong màn chọn.
+   *
+   * ⚠️ ĐỪNG hardcode danh sách này. Bộ nhân vật phụ thuộc board: CricTriv dùng
+   * 12 con thú, Cyclic Trivia và FootieTriv giữ 6 con cũ. `Color` phải đúng cái
+   * server ghi vào `PlayerColor` lúc nhận ghế, lệch là ô người chơi một màu còn
+   * quân cờ một màu khác.
+   */
+  Characters: GameCharacter[];
   Geometry: {
     ViewBox: string;
     BackgroundImage: string;

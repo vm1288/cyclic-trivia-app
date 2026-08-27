@@ -16,6 +16,7 @@ import {
   boardImageUrl,
   characterImageUrl,
   type GameBoard,
+  type GameCharacter,
   type GamePlayer,
 } from '../api/game';
 import { useT } from '../i18n/I18nProvider';
@@ -237,13 +238,6 @@ function useMeasuredBox() {
  */
 const CHAR_BOX_RATIO = 0.92;
 
-/**
- * Bàn chân nằm ở khoảng 88% chiều cao ảnh (phần dưới là bóng/khoảng trống).
- * Chép theo `FOOT_RATIO` trong `wwwroot/js/characters.js` để nhân vật đứng ĐÚNG
- * trên mặt ô chứ không lơ lửng giữa ô.
- */
-const FOOT_RATIO = 0.88;
-
 /** Độ cao cú nhảy, tính theo chiều cao nhân vật. */
 const HOP_RISE = 0.55;
 
@@ -290,6 +284,9 @@ function BoardCharacter({
   isTurn,
   lane,
   laneCount,
+  aspect,
+  footRatio,
+  hasBlink,
 }: {
   player: GamePlayer;
   /** Toạ độ tâm từng ô theo ĐÚNG thứ tự đi vòng, đơn vị px của khung. */
@@ -305,6 +302,12 @@ function BoardCharacter({
   lane: number;
   /** Tổng số người cùng đứng ô đó. */
   laneCount: number;
+  /** Bề ngang / chiều cao của ảnh con này. */
+  aspect: number;
+  /** Chân nằm ở đâu theo chiều cao ảnh. */
+  footRatio: number;
+  /** `{id}-1.png` có phải khung mắt nhắm THẬT không. False thì đừng tải. */
+  hasBlink: boolean;
 }) {
   const progress = useSharedValue(targetIndex);
   const previous = useRef(targetIndex);
@@ -360,8 +363,22 @@ function BoardCharacter({
 
   const blink = useAnimatedStyle(() => ({ opacity: shut.value }));
 
-  const charWidth = charHeight * CHAR_BOX_RATIO;
-  const rise = charHeight * HOP_RISE;
+  /*
+   * Khung khớp ĐÚNG tỉ lệ của chính con đó, không phải một khung đoán sẵn.
+   *
+   * ⚠️ Bộ 12 con của CricTriv có nhiều con vẽ NẰM NGANG (komodo 1.58, hippo
+   * 1.29, rhino 1.28) trong khi 6 con cũ đều đứng dọc (0.57..0.87). Dùng chung
+   * một khung rồi `contain` thì con nằm ngang bị co lại và CĂN GIỮA khung -
+   * chân nó lơ lửng phía trên ô. Khớp khung đúng tỉ lệ thì mép dưới khung
+   * chính là chân, và `footRatio` đặt nó lên mặt ô.
+   *
+   * Vẫn chặn theo BỀ NGANG: cao 120 mà tỉ lệ 1.58 là rộng 190 đơn vị, gần hai ô
+   * của bàn rectangle.
+   */
+  const maxWidth = charHeight * CHAR_BOX_RATIO * 1.35;
+  const boxHeight = Math.min(charHeight, maxWidth / aspect);
+  const charWidth = boxHeight * aspect;
+  const rise = boxHeight * HOP_RISE;
 
   /*
    * Nhiều người cùng một ô thì XOÈ ĐỀU hai bên quanh tâm ô, không dồn một phía.
@@ -394,7 +411,7 @@ function BoardCharacter({
       opacity: 1,
       transform: [
         { translateX: x - charWidth / 2 + spread },
-        { translateY: y - charHeight * FOOT_RATIO },
+        { translateY: y - boxHeight * footRatio },
         // Người tới lượt to hơn một chút cho dễ nhận ra.
         { scale: isTurn ? 1.12 : 1 },
       ],
@@ -404,17 +421,17 @@ function BoardCharacter({
   return (
     <Animated.View
       pointerEvents="none"
-      style={[{ position: 'absolute', left: 0, top: 0, width: charWidth, height: charHeight }, style]}
+      style={[{ position: 'absolute', left: 0, top: 0, width: charWidth, height: boxHeight }, style]}
     >
       {/* Bóng dưới chân, mang màu người chơi để phân biệt khi nhiều người cùng ô. */}
       <View
         style={{
           position: 'absolute',
           left: charWidth * 0.18,
-          bottom: charHeight * (1 - FOOT_RATIO) - charHeight * 0.03,
+          bottom: boxHeight * (1 - footRatio) - boxHeight * 0.03,
           width: charWidth * 0.64,
-          height: charHeight * 0.11,
-          borderRadius: charHeight * 0.06,
+          height: boxHeight * 0.11,
+          borderRadius: boxHeight * 0.06,
           backgroundColor: player.PlayerColor || '#2EE85F',
           opacity: 0.55,
         }}
@@ -425,12 +442,20 @@ function BoardCharacter({
         style={styles.charFrame}
         resizeMode="contain"
       />
-      {/* Mắt nhắm - chồng lên, chỉ hiện đúng lúc nháy. */}
-      <Animated.Image
-        source={{ uri: characterImageUrl(player.CharacterId, 1) }}
-        style={[styles.charFrame, blink]}
-        resizeMode="contain"
-      />
+      {/*
+        Mắt nhắm - chồng lên, chỉ hiện đúng lúc nháy.
+
+        ⚠️ Chỉ vẽ khi bộ nhân vật CÓ khung mắt nhắm thật. Bộ 12 con mới không
+        có; `{id}-1.png` của chúng là bản sao của `-0` (để web/app không 404),
+        nên vẽ ra là tải thừa ~450KB mỗi người chơi mà nhìn không khác gì.
+      */}
+      {hasBlink ? (
+        <Animated.Image
+          source={{ uri: characterImageUrl(player.CharacterId, 1) }}
+          style={[styles.charFrame, blink]}
+          resizeMode="contain"
+        />
+      ) : null}
     </Animated.View>
   );
 }
@@ -445,6 +470,7 @@ function BoardCharacter({
 function Characters({
   players,
   currentTurnPlayerId,
+  characterInfo,
   centres,
   vx,
   vy,
@@ -455,6 +481,14 @@ function Characters({
 }: {
   players: GamePlayer[];
   currentTurnPlayerId: string;
+  /**
+   * Bộ nhân vật của board này (`Board.Characters`), để tra tỉ lệ ảnh.
+   *
+   * ⚠️ Không tra được thì rơi về 0.8 / 0.88 - đúng dáng 6 con cũ. Con nằm ngang
+   * mà rơi vào nhánh đó sẽ đứng sai, nên nếu thấy nhân vật lơ lửng thì kiểm
+   * `Board.Characters` có xuống tới đây không, đừng chỉnh số ở đây.
+   */
+  characterInfo: Map<string, GameCharacter>;
   centres: Map<number, Point>;
   /**
    * GỐC toạ độ của ViewBox.
@@ -562,6 +596,9 @@ function Characters({
             isTurn={player.Id === currentTurnPlayerId}
             lane={lane}
             laneCount={counts.get(key) ?? 1}
+            aspect={characterInfo.get(player.CharacterId)?.Aspect ?? 0.8}
+            footRatio={characterInfo.get(player.CharacterId)?.FootRatio ?? 0.88}
+            hasBlink={characterInfo.get(player.CharacterId)?.HasBlink ?? true}
           />
         );
       })}
@@ -590,6 +627,11 @@ function Characters({
 const CROP = { left: 0.012, right: 0.012, top: 0.09, bottom: 0.025 };
 
 function OvalBoard({ board, players, currentTurnPlayerId, demoJump }: Props) {
+  // Tra cứu nhanh theo `CharacterId`; `Board.Characters` do server cấp.
+  const characterInfo = useMemo(
+    () => new Map((board.Characters ?? []).map((c) => [c.Id, c])),
+    [board.Characters],
+  );
   const geometry = board.Geometry;
   const [box, onLayout] = useMeasuredBox();
 
@@ -830,6 +872,7 @@ function OvalBoard({ board, players, currentTurnPlayerId, demoJump }: Props) {
           <Characters
             players={players}
             currentTurnPlayerId={currentTurnPlayerId}
+            characterInfo={characterInfo}
             centres={centres}
             vx={vx0}
             vy={vy0}
@@ -924,6 +967,11 @@ function rectangleRing(hozStep: number, verStep: number): RectSlot[] {
 }
 
 function RectangleBoard({ board, players, currentTurnPlayerId, demoJump }: Props) {
+  // Tra cứu nhanh theo `CharacterId`; `Board.Characters` do server cấp.
+  const characterInfo = useMemo(
+    () => new Map((board.Characters ?? []).map((c) => [c.Id, c])),
+    [board.Characters],
+  );
   /*
    * Bàn này KHÔNG có ảnh nền để suy ra tỉ lệ, và ô phải VUÔNG - nên ngoài việc
    * vừa khung (xem `useMeasuredBox`), cạnh ô còn phải là số nguyên.
@@ -1132,6 +1180,7 @@ function RectangleBoard({ board, players, currentTurnPlayerId, demoJump }: Props
             <Characters
               players={players}
               currentTurnPlayerId={currentTurnPlayerId}
+              characterInfo={characterInfo}
               centres={layers.centres}
               /* viewBox của bàn rectangle luôn bắt đầu ở `0 0`. */
               vx={0}
