@@ -238,6 +238,19 @@ function useMeasuredBox() {
  */
 const CHAR_BOX_RATIO = 0.92;
 
+/**
+ * Chiều cao nhân vật, đơn vị ViewBox.
+ *
+ * Ô oval cao ~80-99 trong ViewBox cao 627; ô rectangle là CELL = 100 trong
+ * ViewBox cao 612. Nên con số này đọc gần như nhau trên cả hai loại bàn.
+ *
+ * ⚠️ Từng để 120 - đúng công thức của bản web (`boardCharHeight = stepHeight +
+ * 30`), nhưng trên điện thoại thì nhân vật che mất chữ trên ô, và bộ 12 con mới
+ * còn nặng nề hơn vì nhiều con vẽ nằm ngang nên chiếm cả bề ngang ô bên cạnh.
+ * Hạ một nửa.
+ */
+const CHAR_HEIGHT = 60;
+
 /** Độ cao cú nhảy, tính theo chiều cao nhân vật. */
 const HOP_RISE = 0.55;
 
@@ -423,17 +436,25 @@ function BoardCharacter({
       pointerEvents="none"
       style={[{ position: 'absolute', left: 0, top: 0, width: charWidth, height: boxHeight }, style]}
     >
-      {/* Bóng dưới chân, mang màu người chơi để phân biệt khi nhiều người cùng ô. */}
+      {/*
+        Bóng dưới chân, mang màu người chơi để phân biệt khi nhiều người cùng ô.
+
+        ⚠️ Mép DƯỚI của bóng nằm đúng đường chân (`boxHeight * (1 - footRatio)`),
+        không được trừ thêm gì nữa. Bản trước trừ `boxHeight * 0.03`, và với bộ
+        nhân vật đã cắt sát (`footRatio = 1.0`) thì số đó thành ÂM - bóng thò
+        hẳn xuống dưới ảnh và hiện ra thành một đốm màu rời, thay vì nấp sau
+        chân. Bộ cũ không lộ vì nó còn khoảng trong suốt dưới chân che đi.
+      */}
       <View
         style={{
           position: 'absolute',
-          left: charWidth * 0.18,
-          bottom: boxHeight * (1 - footRatio) - boxHeight * 0.03,
-          width: charWidth * 0.64,
-          height: boxHeight * 0.11,
-          borderRadius: boxHeight * 0.06,
+          left: charWidth * 0.2,
+          bottom: boxHeight * (1 - footRatio),
+          width: charWidth * 0.6,
+          height: boxHeight * 0.09,
+          borderRadius: boxHeight * 0.05,
           backgroundColor: player.PlayerColor || '#2EE85F',
-          opacity: 0.55,
+          opacity: 0.4,
         }}
       />
       {/* Mắt mở - luôn hiện, nằm dưới. */}
@@ -878,7 +899,7 @@ function OvalBoard({ board, players, currentTurnPlayerId, demoJump }: Props) {
             vy={vy0}
             vw={vw}
             frameWidth={width}
-            charHeight={120}
+            charHeight={CHAR_HEIGHT}
             demoFrom={demoJump ? 0 : null}
           />
         </View>
@@ -1187,7 +1208,7 @@ function RectangleBoard({ board, players, currentTurnPlayerId, demoJump }: Props
               vy={0}
               vw={layers.vw}
               frameWidth={width}
-              charHeight={120}
+              charHeight={CHAR_HEIGHT}
               demoFrom={demoJump ? 0 : null}
             />
           </View>
