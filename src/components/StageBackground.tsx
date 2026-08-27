@@ -26,6 +26,14 @@ const STAGE = {
    * hơn, để bàn cờ là thứ bắt mắt duy nhất.
    */
   alt: require('../../assets/brand/main-background-alt.png'),
+  /**
+   * Chỉ dùng cho màn NẰM NGANG trong ván (`app/game-landscape.tsx`).
+   *
+   * Là bản vẽ riêng cho chiều ngang, không phải bản dọc xoay 90°. Ảnh
+   * 1846×852 (tỉ lệ 2.167) trùng khít tỉ lệ máy test khi nằm ngang
+   * (850.9×392.7 dp = 2.167), nên `cover` gần như không cắt gì.
+   */
+  landscape: require('../../assets/brand/main-background-landscape.png'),
 } as const;
 
 export type StageVariant = keyof typeof STAGE;

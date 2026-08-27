@@ -346,9 +346,14 @@ export type GameSnapshot = {
  * toạ độ `ViewBox`. Nghĩa là muốn đặt quân cờ đúng ô thì phải hiển thị đúng ảnh
  * đó với đúng tỉ lệ - co giãn lệch một chút là quân cờ lệch ô.
  *
- * `Geometry` NULL với bàn `rectangle`: loại đó server không vẽ sẵn mà client tự
- * sinh từ `Hoz_step`/`Ver_step` (`renderSteps()` trong board.js của bản web).
- * Dữ liệu thật hiện có: `crictriv` và `footietriv` đều là oval.
+ * `Geometry` NULL với bàn `rectangle` là **đúng**, không phải lỗi: loại đó
+ * client tự sinh toạ độ từ `Hoz_step`/`Ver_step` (`renderSteps()` trong
+ * board.js của bản web). `BoardCanvas` đã có nhánh cho cả hai.
+ *
+ * ⚠️ Ở bàn `rectangle`, `StepNumber` và `StepIndex` **lệch nhau**: thứ tự đặt ô
+ * quanh vòng đi theo `StepNumber`, còn `CurrentStepIndex` của người chơi trỏ
+ * theo `StepIndex`. Dùng nhầm một cái là cả bàn cờ xoay đi một ô. Bàn `oval`
+ * không dính vì polygon đã mang sẵn `StepIndex`.
  */
 export type GameBoard = {
   BoardGameId: string;
@@ -440,11 +445,14 @@ export const CASE_ACTION = { QuestionForTurn: 20 } as const;
  * Ảnh nhân vật, lấy thẳng từ server.
  *
  * Hậu tố `-0` là khung đứng yên - đúng khung mà bản web dùng cho ô người chơi
- * (`SelectPlayersPartialHtml.cshtml`, `PlayerHomeScreen.js`). Các khung `-1`,
- * `-male`, `-female` dành cho animation và màn chọn nhân vật.
+ * (`SelectPlayersPartialHtml.cshtml`, `PlayerHomeScreen.js`).
+ *
+ * `-1` là **cùng nhân vật đó nhưng NHẮM MẮT** - hai file chỉ khác nhau đôi mắt.
+ * `BoardCanvas` chồng hai khung rồi đảo `opacity` để nhân vật trên bàn cờ nháy
+ * mắt. Các khung `-male`, `-female` dành cho màn chọn nhân vật.
  */
-export const characterImageUrl = (characterId: string) =>
-  `${API_BASE_URL}/images/character/${characterId}-0.png`;
+export const characterImageUrl = (characterId: string, frame: 0 | 1 = 0) =>
+  `${API_BASE_URL}/images/character/${characterId}-${frame}.png`;
 
 export async function getGameState(
   gameId: string,

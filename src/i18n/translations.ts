@@ -163,6 +163,8 @@ export const en = {
   'game.card.Changer': 'CHANGER',
   'game.rollDice': 'ROLL DICE',
   'game.noSeat': 'You do not have a seat in this game.',
+  /** Loại bàn cờ chưa có nhánh vẽ - thà nói ra còn hơn để bàn cờ trắng trơn. */
+  'game.boardUnsupported': 'This board type is not supported yet.',
 
   'error.network': 'Cannot reach the server. Check your connection and the server address.',
   'error.timeout': 'The server did not respond. Check your connection and try again.',
@@ -317,6 +319,7 @@ const vi: Record<TranslationKey, string> = {
   'game.card.Changer': 'CHANGER',
   'game.rollDice': 'TUNG XÚC XẮC',
   'game.noSeat': 'Bạn không có ghế trong ván này.',
+  'game.boardUnsupported': 'Loại bàn cờ này chưa hỗ trợ.',
 
   'error.network': 'Không kết nối được tới server. Kiểm tra mạng và địa chỉ server.',
   'error.timeout': 'Server không phản hồi. Kiểm tra kết nối rồi thử lại.',
