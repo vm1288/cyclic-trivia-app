@@ -4,16 +4,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import {
-  characterImageUrl,
-  getGameState,
-  type GameBoard,
-  type GamePlayer,
-  type GameSnapshot,
-} from '../src/api/game';
+import { characterImageUrl, type GamePlayer } from '../src/api/game';
 import { BoardCanvas } from '../src/components/BoardCanvas';
 import { StageBackground } from '../src/components/StageBackground';
-import { useGameConnection } from '../src/net/useGameConnection';
+import { useGameState } from '../src/net/useGameState';
 import {
   boardColors,
   CARD_ORDER,
@@ -40,8 +34,6 @@ import { neon, text } from '../src/theme/colors';
  *
  * Màn này tự khoá landscape khi mở và trả về portrait khi thoát.
  */
-
-const POLL_MS = 3000;
 
 /**
  * CHẾ ĐỘ THỬ: cho nhân vật của người tới lượt tự nhảy vòng quanh bàn cờ.
@@ -105,9 +97,6 @@ export default function GameLandscapeScreen() {
 
   const seat = player.status === 'ready' ? player.seat : null;
 
-  const [snapshot, setSnapshot] = useState<GameSnapshot | null>(null);
-  const [board, setBoard] = useState<GameBoard | null>(null);
-
   /**
    * Khoá ngang khi vào, trả về dọc khi rời.
    */
@@ -123,78 +112,23 @@ export default function GameLandscapeScreen() {
     };
   }, []);
 
-  const alive = useRef(true);
-
-  useEffect(() => {
-    alive.current = true;
-
-    let timer: ReturnType<typeof setTimeout>;
-    let hasBoard = false;
-
-    async function tick() {
-      if (!seat || !alive.current) {
-        return;
-      }
-
-      const result = await getGameState(
-        seat.gameId,
-        !hasBoard,
-      );
-
-      if (!alive.current) {
-        return;
-      }
-
-      if (result.isSuccess) {
-        setSnapshot({
-          Game: result.Game,
-          Players: result.Players,
-        });
-
-        if (!hasBoard && result.Board) {
-          setBoard(result.Board);
-          hasBoard = true;
-        }
-      }
-
-      timer = setTimeout(
-        tick,
-        POLL_MS,
-      );
-    }
-
-    void tick();
-
-    return () => {
-      alive.current = false;
-      clearTimeout(timer);
-    };
-  }, [seat]);
-
   /*
-   * ============================================================
-   * SIGNALR
-   * ============================================================
+   * Trạng thái ván do SignalR đẩy nhịp - xem `useGameState`.
    *
-   * Bước một: NỐI và NGHE. Poll 3 giây ở trên vẫn giữ nguyên - nó là nguồn dữ
-   * liệu, còn kết nối này mới chỉ chứng minh gói tin về được tới app.
-   *
-   * ⚠️ Đừng bỏ poll cho tới khi từng loại gói tin đã có chỗ xử lý. Bỏ sớm là
-   * mất luôn đường cập nhật mà chưa có gì thay thế.
+   * ⚠️ KHÔNG còn poll 3 giây. Gói tin chỉ là TÍN HIỆU (`PlayerCheckedIn` chẳng
+   * hạn chỉ mang tên với id, không mang danh sách ghế), nên hook nghe gói tin
+   * để biết KHI NÀO đổi rồi nạp lại `/api/game/{id}/state` - vẫn là nguồn sự
+   * thật duy nhất. Vẫn còn một lưới an toàn 20 giây, đừng bỏ.
    *
    * `asBoard` bật vì màn này CHÍNH LÀ một bàn cờ - mỗi điện thoại đều vẽ bàn cờ
-   * riêng (NEXT_STEPS đã sửa lại điều tài liệu từng ghi sai). Server đọc
-   * `connKind=board` và cho `BoardStepWatchdog` lui về vai lưới an toàn.
+   * riêng. Server đọc `connKind=board` và cho `BoardStepWatchdog` lui về vai
+   * lưới an toàn thay vì tự chạy từng bước.
    */
-  const [lastPacket, setLastPacket] = useState<{ typeID: number; at: number } | null>(null);
-
-  const { state: connState } = useGameConnection({
+  const { snapshot, board, connState } = useGameState({
+    gameId: seat?.gameId ?? null,
     token: seat?.token ?? null,
+    includeBoard: true,
     asBoard: true,
-    onPacket: (packet) => {
-      // Chưa xử lý theo từng loại - mới chỉ ghi lại để nhìn thấy trên màn hình.
-      setLastPacket({ typeID: packet.typeID, at: Date.now() });
-    },
   });
 
   const players = snapshot?.Players ?? [];
@@ -514,8 +448,8 @@ export default function GameLandscapeScreen() {
               </Text>
 
               {/*
-                ⚠️ TẠM THỜI - chấm trạng thái SignalR + typeID gói tin cuối, để
-                nhìn được kết nối trong lúc dựng. Bỏ khi các màn đã bỏ poll.
+                Chấm trạng thái SignalR. Xanh = đang nối, vàng = đang nối lại,
+                đỏ = mất kết nối (lúc đó chỉ còn lưới an toàn 20 giây).
               */}
               <View
                 style={[
@@ -527,9 +461,6 @@ export default function GameLandscapeScreen() {
                       : styles.netDead,
                 ]}
               />
-              {lastPacket ? (
-                <Text style={styles.netText}>{lastPacket.typeID}</Text>
-              ) : null}
 
               <View
                 style={styles.iconBtn}
@@ -937,12 +868,11 @@ const styles = StyleSheet.create({
      CURRENT PLAYER
      =========================================================== */
 
-  /* ⚠️ TẠM THỜI - chỉ báo SignalR trong lúc dựng, xem ghi chú ở chỗ dùng. */
+  /* Chỉ báo SignalR - xem ghi chú ở chỗ dùng. */
   netDot: { width: 9, height: 9, borderRadius: 5 },
   netOk: { backgroundColor: boardColors.green },
   netBusy: { backgroundColor: boardColors.amber },
   netDead: { backgroundColor: boardColors.red },
-  netText: { fontSize: 10, fontWeight: '700', color: boardColors.dim },
 
   meRow: {
     flexDirection: 'row',

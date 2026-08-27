@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CASE_ACTION, GAME_SETUP, getGameState, type GameSnapshot } from '../src/api/game';
+import { CASE_ACTION, GAME_SETUP } from '../src/api/game';
+import { useGameState } from '../src/net/useGameState';
 import { lobbyColors, PlayerRow } from '../src/components/LobbyParts';
 import { NeonButton } from '../src/components/NeonButton';
 import { SectionHeader } from '../src/components/SectionHeader';
@@ -18,10 +19,7 @@ import { neon, text } from '../src/theme/colors';
  * Hai màn cố tình tách nhau: `lobby.tsx` cần token license để cấp mã phòng và
  * bấm START GAME, mà người vào bằng mã thì không có license nào. Nhồi cả hai vai
  * vào một màn sẽ thành một mớ `if (isHost)` xuyên suốt.
- *
- * Nhịp poll giống lobby - xem ghi chú `POLL_MS` ở đó. Bỏ khi chuyển sang SignalR.
  */
-const POLL_MS = 3000;
 
 export default function WaitingScreen() {
   const router = useRouter();
@@ -30,31 +28,19 @@ export default function WaitingScreen() {
 
   const seat = player.status === 'ready' ? player.seat : null;
 
-  const [snapshot, setSnapshot] = useState<GameSnapshot | null>(null);
-
-  const alive = useRef(true);
-  useEffect(() => {
-    alive.current = true;
-    let timer: ReturnType<typeof setTimeout>;
-
-    async function tick() {
-      if (!seat || !alive.current) return;
-
-      const result = await getGameState(seat.gameId);
-      if (!alive.current) return;
-
-      // Lỗi mạng thì giữ danh sách cũ và thử lại nhịp sau, đừng nhấp nháy.
-      if (result.isSuccess) setSnapshot({ Game: result.Game, Players: result.Players });
-
-      timer = setTimeout(tick, POLL_MS);
-    }
-
-    void tick();
-    return () => {
-      alive.current = false;
-      clearTimeout(timer);
-    };
-  }, [seat]);
+  /*
+   * Trạng thái ván do SignalR đẩy nhịp thay cho poll 3 giây - xem `useGameState`.
+   *
+   * Màn này chờ hai thứ: người khác nhận ghế (`PlayerCheckedIn`) và ván bắt đầu
+   * (`GameStart` / `QuestionForTurn`). Cả hai đều nằm trong danh sách gói tin
+   * làm nạp lại state.
+   *
+   * `asBoard` KHÔNG bật ở đây - đây là phòng chờ, chưa phải bàn cờ.
+   */
+  const { snapshot } = useGameState({
+    gameId: seat?.gameId ?? null,
+    token: seat?.token ?? null,
+  });
 
   const seats = snapshot?.Players ?? [];
   const joined = seats.filter((p) => p.IsSetupNickName).length;

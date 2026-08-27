@@ -36,6 +36,8 @@ import { StageBackground } from '../src/components/StageBackground';
 import { apiErrorText } from '../src/i18n/apiError';
 import { useT } from '../src/i18n/I18nProvider';
 import { useLicense } from '../src/session/LicenseSession';
+import { usePlayer } from '../src/session/PlayerSession';
+import { useGameState } from '../src/net/useGameState';
 import { neon, text } from '../src/theme/colors';
 
 /**
@@ -45,8 +47,6 @@ import { neon, text } from '../src/theme/colors';
  * đủ nhạy cho việc người chơi lần lượt nhận chỗ. Khi nối SignalR thì bỏ hẳn
  * vòng này - xem NEXT_STEPS.md.
  */
-const POLL_MS = 3000;
-
 /** Bằng đúng bản web (`beginCountdown` trong main.js). Đọc ghi chú ở `beginStart`. */
 const COUNTDOWN_SECONDS = 10;
 
@@ -54,6 +54,8 @@ export default function LobbyScreen() {
   const params = useLocalSearchParams<{ gameId?: string }>();
   const router = useRouter();
   const license = useLicense();
+  const player = usePlayer();
+  const seat = player.status === 'ready' ? player.seat : null;
   const t = useT();
 
   const session = license.status === 'active' ? license.session : null;
@@ -66,7 +68,6 @@ export default function LobbyScreen() {
   const gameId = params.gameId ?? session?.currentGameId ?? null;
 
   const [room, setRoom] = useState<RoomCode | null>(null);
-  const [snapshot, setSnapshot] = useState<GameSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -96,33 +97,17 @@ export default function LobbyScreen() {
   }, [openRoom]);
 
   /*
-   * Poll danh sách ghế. Dùng ref cho cờ sống để lần chạy sau không chồng lên
-   * lần trước khi mạng chậm, và dọn sạch khi rời màn.
+   * Danh sách ghế do SignalR đẩy nhịp thay cho poll 3 giây - xem `useGameState`.
+   *
+   * ⚠️ Token ở đây là token NGƯỜI CHƠI của ghế chủ phòng, không phải token
+   * license. Chủ phòng nhận ghế 0 trước khi vào màn này (`/host-seat` rồi
+   * `submitNickname`), nên `seat` đã có. Chưa có thì hook chỉ chạy lưới an toàn
+   * 20 giây - vẫn dùng được, chỉ chậm hơn.
    */
-  const alive = useRef(true);
-  useEffect(() => {
-    alive.current = true;
-    let timer: ReturnType<typeof setTimeout>;
-
-    async function tick() {
-      if (!gameId || !alive.current) return;
-
-      const result = await getGameState(gameId);
-      if (!alive.current) return;
-
-      // Lỗi mạng thì giữ nguyên danh sách cũ và thử lại ở nhịp sau - nhấp nháy
-      // giữa "có người" và "trống" khó chịu hơn là hiện hơi cũ vài giây.
-      if (result.isSuccess) setSnapshot({ Game: result.Game, Players: result.Players });
-
-      timer = setTimeout(tick, POLL_MS);
-    }
-
-    void tick();
-    return () => {
-      alive.current = false;
-      clearTimeout(timer);
-    };
-  }, [gameId]);
+  const { snapshot } = useGameState({
+    gameId,
+    token: seat?.token ?? null,
+  });
 
   const seats = snapshot?.Players ?? [];
   const joined = seats.filter((p) => p.IsSetupNickName).length;
