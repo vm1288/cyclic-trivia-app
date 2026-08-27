@@ -127,7 +127,7 @@ export function useGameState(options: {
     }, COALESCE_MS);
   }, [load]);
 
-  const { state: connState } = useGameConnection({
+  const { state: connState, connection } = useGameConnection({
     token,
     asBoard,
     onPacket: (packet) => {
@@ -158,5 +158,5 @@ export function useGameState(options: {
     if (connState === 'connected') void load();
   }, [connState, load]);
 
-  return { snapshot, board, connState, refresh: load };
+  return { snapshot, board, connState, connection, refresh: load };
 }

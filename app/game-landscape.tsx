@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { characterImageUrl, type GamePlayer } from '../src/api/game';
+import { CASE_ACTION, characterImageUrl, type GamePlayer } from '../src/api/game';
 import { BoardCanvas } from '../src/components/BoardCanvas';
 import { StageBackground } from '../src/components/StageBackground';
+import { TYPE_ID } from '../src/net/gameConnection';
 import { useGameState } from '../src/net/useGameState';
 import {
   boardColors,
@@ -38,12 +39,13 @@ import { neon, text } from '../src/theme/colors';
 /**
  * CHẾ ĐỘ THỬ: cho nhân vật của người tới lượt tự nhảy vòng quanh bàn cờ.
  *
- * ⚠️ TẠM THỜI. Nước đi thật đi qua packet `Pub` của SignalR mà app chưa nối, nên
- * đây là đường duy nhất hiện có để thấy nhân vật di chuyển và kiểm toạ độ từng
- * ô. Nối SignalR xong thì đặt `false` (hoặc xoá hẳn) và để `CurrentStepIndex`
- * tự lái - cơ chế nhảy đã dùng chung một đường, không phải viết lại.
+ * ĐÃ TẮT (2026-08-27) vì SignalR đã nối: nước đi thật tới qua gói tin và
+ * `CurrentStepIndex` tự lái nhân vật - cơ chế nhảy dùng chung một đường nên
+ * không phải viết lại gì.
+ *
+ * Giữ lại cờ này để bật tạm khi cần xem hiệu ứng nhảy mà không phải chơi cả ván.
  */
-const DEMO_JUMP = true;
+const DEMO_JUMP = false;
 
 /**
  * Bề ngang cột phải.
@@ -90,6 +92,9 @@ const ss = (value: number) => Math.round(value * STRIP_SCALE * 10) / 10;
 
 const STRIP_HEIGHT = STRIP_BASE_HEIGHT * STRIP_SCALE;
 
+/** Chặn bấm xúc xắc dồn - chép theo `canTriggerRollDice` của bản web. */
+const ROLL_COOLDOWN_MS = 2000;
+
 export default function GameLandscapeScreen() {
   const player = usePlayer();
   const t = useT();
@@ -120,11 +125,11 @@ export default function GameLandscapeScreen() {
    * để biết KHI NÀO đổi rồi nạp lại `/api/game/{id}/state` - vẫn là nguồn sự
    * thật duy nhất. Vẫn còn một lưới an toàn 20 giây, đừng bỏ.
    *
-   * `asBoard` bật vì màn này CHÍNH LÀ một bàn cờ - mỗi điện thoại đều vẽ bàn cờ
-   * riêng. Server đọc `connKind=board` và cho `BoardStepWatchdog` lui về vai
-   * lưới an toàn thay vì tự chạy từng bước.
+   * `asBoard` bật vì đúng vai - mỗi điện thoại đều vẽ bàn cờ riêng. Nhưng xem
+   * ghi chú trong `gameConnection.ts`: với app nó HIỆN LÀ NO-OP, và như vậy mới
+   * đúng, vì app chưa làm việc của bàn cờ.
    */
-  const { snapshot, board, connState } = useGameState({
+  const { snapshot, board, connState, connection } = useGameState({
     gameId: seat?.gameId ?? null,
     token: seat?.token ?? null,
     includeBoard: true,
@@ -148,6 +153,51 @@ export default function GameLandscapeScreen() {
   const isMyTurn =
     !!me &&
     currentTurnPlayerId === me.Id;
+
+  /*
+   * ============================================================
+   * TUNG XÚC XẮC
+   * ============================================================
+   *
+   * ⚠️ Nút sáng theo `me.CurrentAction`, KHÔNG theo `currentTurnPlayerId`.
+   * Server nói rõ lúc nào người này được tung; tới lượt mình nhưng đang trả lời
+   * câu hỏi thì `CurrentAction` không phải `RollDice` và tung là vô nghĩa.
+   *
+   * Hai loại xúc xắc, gói tin KHÁC NHAU:
+   *   RollDice (1)        -> TypeID.RollDice            lượt chơi bình thường
+   *   RollDiceForTurn (13)-> TypeID.RollDiceForTurnClient  vòng đua "ai đi trước"
+   * Gửi nhầm loại thì server bỏ qua và người chơi kẹt lượt.
+   */
+  const rollAction =
+    me?.CurrentAction === CASE_ACTION.RollDice
+      ? TYPE_ID.RollDice
+      : me?.CurrentAction === CASE_ACTION.RollDiceForTurn
+        ? TYPE_ID.RollDiceForTurnClient
+        : null;
+
+  const canRoll = rollAction !== null && connState === 'connected';
+
+  /*
+   * Chặn bấm dồn 2 giây, chép theo `canTriggerRollDice` của bản web.
+   *
+   * ⚠️ Cần thật: gửi hai lần `RollDice` cho cùng một lượt thì server xử lý cả
+   * hai và quân cờ đi hai lần. Dùng `ref` chứ không phải state - đây là cái
+   * chốt, không phải thứ để vẽ lại màn hình.
+   */
+  const lastRoll = useRef(0);
+
+  const rollDice = () => {
+    if (!canRoll || rollAction === null) return;
+
+    const now = Date.now();
+    if (now - lastRoll.current < ROLL_COOLDOWN_MS) return;
+    lastRoll.current = now;
+
+    // `TurnId` là bắt buộc - thiếu là server không biết gói tin thuộc lượt nào.
+    void connection.current?.send(rollAction, {
+      TurnId: snapshot?.Game.CurrentTurnId ?? '',
+    });
+  };
 
   const cards = countCards(
     me?.Cards ?? [],
@@ -621,17 +671,24 @@ export default function GameLandscapeScreen() {
                 <ChatIcon size={22} />
               </View>
 
-              <View
-                style={[
+              {/*
+                Chưa tới lượt thì XÁM và không bấm được; tới lượt thì sáng.
+                `disabled` đi theo đúng `canRoll` để không có cảnh nút trông
+                bấm được mà bấm không ăn.
+              */}
+              <Pressable
+                onPress={rollDice}
+                disabled={!canRoll}
+                style={({ pressed }) => [
                   styles.diceBlock,
-                  isMyTurn &&
-                    styles.diceBlockLive,
+                  canRoll && styles.diceBlockLive,
+                  pressed && canRoll && styles.dicePressed,
                 ]}
               >
                 <View
                   style={[
                     styles.diceBtn,
-                    isMyTurn &&
+                    canRoll &&
                       styles.diceBtnLive,
                   ]}
                 >
@@ -641,13 +698,13 @@ export default function GameLandscapeScreen() {
                 <Text
                   style={[
                     styles.diceLabel,
-                    isMyTurn &&
+                    canRoll &&
                       styles.diceLabelLive,
                   ]}
                 >
                   {t('game.rollDice')}
                 </Text>
-              </View>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -1061,6 +1118,7 @@ const styles = StyleSheet.create({
       'rgba(198,212,240,0.5)',
   },
 
+  dicePressed: { opacity: 0.7 },
   diceLabelLive: {
     color: text.primary,
   },

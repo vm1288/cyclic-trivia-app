@@ -296,6 +296,14 @@ export type GamePlayer = {
   Stars: number;
   /** Đang đứng ở ô nào. Khớp với Board.Squares[].StepIndex. */
   CurrentStepIndex: number;
+  /**
+   * Server đang BẢO người này làm gì (`CaseAction`, xem `CASE_ACTION`).
+   *
+   * ⚠️ Đây mới là thứ quyết định nút xúc xắc sáng hay xám, KHÔNG phải
+   * `CurrentTurnPlayerId`. Tới lượt mình nhưng đang trả lời câu hỏi thì cũng
+   * không được tung; server nói `RollDice` thì mới được.
+   */
+  CurrentAction: number;
   IsConnected: boolean;
   IsSetupNickName: boolean;
   IsHost: boolean;
@@ -317,6 +325,11 @@ export type GameSnapshot = {
      */
     CurrentTurnPlayerId: string;
     PlayerTurnIndex: number;
+    /**
+     * Id của LƯỢT hiện tại. Phải gửi kèm khi tung xúc xắc để server biết gói tin
+     * thuộc lượt nào - gửi thiếu là nó bỏ qua.
+     */
+    CurrentTurnId: string;
     /**
      * 0 = ván chưa thật sự bắt đầu. Bản web dùng đúng biến này để phân biệt
      * "vào ván mới" với "quay lại ván đang dở" (`CurrentCountRollDice == 0`
@@ -476,7 +489,13 @@ export function assetUrl(raw: string): string {
 export const GAME_SETUP = { Started: 0, Instruction: 1, SetNickname: 2 } as const;
 
 /** `CaseAction` ở server (`Hubs/PacketType.cs`). Chỉ khai báo cái app đang dùng. */
-export const CASE_ACTION = { QuestionForTurn: 20 } as const;
+export const CASE_ACTION = {
+  /** Tới lượt, được tung xúc xắc. */
+  RollDice: 1,
+  /** Vòng đua "ai đi trước" - cũng tung xúc xắc nhưng gói tin khác. */
+  RollDiceForTurn: 13,
+  QuestionForTurn: 20,
+} as const;
 
 /**
  * Ảnh nhân vật, lấy thẳng từ server.

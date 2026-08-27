@@ -36,6 +36,8 @@ export const TYPE_ID = {
   PlayerCheckedIn: 8,
   WhosTurn: 9,
   RollDice: 14,
+  /** Xúc xắc của vòng đua "ai đi trước" - KHÁC `RollDice`. */
+  RollDiceForTurnClient: 41,
   GameStart: 38,
   GameOver: 39,
   PlayerStart: 50,
@@ -61,10 +63,22 @@ type Options = {
   /**
    * Nối với vai BÀN CỜ.
    *
-   * ⚠️ Có ý nghĩa thật ở server: `GameHub.OnConnectedAsync` đọc `connKind=board`
-   * và khi có bàn cờ thật thì `BoardStepWatchdog` lui về vai lưới an toàn thay
-   * vì tự chạy từng bước. Màn trong ván của app CHÍNH LÀ một bàn cờ (mỗi điện
-   * thoại đều vẽ bàn cờ riêng), nên nó phải bật cờ này.
+   * ⚠️ HIỆN TẠI ĐÂY LÀ NO-OP với app, và như vậy là ĐÚNG - đừng "sửa" cho nó có
+   * tác dụng.
+   *
+   * `GameHub.OnConnectedAsync` đọc `connKind=board` rồi đưa xuống
+   * `ConnectionSyncHelper`, nhưng chỗ đó chỉ ghi `IsBoardConnection` lên identity
+   * của CHÍNH người vừa nối - với app là `PlayerIdentity-{playerId}`. Còn
+   * `BoardStepWatchdog` lại đọc `PlayerIdentity-{hostId}` (THIẾT BỊ giữ license,
+   * tức Main Device web). Hai ô cache khác nhau.
+   *
+   * Nghĩa là app bật cờ này KHÔNG làm watchdog đổi nhịp - nó vẫn thấy "không có
+   * bàn cờ" và dùng `BoardlessStepSeconds` = 2s. May, vì app chưa làm việc của
+   * bàn cờ (chạy animation rồi báo "xong"); nếu cờ này ăn thật thì mỗi bước sẽ
+   * phải chờ `BoardStepFallbackSeconds` = 10s mà chẳng ai báo gì.
+   *
+   * Giữ lại vì đúng vai: mỗi điện thoại đều vẽ bàn cờ riêng. Khi nào app nhận
+   * việc của bàn cờ thì mới nối phần còn lại ở server.
    */
   asBoard?: boolean;
   onPacket: (packet: Packet) => void;
