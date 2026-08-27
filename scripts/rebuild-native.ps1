@@ -1,3 +1,7 @@
+# ⚠️ BẢN CŨ. Dùng scriptsuild-apk.ps1 thay cho file này.
+#    Giữ lại vì còn vài chỗ ghi chú hữu ích, nhưng nó có MỘT CHỖ SAI: ghi rằng
+#    `adb reverse` không chạy trên emulator. Đã đo lại 2026-08-26, nó CHẠY.
+#
 # Build lại native sau khi đổi app.json hoặc asset native (splash, icon).
 #
 # Vì sao cần script này:

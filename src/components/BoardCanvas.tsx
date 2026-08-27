@@ -61,8 +61,13 @@ type Props = {
  *
  * Chừa trên nhiều hơn dưới vì **quân cờ vẽ nhô lên trên tâm ô** - chừa đều là
  * quân ở hàng trên bị cắt đầu.
+ *
+ * ⚠️ `top` KHÔNG được nhỏ hơn ~0.08. Quân cờ cao ~34 đơn vị tính từ tâm ô, và
+ * quân của người đang tới lượt còn phóng 1.3 lần (~44 đơn vị). Vùng ô cao 563
+ * đơn vị, nên 0.08 mới đủ 45 đơn vị headroom; thấp hơn là cụt đầu quân ở hàng
+ * trên cùng.
  */
-const CROP = { left: 0.04, right: 0.04, top: 0.14, bottom: 0.06 };
+const CROP = { left: 0.012, right: 0.012, top: 0.09, bottom: 0.025 };
 
 /** "0 0 1536 1024" → [1536, 1024]. */
 function parseViewBox(viewBox: string): [number, number] {

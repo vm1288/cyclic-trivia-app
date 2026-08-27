@@ -3,7 +3,7 @@
     "name": "Cyclic",
     "slug": "cyclic-trivia",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "scheme": "cyclic",
     "userInterfaceStyle": "dark",
@@ -41,7 +41,8 @@
           }
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-screen-orientation"
     ]
   }
 }

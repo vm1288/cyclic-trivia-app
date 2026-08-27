@@ -1,5 +1,7 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as ScreenOrientation from 'expo-screen-orientation';
+import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ConfirmProvider } from '../src/components/ConfirmDialog';
@@ -9,6 +11,18 @@ import { PlayerProvider } from '../src/session/PlayerSession';
 import { bg } from '../src/theme/colors';
 
 export default function RootLayout() {
+  /*
+   * Mặc định KHOÁ DỌC cho toàn app.
+   *
+   * `app.json` để `orientation: "default"` vì màn trong ván cần xoay ngang -
+   * nhưng mọi màn còn lại đều dựng cho chiều dọc và sẽ vỡ nếu bị xoay theo
+   * máy. Khoá ở đây, rồi để riêng `app/game-landscape.tsx` tự mở khoá sang
+   * ngang lúc nó mở và trả về dọc lúc rời đi.
+   */
+  useEffect(() => {
+    void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+  }, []);
+
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />

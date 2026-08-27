@@ -86,6 +86,14 @@ export const ChatIcon = ({ size = 24, color = boardColors.blueSoft }: { size?: n
   </Svg>
 );
 
+/** Vương miện - dấu hiệu chủ phòng, thay cho chữ "(HOST)". */
+export const CrownIcon = ({ size = 15, color = boardColors.amber }: { size?: number; color?: string }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+    <Path d="M3 8.5l4.2 3.1L12 4.6l4.8 7 4.2-3.1-1.7 9.6H4.7z" />
+    <Rect x={4.4} y={18.4} width={15.2} height={2.2} rx={1.1} />
+  </Svg>
+);
+
 export const BookIcon = () => (
   <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#CDDCFF" strokeWidth={1.7}
        strokeLinejoin="round">
@@ -163,7 +171,7 @@ const ChangerIcon = ({ size = 30 }: { size?: number }) => (
  * Dùng để dựng viền gradient kiểu ống neon: sáng ở hai mép, đậm ở giữa - cùng
  * công thức `mid → stroke → mid` mà `src/theme/colors.ts` dùng cho các nút.
  */
-function lighten(hex: string, amount: number): string {
+export function lighten(hex: string, amount: number): string {
   const clean = hex.replace('#', '');
   if (clean.length !== 6) return hex;
   const mix = (v: number) => Math.round(v + (255 - v) * amount);
@@ -241,11 +249,18 @@ export const HandTile = ({
   label,
   count,
   dimmed,
+  compact,
 }: {
   cardKey: CardKey;
   label: string;
   count: number;
   dimmed: boolean;
+  /**
+   * Bố cục nằm ngang: lá bài chỉ rộng ~56dp thay vì ~78dp, và "ELIMINATOR" bị
+   * cắt ở cỡ chữ thường. Chỉ hạ cỡ chữ ở đó, đừng hạ chung - bản dọc rộng rãi
+   * và chữ nhỏ hơn sẽ khó đọc.
+   */
+  compact?: boolean;
 }) => {
   const style = CARD_STYLES[cardKey];
 
@@ -262,6 +277,7 @@ export const HandTile = ({
     <View
       style={[
         styles.handCard,
+        compact && styles.handCardCompact,
         { borderColor: empty ? 'rgba(150,170,215,0.30)' : style.glow },
       ]}
     >
@@ -277,26 +293,38 @@ export const HandTile = ({
       */}
       {dimmed && !empty ? <View style={[fill, styles.handDim]} /> : null}
       <View style={empty ? styles.handIconEmpty : undefined}>
-        <style.Icon />
+        <style.Icon size={compact ? 26 : 30} />
       </View>
-      <Text
-        style={[styles.handName, { color: empty ? 'rgba(198,212,240,0.75)' : style.accent }]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
-      <View style={styles.pipRow}>
-        {Array.from({ length: style.max }).map((_, i) => (
-          <View
-            key={i}
-            style={[
-              styles.pip,
-              i < count
-                ? { backgroundColor: style.accent, boxShadow: `0 0 6px ${style.glow}` }
-                : { backgroundColor: 'rgba(200,215,255,0.30)' },
-            ]}
-          />
-        ))}
+
+      {/*
+        Bản `compact` xếp NGANG: icon bên trái, tên + chấm bên phải.
+        Xếp dọc thì chiều cao ăn hết chỗ mà bề ngang lại thừa - đúng ngược với
+        thứ lá bài cần khi nằm trong cột hẹp của bố cục ngang.
+      */}
+      <View style={compact ? styles.handTextRow : undefined}>
+        <Text
+          style={[
+            styles.handName,
+            compact && styles.handNameCompact,
+            { color: empty ? 'rgba(198,212,240,0.75)' : style.accent },
+          ]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+        <View style={styles.pipRow}>
+          {Array.from({ length: style.max }).map((_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.pip,
+                i < count
+                  ? { backgroundColor: style.accent, boxShadow: `0 0 6px ${style.glow}` }
+                  : { backgroundColor: 'rgba(200,215,255,0.30)' },
+              ]}
+            />
+          ))}
+        </View>
       </View>
     </View>
   );
@@ -537,7 +565,12 @@ const styles = StyleSheet.create({
   // Phủ tối lên thân lá bài, giữ nguyên độ đục. Xem ghi chú ở HandTile.
   handDim: { backgroundColor: 'rgba(6,8,20,0.38)' },
   handIconEmpty: { opacity: 0.5 },
-  handName: { fontSize: 9.5, fontWeight: '700', letterSpacing: 0.6 },
+  handName: { fontSize: 9.5, fontWeight: '700', letterSpacing: 0.4 },
+  // Xếp ngang nên thấp hơn nữa. Lề quanh icon để HẸP: mỗi dp lề là một dp
+  // chữ mất đi, mà cột phải vốn đã chật.
+  handCardCompact: { height: 50, flexDirection: 'row', gap: 5, paddingHorizontal: 5 },
+  handTextRow: { alignItems: 'flex-start', gap: 4 },
+  handNameCompact: { fontSize: 9, letterSpacing: 0.2 },
   pipRow: { flexDirection: 'row', gap: 4 },
   pip: { width: 6, height: 6, borderRadius: 3 },
 });

@@ -75,7 +75,10 @@ export default function WaitingScreen() {
   const live = racing || started;
 
   /*
-   * Ván đã chạy -> sang màn bàn cờ.
+   * Ván đã chạy -> sang màn bàn cờ (bố cục NẰM NGANG).
+   *
+   * ⚠️ `app/game.tsx` là bản bố cục DỌC, giờ KHÔNG còn màn nào dẫn tới nữa.
+   * Giữ lại để đối chiếu; xoá được khi bản ngang đã chốt.
    *
    * `replace` chứ không `push`: back từ bàn cờ phải về màn hình chính, không
    * quay lại phòng chờ của một ván đã bắt đầu.
@@ -85,7 +88,7 @@ export default function WaitingScreen() {
    * chạy hai lần.
    */
   useEffect(() => {
-    if (live) router.replace('/game');
+    if (live) router.replace('/game-landscape');
   }, [live, router]);
 
   if (!seat) {
