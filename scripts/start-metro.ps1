@@ -3,6 +3,12 @@
 # Dung:  powershell -ExecutionPolicy Bypass -File scripts\start-metro.ps1
 #        powershell -ExecutionPolicy Bypass -File scripts\start-metro.ps1 -Device emulator-5554
 #        powershell -ExecutionPolicy Bypass -File scripts\start-metro.ps1 -NoLaunch
+#        powershell -ExecutionPolicy Bypass -File scripts\start-metro.ps1 -Visible
+#
+# MAC DINH Metro chay AN, moi thu do ra %TEMP%\cyclic-metro.log. Muon NHIN thay
+# console (loi bundle, `Unable to resolve`, console.log cua app) thi:
+#   -Visible                                    -> Metro co cua so rieng
+#   Get-Content $env:TEMP\cyclic-metro.log -Wait -> theo doi log dang chay
 #
 # Script nay KHONG build gi ca. Sua file .ts/.tsx thi chi can cai nay.
 # Sua app.json hoac them native module -> dung scripts\build-apk.ps1.
@@ -12,7 +18,10 @@ param(
     # Serial may dich. Bo trong = lay may dau tien dang o trang thai `device`.
     [string]$Device,
     # Chi khoi dong Metro, khong mo app tren may.
-    [switch]$NoLaunch
+    [switch]$NoLaunch,
+    # Chay Metro trong CUA SO RIENG nhin duoc, thay vi an di va do ra file log.
+    # Dung khi can doc loi bundle / console.log cua app ngay luc no xay ra.
+    [switch]$Visible
 )
 
 $ErrorActionPreference = 'Stop'
@@ -52,10 +61,23 @@ if ($old) {
 
 # ── 2. Khoi dong Metro ────────────────────────────────────────────────────
 $Log = Join-Path $env:TEMP 'cyclic-metro.log'
-Write-Host "`nKhoi dong Metro (log: $Log)..." -ForegroundColor Cyan
-Start-Process -FilePath 'cmd.exe' `
-    -ArgumentList "/c npx expo start --port 8081 > `"$Log`" 2>&1" `
-    -WindowStyle Hidden
+
+if ($Visible) {
+    # Cua so rieng, KHONG redirect: moi thu hien thang ra do - loi bundle,
+    # `Unable to resolve`, va console.log/console.error ma app day nguoc len.
+    #
+    # ⚠️ Danh doi: cua so nay khong ghi ra $Log, nen sau khi dong la mat sach.
+    # Muon vua nhin vua luu thi bo -Visible roi `Get-Content $Log -Wait`.
+    Write-Host "`nKhoi dong Metro (cua so rieng)..." -ForegroundColor Cyan
+    Start-Process -FilePath 'cmd.exe' `
+        -ArgumentList '/k npx expo start --port 8081' `
+        -WorkingDirectory $AppDir
+} else {
+    Write-Host "`nKhoi dong Metro (log: $Log)..." -ForegroundColor Cyan
+    Start-Process -FilePath 'cmd.exe' `
+        -ArgumentList "/c npx expo start --port 8081 > `"$Log`" 2>&1" `
+        -WindowStyle Hidden
+}
 
 $deadline = (Get-Date).AddSeconds(90)
 do {
@@ -93,6 +115,11 @@ Start-Sleep -Seconds 2
 adb -s $Device shell am start -a android.intent.action.VIEW `
     -d 'cyclic://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081' | Out-Null
 
-Write-Host "`nXong. Cho dong 'Android Bundled ...' trong log:" -ForegroundColor Green
-Write-Host "  Get-Content `"$Log`" -Tail 5 -Wait" -ForegroundColor DarkGray
+if ($Visible) {
+    Write-Host "`nXong. Cho dong 'Android Bundled ...' trong CUA SO METRO vua mo." -ForegroundColor Green
+} else {
+    Write-Host "`nXong. Metro chay AN. Xem console / loi bundle bang:" -ForegroundColor Green
+    Write-Host "  Get-Content `"$Log`" -Tail 40 -Wait" -ForegroundColor DarkGray
+    Write-Host "  (hoac chay lai script nay voi -Visible de Metro co cua so rieng)" -ForegroundColor DarkGray
+}
 Write-Host "`nNHO: server CyclicTrivia phai dang chay (profile https)." -ForegroundColor Yellow

@@ -15,13 +15,32 @@ Những lỗi dưới đây đều **không phải lỗi code**, và mỗi cái 
 
 ## Chạy app lên emulator
 
-Dùng script, đừng gọi `npx expo start --android` trực tiếp:
+Hai bước, hai script — đừng gọi `npx expo start --android` trực tiếp:
 
 ```bash
-bash scripts/run-emulator.sh
+powershell -ExecutionPolicy Bypass -File scripts\start-emulator.ps1
 ```
 
-Lý do từng bước nằm trong comment của script. Tóm tắt ba cái bẫy:
+```bash
+powershell -ExecutionPolicy Bypass -File scripts\start-metro.ps1 -Device emulator-5554
+```
+
+`start-emulator.ps1` **chỉ boot máy ảo**, không đụng gì tới Metro hay cổng 8081.
+`-Avd CyclicPhone2 -Port 5556` cho máy thứ hai, `-List` để xem có những AVD nào.
+Chạy lại khi máy đã lên thì nó không làm gì cả.
+
+> ⚠️ **`scripts/run-emulator.sh` KHÔNG boot emulator** — nó giả định máy ảo đã
+> chạy sẵn rồi chỉ `am start` vào `emulator-5554`. Chưa có máy ảo thì adb báo
+> `device not found`, nhưng lỗi đó bị `>/dev/null 2>&1` nuốt mất và `set -e` làm
+> script **thoát im lặng** — trông như treo chứ không như hỏng. Tệ hơn: bước đầu
+> tiên nó đã giết tiến trình giữ cổng 8081, tức kéo sập cả Metro đang phục vụ máy
+> thật, rồi mới chết.
+>
+> Phần chú thích đầu file đó còn khẳng định `adb reverse` không chạy trên
+> emulator — **sai**, đã đo lại 26/08 (xem mục dưới). Script viết 25/08, trước
+> lúc sửa. Dùng hai script PowerShell ở trên thay cho nó.
+
+Tóm tắt bốn cái bẫy còn lại:
 
 | Bẫy | Triệu chứng | Nguyên nhân |
 |---|---|---|
@@ -75,7 +94,7 @@ Chủ phòng trên máy thật, hai khách trên hai emulator. Server chạy pro
 AVD thứ hai (`CyclicPhone2`) tạo bằng cách **nhân bản** `CyclicPhone`:
 
 ```bash
-# copy ca thu muc .avd va file .ini trong %USERPROFILE%\.androidvd,
+# copy ca thu muc .avd va file .ini trong %USERPROFILE%\.android\avd,
 # roi sua path trong CyclicPhone2.ini va config.ini cho khop ten moi
 emulator -avd CyclicPhone2 -gpu host -memory 4096 -no-snapshot -no-boot-anim -port 5556
 ```
@@ -254,9 +273,38 @@ Tự thêm vào sẽ **ghi đè** cấu hình mặc định và làm hỏng expo
 
 AVD `CyclicPhone` (tạo tay, Pixel dọc 1080×2340, API 33). AVD duy nhất có sẵn trên máy là `Honda_IVI_LHD_API30` — màn hình xe hơi nằm ngang, không dùng để xem app dọc được.
 
+Dùng `scripts\start-emulator.ps1`; nó gói sẵn các cờ dưới đây. Lệnh trần tương đương:
+
 ```bash
 emulator -avd CyclicPhone -gpu host -memory 4096 -no-snapshot -no-boot-anim
 ```
+
+### ⚠️ `ANDROID_HOME` trên máy này TRỎ SAI
+
+`ANDROID_HOME` và `ANDROID_SDK_ROOT` đang trỏ tới
+`C:\Users\Vi\.antidetect-cloud-android\sdk` — **thư mục đó không tồn tại**, rác
+của một dự án khác. SDK thật ở `D:\AndroidSDK`.
+
+Công cụ nào tra SDK qua biến môi trường sẽ trượt, và thông báo lỗi thường chỉ là
+"SDK not found" chứ không nói vì sao. `build-apk.ps1` và `start-emulator.ps1` đều
+tự đặt đè hai biến đó ở đầu file — **đừng gỡ ra** khi chưa sửa biến của máy.
+
+### ⚠️ Chờ boot: `wait-for-device` không đủ, và `2>$null` làm chết script
+
+Hai cái bẫy chồng lên nhau khi viết vòng chờ emulator lên:
+
+1. `adb wait-for-device` trả về ngay khi adb **thấy** thiết bị, lúc đó Android
+   vẫn đang boot và mọi lệnh sau đó đều trượt. Phải đợi `getprop sys.boot_completed`
+   bằng `1`.
+2. Trong lúc boot, serial hiện ra với trạng thái `offline`, và gọi
+   `adb -s ... shell` vào nó thì adb ghi `device offline` ra **stderr**. Trên
+   **PowerShell 5.1**, stderr của một exe bị bọc thành `ErrorRecord`
+   (`NativeCommandError`); script nào đặt `$ErrorActionPreference = 'Stop'` sẽ
+   **chết giữa chừng** dù emulator đang boot hoàn toàn bình thường. Thêm
+   `2>$null` **không** cứu được — chính nó là bẫy.
+
+Cách đúng: đọc `adb devices` (lệnh này không bao giờ ghi stderr) để biết serial
+đã sang trạng thái `device` chưa, rồi mới hỏi `getprop`.
 
 - **`-memory 4096` là bắt buộc.** Lần đầu tôi đặt 2048 → RAM cạn sạch (1858/2013MB), `graphics.composer` và `graphics.allocator` kẹt 100% CPU, emulator đứng hình.
 - **`-gpu host`** để dùng GPU thật. Không có nó, log báo `Failed to load opengl32sw` rồi rơi về render phần mềm rất chậm.
