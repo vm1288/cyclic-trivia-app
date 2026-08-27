@@ -4,8 +4,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { CASE_ACTION, characterImageUrl, type GamePlayer } from '../src/api/game';
+import {
+  CASE_ACTION,
+  characterImageUrl,
+  EMPTY_GUID,
+  submitAnswerForTurn,
+  type GamePlayer,
+  type QuestionPacket,
+} from '../src/api/game';
 import { BoardCanvas } from '../src/components/BoardCanvas';
+import { QuestionOverlay } from '../src/components/QuestionOverlay';
 import { StageBackground } from '../src/components/StageBackground';
 import { TYPE_ID } from '../src/net/gameConnection';
 import { useGameState } from '../src/net/useGameState';
@@ -129,11 +137,26 @@ export default function GameLandscapeScreen() {
    * ghi chú trong `gameConnection.ts`: với app nó HIỆN LÀ NO-OP, và như vậy mới
    * đúng, vì app chưa làm việc của bàn cờ.
    */
+  /*
+   * Câu hỏi VÒNG ĐUA "ai đi trước", tới qua gói `PlayerInstructionQuestion` (67).
+   *
+   * ⚠️ Gói này KHÁC hẳn mọi gói khác ở chỗ nó MANG SẴN DỮ LIỆU (cả câu hỏi lẫn
+   * các đáp án), nên đây là chỗ duy nhất đọc thẳng payload thay vì nạp lại
+   * `/api/game/{id}/state` - state không có câu hỏi.
+   */
+  const [question, setQuestion] = useState<QuestionPacket | null>(null);
+
   const { snapshot, board, connState, connection } = useGameState({
     gameId: seat?.gameId ?? null,
     token: seat?.token ?? null,
     includeBoard: true,
     asBoard: true,
+    onPacket: (packet) => {
+      if (packet.typeID !== TYPE_ID.PlayerInstructionQuestion) return;
+
+      const data = packet as unknown as QuestionPacket;
+      if (data.Question?.Id) setQuestion(data);
+    },
   });
 
   const players = snapshot?.Players ?? [];
@@ -202,6 +225,40 @@ export default function GameLandscapeScreen() {
   const cards = countCards(
     me?.Cards ?? [],
   );
+
+  /*
+   * ============================================================
+   * TRẢ LỜI CÂU HỎI
+   * ============================================================
+   *
+   * ⚠️ Đóng overlay NGAY khi gửi, không đợi server trả lời. Vòng đua là cuộc
+   * đua ai nhanh hơn; giữ màn hình lại chờ HTTP xong là người chơi tưởng máy
+   * treo, và câu trả lời thì đã đi rồi.
+   *
+   * ⚠️ Hết giờ cũng PHẢI gửi. Server đợi câu trả lời của từng người để biết
+   * vòng đua đã xong chưa - im lặng là ván đứng đó.
+   */
+  const answerQuestion = (answerId: string, answerContent: string) => {
+    const current = question;
+    setQuestion(null);
+    if (!current || !seat) return;
+
+    void submitAnswerForTurn(
+      { questionId: current.Question.Id, answerId, questionTitle: answerContent },
+      seat.token,
+    );
+  };
+
+  const timeoutQuestion = () => {
+    const current = question;
+    setQuestion(null);
+    if (!current || !seat) return;
+
+    void submitAnswerForTurn(
+      { questionId: current.Question.Id, answerId: EMPTY_GUID, isTimeout: true },
+      seat.token,
+    );
+  };
 
   /**
    * ============================================================
@@ -709,6 +766,20 @@ export default function GameLandscapeScreen() {
           </View>
         </View>
       </View>
+
+      {/*
+        Câu hỏi phủ lên TẤT CẢ, nên nằm cuối cây. Nó cũng chặn chạm xuống dưới -
+        đang có câu hỏi thì không được bấm xúc xắc.
+      */}
+      {question ? (
+        <QuestionOverlay
+          question={question.Question}
+          category={question.Category?.Title ?? null}
+          durationSeconds={question.DurationInSeconds || 20}
+          onAnswer={answerQuestion}
+          onTimeout={timeoutQuestion}
+        />
+      ) : null}
     </View>
   );
 }

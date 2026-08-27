@@ -47,6 +47,9 @@ export const TYPE_ID = {
   PlayerBattleInstruction: 55,
   GameState: 62,
   QuestionForTurn: 66,
+  /** Cau hoi vong dua, MANG SAN ca cau hoi lan cac dap an. */
+  PlayerInstructionQuestion: 67,
+  AnsweredQuestionFornTurn: 68,
   Log: 77,
   CheckPlayerScreen: 79,
   PauseGame: 80,

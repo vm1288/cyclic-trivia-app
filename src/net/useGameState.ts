@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { getGameState, type GameBoard, type GameSnapshot } from '../api/game';
-import { TYPE_ID } from './gameConnection';
+import type { Packet } from './gameConnection';
 import { useGameConnection } from './useGameConnection';
 
 /**
@@ -79,8 +79,17 @@ export function useGameState(options: {
   includeBoard?: boolean;
   /** Xem ghi chú `asBoard` trong `gameConnection.ts`. */
   asBoard?: boolean;
+  /**
+   * Xem thêm gói tin thô, sau khi hook đã tự lo phần nạp lại state.
+   *
+   * ⚠️ Chỉ dùng cho những gói MANG SẴN DỮ LIỆU mà state không có - hiện chỉ có
+   * câu hỏi (`PlayerInstructionQuestion`). Mọi thứ khác cứ để hook nạp lại
+   * `/api/game/{id}/state`; tự chép payload vào state là đi lại đường server đã
+   * làm sẵn, và sai lệch dần theo thời gian.
+   */
+  onPacket?: (packet: Packet) => void;
 }) {
-  const { gameId, token, includeBoard, asBoard } = options;
+  const { gameId, token, includeBoard, asBoard, onPacket } = options;
 
   const [snapshot, setSnapshot] = useState<GameSnapshot | null>(null);
   const [board, setBoard] = useState<GameBoard | null>(null);
@@ -127,11 +136,16 @@ export function useGameState(options: {
     }, COALESCE_MS);
   }, [load]);
 
+  // Giữ trong ref - xem ghi chú cùng lý do ở `useGameConnection`.
+  const extra = useRef(onPacket);
+  extra.current = onPacket;
+
   const { state: connState, connection } = useGameConnection({
     token,
     asBoard,
     onPacket: (packet) => {
       if (REFRESH_ON.has(packet.typeID)) schedule();
+      extra.current?.(packet);
     },
   });
 

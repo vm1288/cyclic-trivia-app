@@ -1,4 +1,4 @@
-import { postForm, type ApiResult } from './client';
+import { postForm, postJson, type ApiResult } from './client';
 import { API_BASE_URL, API_TIMEOUT_MS } from './config';
 
 /**
@@ -614,6 +614,62 @@ export function startGame(
   token: string,
 ): Promise<ApiResult<{ AlreadyRunning?: boolean }>> {
   return postForm(`/public/game/${gameId}/start`, {}, token);
+}
+
+/* ─── Câu hỏi ──────────────────────────────────────────────────────────────── */
+
+/**
+ * Câu hỏi server đẩy xuống qua gói tin.
+ *
+ * ⚠️ KHÔNG có trường nào cho biết đáp án đúng - `IsCorrect` và `AnswerExplain`
+ * đều `[JsonIgnore]` ở server. Cố ý, và đừng tìm cách lấy: client biết đáp án là
+ * gian lận được. Chấm đúng/sai do server làm, kết quả về qua gói tin sau đó.
+ */
+export type GameQuestion = {
+  Id: string;
+  Title: string;
+  Answers: { Id: string; Content: string }[];
+};
+
+/** Payload của gói `PlayerInstructionQuestion` (67) - câu hỏi vòng đua. */
+export type QuestionPacket = {
+  Question: GameQuestion;
+  Category?: { Title?: string } | null;
+  DurationInSeconds: number;
+};
+
+/**
+ * Trả lời câu hỏi VÒNG ĐUA "ai đi trước".
+ *
+ * ⚠️ Đây là endpoint riêng của vòng đua. Lượt chơi thường dùng
+ * `/public/game/submitAnswer`, battle lại dùng đường khác nữa - đừng gộp.
+ *
+ * Ba đường gửi, chép đúng theo `PlayerQuestionForTurn.cshtml` của bản web:
+ *
+ *   chọn đáp án : { answerId, questionId, questionTitle }
+ *   hết giờ     : { answerId: GUID rỗng, questionId, IsTimeout: true }
+ *   trả lời muộn: { answerId: GUID rỗng, questionId, IsTooLate: true }
+ *
+ * ⚠️ Hết giờ PHẢI gửi, không được im lặng. Server đang đợi câu trả lời của từng
+ * người để biết vòng đua đã xong chưa; không ai báo gì là ván đứng đó.
+ */
+export const EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
+
+export function submitAnswerForTurn(
+  params: { questionId: string; answerId: string; questionTitle?: string; isTimeout?: boolean; isTooLate?: boolean },
+  token: string,
+): Promise<ApiResult<{}>> {
+  return postJson(
+    '/public/game/submitAnswerForTurn',
+    {
+      answerId: params.answerId,
+      questionId: params.questionId,
+      questionTitle: params.questionTitle ?? '',
+      IsTimeout: params.isTimeout ?? false,
+      IsTooLate: params.isTooLate ?? false,
+    },
+    token,
+  );
 }
 
 /** GUID nằm ở CUỐI chuỗi, sau tiền tố. */
