@@ -13,6 +13,7 @@ import {
 } from '../src/api/game';
 import { BoardCanvas } from '../src/components/BoardCanvas';
 import { StageBackground } from '../src/components/StageBackground';
+import { useGameConnection } from '../src/net/useGameConnection';
 import {
   boardColors,
   CARD_ORDER,
@@ -169,6 +170,32 @@ export default function GameLandscapeScreen() {
       clearTimeout(timer);
     };
   }, [seat]);
+
+  /*
+   * ============================================================
+   * SIGNALR
+   * ============================================================
+   *
+   * Bước một: NỐI và NGHE. Poll 3 giây ở trên vẫn giữ nguyên - nó là nguồn dữ
+   * liệu, còn kết nối này mới chỉ chứng minh gói tin về được tới app.
+   *
+   * ⚠️ Đừng bỏ poll cho tới khi từng loại gói tin đã có chỗ xử lý. Bỏ sớm là
+   * mất luôn đường cập nhật mà chưa có gì thay thế.
+   *
+   * `asBoard` bật vì màn này CHÍNH LÀ một bàn cờ - mỗi điện thoại đều vẽ bàn cờ
+   * riêng (NEXT_STEPS đã sửa lại điều tài liệu từng ghi sai). Server đọc
+   * `connKind=board` và cho `BoardStepWatchdog` lui về vai lưới an toàn.
+   */
+  const [lastPacket, setLastPacket] = useState<{ typeID: number; at: number } | null>(null);
+
+  const { state: connState } = useGameConnection({
+    token: seat?.token ?? null,
+    asBoard: true,
+    onPacket: (packet) => {
+      // Chưa xử lý theo từng loại - mới chỉ ghi lại để nhìn thấy trên màn hình.
+      setLastPacket({ typeID: packet.typeID, at: Date.now() });
+    },
+  });
 
   const players = snapshot?.Players ?? [];
 
@@ -485,6 +512,24 @@ export default function GameLandscapeScreen() {
                     })
                   : t('game.title')}
               </Text>
+
+              {/*
+                ⚠️ TẠM THỜI - chấm trạng thái SignalR + typeID gói tin cuối, để
+                nhìn được kết nối trong lúc dựng. Bỏ khi các màn đã bỏ poll.
+              */}
+              <View
+                style={[
+                  styles.netDot,
+                  connState === 'connected'
+                    ? styles.netOk
+                    : connState === 'connecting' || connState === 'reconnecting'
+                      ? styles.netBusy
+                      : styles.netDead,
+                ]}
+              />
+              {lastPacket ? (
+                <Text style={styles.netText}>{lastPacket.typeID}</Text>
+              ) : null}
 
               <View
                 style={styles.iconBtn}
@@ -891,6 +936,13 @@ const styles = StyleSheet.create({
   /* ===========================================================
      CURRENT PLAYER
      =========================================================== */
+
+  /* ⚠️ TẠM THỜI - chỉ báo SignalR trong lúc dựng, xem ghi chú ở chỗ dùng. */
+  netDot: { width: 9, height: 9, borderRadius: 5 },
+  netOk: { backgroundColor: boardColors.green },
+  netBusy: { backgroundColor: boardColors.amber },
+  netDead: { backgroundColor: boardColors.red },
+  netText: { fontSize: 10, fontWeight: '700', color: boardColors.dim },
 
   meRow: {
     flexDirection: 'row',
