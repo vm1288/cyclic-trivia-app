@@ -36,13 +36,17 @@ const REFRESH_ON = new Set<number>([
   8, // PlayerCheckedIn   - có người nhận ghế
   9, // WhosTurn
   10, // NextTurn
+  12, // StartTurn         - tới lượt mình, `CurrentAction` vừa đổi
   13, // TurnComplete
   15, // ActionDone
+  16, // PlayerGetNextAction - server vừa đổi việc kế tiếp của mình (vd sang RollDice)
+  22, // UseCard            - số lá bài của mình vừa đổi
   24, // PlayerRank
   36, // PlayerStars
   38, // GameStart
   39, // GameOver
   50, // PlayerStart
+  52, // AskMoveDirection - vừa tung xong, xúc xắc và lượt đã đổi
   53, // MoveDirectionSelected - quân cờ vừa đi
   58, // PlayerBattleWinner
   62, // GameState
@@ -51,6 +55,7 @@ const REFRESH_ON = new Set<number>([
   80, // PauseGame
   81, // ResumeGameFromPause
   85, // PlayersStatus
+  86, // PlayerUsedCard    - người khác vừa dùng thẻ, tay bài của họ đổi
 ]);
 
 /**

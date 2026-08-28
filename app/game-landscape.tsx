@@ -5,14 +5,26 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
+  ackFlow,
   CASE_ACTION,
+  categoryChain,
   characterImageUrl,
   EMPTY_GUID,
+  submitAnswer,
   submitAnswerForTurn,
+  type CardStepPayload,
+  type DirectionPacket,
   type GamePlayer,
+  type GameQuestion,
+  type MoveDirection,
   type QuestionPacket,
+  type TurnCard,
+  type TurnQuestionPayload,
 } from '../src/api/game';
 import { BoardCanvas } from '../src/components/BoardCanvas';
+import { CardChoiceOverlay } from '../src/components/CardChoiceOverlay';
+import { DiceRollOverlay } from '../src/components/DiceRollOverlay';
+import { MoveDirectionOverlay } from '../src/components/MoveDirectionOverlay';
 import { QuestionOverlay } from '../src/components/QuestionOverlay';
 import { StageBackground } from '../src/components/StageBackground';
 import { TYPE_ID } from '../src/net/gameConnection';
@@ -103,6 +115,21 @@ const STRIP_HEIGHT = STRIP_BASE_HEIGHT * STRIP_SCALE;
 /** Chặn bấm xúc xắc dồn - chép theo `canTriggerRollDice` của bản web. */
 const ROLL_COOLDOWN_MS = 2000;
 
+/**
+ * Câu hỏi đang hiện, đã gộp về MỘT kiểu.
+ *
+ * Hai loại tới bằng hai đường khác hẳn nhau - vòng đua qua gói 67 (trường viết
+ * HOA), lượt thường qua `Payload` của gói 16 (trường viết thường) - nhưng lên
+ * màn hình thì y hệt. Gộp ở đây để chỉ có MỘT overlay và một chỗ quyết định gửi
+ * câu trả lời đi đâu; `kind` là thứ duy nhất phân biệt.
+ */
+type ActiveQuestion = {
+  kind: 'race' | 'turn';
+  question: GameQuestion;
+  categories: string[];
+  duration: number;
+};
+
 export default function GameLandscapeScreen() {
   const player = usePlayer();
   const t = useT();
@@ -144,7 +171,67 @@ export default function GameLandscapeScreen() {
    * các đáp án), nên đây là chỗ duy nhất đọc thẳng payload thay vì nạp lại
    * `/api/game/{id}/state` - state không có câu hỏi.
    */
-  const [question, setQuestion] = useState<QuestionPacket | null>(null);
+  const [question, setQuestion] = useState<ActiveQuestion | null>(null);
+
+  /**
+   * Hỏi hướng đi, tới qua gói `AskMoveDirection` (52) ngay sau khi tung xúc xắc.
+   *
+   * Cùng loại ngoại lệ với gói 67: nó MANG SẴN dữ liệu (chủ đề mỗi hướng, thông
+   * tin battle) mà `/api/game/{id}/state` không có.
+   */
+  const [direction, setDirection] = useState<DirectionPacket | null>(null);
+
+  /**
+   * Bước mời dùng thẻ bài, tới qua gói 16 với `Action = 5`.
+   *
+   * ⚠️ Bước này CHẶN đường tới câu hỏi: server đứng chờ cho tới khi máy gửi
+   * `UseCard` hoặc `ActionDone`. Xem `CardChoiceOverlay`.
+   */
+  const [cardStep, setCardStep] = useState<
+    { cards: TurnCard[]; title: string; duration: number } | null
+  >(null);
+
+  /**
+   * Xúc xắc đang lăn giữa màn hình.
+   *
+   * `value: null` = chưa biết kết quả. Server KHÔNG gửi mặt xúc xắc cho người
+   * chơi (xem `GameSnapshot.Game.DiceOne`), nên giá trị tới muộn qua một lượt
+   * nạp lại state - lăn trước, dừng sau.
+   */
+  const [dice, setDice] = useState<{ value: number | null } | null>(null);
+
+  /** Thông báo thoáng qua: người khác vừa dùng thẻ gì. */
+  const [notice, setNotice] = useState<string | null>(null);
+
+  /** Xem `waiting.tsx` - ref chỉ chặn lời gọi ĐANG BAY, không chặn vĩnh viễn. */
+  const acking = useRef(false);
+
+  /**
+   * `CurrentTurnId` của lượt đã gửi `PlayerGetNextAction` rồi.
+   *
+   * Một lượt chỉ bắt tay MỘT lần. Gói `StartTurn` có thể tới lại (server phát
+   * lại flow khi nối lại), mà gửi hai lần thì server chạy resolver hai lần cho
+   * cùng một lượt.
+   */
+  const nextActionTurn = useRef<string | null>(null);
+
+  /**
+   * `CurrentTurnId` mới nhất mà server nói tới.
+   *
+   * Mọi gói gửi lên đều phải mang nó. Lấy từ GÓI TIN chứ không chỉ từ state:
+   * ngay sau một nước đi, state có thể còn là bản cũ (nạp lại là bất đồng bộ),
+   * mà gói `ActionDone` thì phải trả lời ngay. Bản web giữ y hệt trong
+   * `playerFunc.currentTurnId`.
+   */
+  const turnId = useRef<string>('');
+
+  /**
+   * Đang đợi kết quả xúc xắc từ một lượt nạp lại state.
+   *
+   * Bật lên khi gói `AskMoveDirection` (52) về - lúc đó server đã ghi xong
+   * `DiceOne`, nên lượt nạp lại NGAY SAU đó chắc chắn mang số đúng.
+   */
+  const waitingDice = useRef(false);
 
   const { snapshot, board, connState, connection } = useGameState({
     gameId: seat?.gameId ?? null,
@@ -152,12 +239,225 @@ export default function GameLandscapeScreen() {
     includeBoard: true,
     asBoard: true,
     onPacket: (packet) => {
+      /*
+       * Ack `PlayerStart` - LƯỚI AN TOÀN ở màn này. Chỗ ack thật là
+       * `waiting.tsx`, vì lúc gói 50 tới thì mọi người còn ở đó. Nhưng vào lại
+       * ván đang dở thì màn này mở ra trước, và gói 50 sẽ tới thẳng đây.
+       */
+      if (packet.typeID === TYPE_ID.PlayerStart) {
+        if (acking.current || !seat) return;
+        acking.current = true;
+        void ackFlow('PlayerStart', seat.token).finally(() => {
+          acking.current = false;
+        });
+        return;
+      }
+
+      /*
+       * ============================================================
+       * BẮT TAY ĐẦU LƯỢT - thứ làm nút xúc xắc sáng lên
+       * ============================================================
+       *
+       * ⚠️ ĐỪNG GỠ. Vòng đua kết thúc KHÔNG tự làm nút xúc xắc sáng: server đặt
+       * người thắng vào `CaseAction.Start` (3) rồi gửi `StartTurn` (12) kèm
+       * `Action: 2` (PlayerGetNextAction), nghĩa là "báo lại đi rồi tôi nói việc
+       * kế tiếp". Chỉ sau khi máy gửi gói 16 thì `CurrentAction` mới sang
+       * `RollDice` (1) - mà nút xúc xắc lại sáng theo đúng giá trị đó.
+       *
+       * Chép theo `handleStartTurn` trong `wwwroot/js/playerHandlers.js`.
+       *
+       * ⚠️ Payload phải đủ ba trường. Gửi payload rỗng thì server ném
+       * `NullReferenceException` (`PlayerGetNextActionHandler.cs:176`, log ghi
+       * "PlayerGetNextAction reached - CurrentAction is Start - payload is
+       * null") và lượt chơi đứng luôn tại đó.
+       *
+       * Server chỉ gửi `StartTurn` cho ĐÚNG người tới lượt, nên không cần kiểm
+       * lại xem có phải lượt mình không.
+       */
+      if (packet.typeID === TYPE_ID.StartTurn) {
+        const id = typeof packet.CurrentTurnId === 'string' ? packet.CurrentTurnId : '';
+        if (id) turnId.current = id;
+
+        if (packet.Action !== CASE_ACTION.PlayerGetNextAction) return;
+        if (!id || nextActionTurn.current === id) return;
+        nextActionTurn.current = id;
+
+        void connection.current?.send(TYPE_ID.PlayerGetNextAction, {
+          TurnId: id,
+          payload: typeof packet.payload === 'string' ? packet.payload : '',
+          isRemoveAllComponent: packet.isRemoveAllComponent ?? true,
+        });
+        return;
+      }
+
+      /*
+       * ============================================================
+       * BẮT TAY GIỮA LƯỢT - thứ đưa CÂU HỎI LƯỢT THƯỜNG tới
+       * ============================================================
+       *
+       * `ActionDone` (15) = "quân cờ đã đi tới nơi". Bản web trả lời ngay bằng
+       * `PlayerGetNextAction`, và server đáp lại bằng gói 16 mang sẵn câu hỏi.
+       *
+       * ⚠️ Không trả lời là KẸT HẲN. `BoardStepWatchdog` chỉ chạy thay phần việc
+       * của BÀN CỜ; bước này là việc của người chơi, không ai làm hộ.
+       */
+      if (packet.typeID === TYPE_ID.ActionDone) {
+        if (packet.IsPendingAction) return;
+
+        void connection.current?.send(TYPE_ID.PlayerGetNextAction, {
+          TurnId: turnId.current || snapshot?.Game.CurrentTurnId || '',
+          payload: typeof packet.data === 'string' ? packet.data : '',
+          isRemoveAllComponent: true,
+        });
+        return;
+      }
+
+      /*
+       * Server trả lời "việc kế tiếp của bạn là gì".
+       *
+       * ⚠️ Tên trường trong `Payload` viết THƯỜNG (`question`, `category`), khác
+       * gói 67 của vòng đua viết hoa - xem `TurnQuestionPayload`.
+       *
+       * Hai `Action` cùng dẫn tới màn câu hỏi: `ShowSubCategoriesAndQuestions`
+       * (mình tới lượt) và `OtherPlayersAnswering` (tranh trả lời câu của người
+       * khác). Bản web cũng dùng chung một màn cho cả hai.
+       */
+      if (packet.typeID === TYPE_ID.PlayerGetNextAction) {
+        const id = typeof packet.CurrentTurnId === 'string' ? packet.CurrentTurnId : '';
+        if (id) turnId.current = id;
+
+        if (packet.IsPendingAction) return;
+
+        /*
+         * ⚠️ TRƯỚC câu hỏi còn một bước nữa: server mời dùng thẻ bài
+         * (`ShowCardsBeforeSubCategoryOrQuestion`, Action 5) kèm danh sách bài
+         * đang cầm. App chưa có màn dùng bài, nên BỎ QUA bằng đúng gói mà bản
+         * web gửi khi người chơi bấm "skip" hoặc để hết giờ: `Pub ActionDone`.
+         *
+         * Không gửi gì ở đây thì câu hỏi KHÔNG BAO GIỜ TỚI - server đứng chờ ở
+         * bước bài. Khi nào làm màn dùng bài thì thay chỗ này, đừng bỏ hẳn.
+         */
+        if (packet.Action === CASE_ACTION.ShowCardsBeforeSubCategoryOrQuestion) {
+          const step = packet.Payload as CardStepPayload | undefined;
+          const usable = (step?.cardsToShow ?? []).filter((c) => !c.IsUsed && c.Quantity > 0);
+
+          /*
+           * Không còn lá nào dùng được thì đừng bắt người chơi bấm SKIP cho có -
+           * gửi luôn `ActionDone` để đi thẳng tới câu hỏi.
+           */
+          if (usable.length === 0) {
+            void connection.current?.send(TYPE_ID.ActionDone, {
+              TurnId: turnId.current || snapshot?.Game.CurrentTurnId || '',
+              CompletedAction: CASE_ACTION.ShowCardsBeforeSubCategoryOrQuestion,
+              data: '',
+              IsPendingAction: false,
+            });
+            return;
+          }
+
+          setCardStep({
+            cards: usable,
+            title: step?.category?.Root?.Title ?? '',
+            duration: typeof packet.DurationInSeconds === 'number' ? packet.DurationInSeconds : 15,
+          });
+          return;
+        }
+
+        if (
+          packet.Action !== CASE_ACTION.ShowSubCategoriesAndQuestions &&
+          packet.Action !== CASE_ACTION.OtherPlayersAnswering
+        ) {
+          return;
+        }
+
+        const payload = packet.Payload as TurnQuestionPayload | undefined;
+        if (!payload?.question?.Id) return;
+
+        setQuestion({
+          kind: 'turn',
+          question: payload.question,
+          categories: categoryChain(payload.category),
+          duration: typeof packet.DurationInSeconds === 'number' ? packet.DurationInSeconds : 20,
+        });
+        return;
+      }
+
+      /*
+       * Hỏi hướng đi. Tới NGAY SAU cú tung xúc xắc, và nếu không trả lời thì
+       * watchdog của server cắt lượt: quân cờ đứng yên, lượt trôi sang người
+       * khác. Xem `MoveDirectionOverlay`.
+       */
+      if (packet.typeID === TYPE_ID.AskMoveDirection) {
+        setDirection(packet as unknown as DirectionPacket);
+        return;
+      }
+
+      /*
+       * Server xác nhận đã dùng thẻ. Bản web trả lời bằng `ActionDone` để đi
+       * tiếp tới câu hỏi - `handleUseCard` trong `playerHandlers.js`.
+       *
+       * ⚠️ Thẻ Changer chờ 3 giây trước khi báo xong: server đang đổi chủ đề, và
+       * bản web cũng để đúng nhịp đó cho hiệu ứng đổi chủ đề chạy. Gửi ngay thì
+       * câu hỏi nhảy ra trước khi người chơi kịp thấy mình vừa dùng thẻ gì.
+       */
+      if (packet.typeID === TYPE_ID.UseCard) {
+        const wait = packet.isChangerCard ? 3000 : 0;
+        setTimeout(() => {
+          void connection.current?.send(TYPE_ID.ActionDone, {
+            TurnId: turnId.current || '',
+            CompletedAction: CASE_ACTION.ShowCardsBeforeSubCategoryOrQuestion,
+            data: '',
+            IsPendingAction: false,
+          });
+        }, wait);
+        return;
+      }
+
+      /*
+       * Người chơi KHÁC vừa dùng thẻ. Gói riêng của app - xem ghi chú ở
+       * `TYPE_ID.PlayerUsedCard`.
+       */
+      if (packet.typeID === TYPE_ID.PlayerUsedCard) {
+        const name = typeof packet.NickName === 'string' ? packet.NickName : '';
+        const card = typeof packet.CardId === 'string' ? packet.CardId : '';
+        if (!name || !card) return;
+        setNotice(t('cards.usedBy', { name, card: card.toUpperCase() }));
+        return;
+      }
+
+      /* Tung xong: server đã chốt mặt xúc xắc, lượt nạp lại tới đây sẽ mang nó. */
+      if (packet.typeID === TYPE_ID.AskMoveDirection) waitingDice.current = true;
+
       if (packet.typeID !== TYPE_ID.PlayerInstructionQuestion) return;
 
       const data = packet as unknown as QuestionPacket;
-      if (data.Question?.Id) setQuestion(data);
+      if (!data.Question?.Id) return;
+
+      setQuestion({
+        kind: 'race',
+        question: data.Question,
+        categories: categoryChain(data.Category),
+        duration: data.DurationInSeconds || 20,
+      });
     },
   });
+
+  /*
+   * Nối xong thì xin server phát lại flow đang treo (`HostResume`, 21) - y như
+   * `playerConnection.js` bản web làm ở mỗi lần nối.
+   *
+   * ⚠️ ĐÂY MỚI LÀ THỨ ĐƯA CÂU HỎI TỚI MÀN NÀY, đừng gỡ vì tưởng thừa. Gói câu
+   * hỏi (67) được bắn ra lúc vòng đua nổ, mà lúc đó máy vẫn đang ở `waiting.tsx`
+   * - màn này chỉ mở ra SAU đó, với một kết nối mới toanh và không có gì trong
+   * tay. `QuestionForTurnFlowResolver` phát lại gói 67 kèm SỐ GIÂY CÒN LẠI đã
+   * trừ, nên đồng hồ vẫn đúng.
+   *
+   * Cũng là đường cứu khi rớt mạng giữa câu hỏi rồi vào lại.
+   */
+  useEffect(() => {
+    if (connState !== 'connected') return;
+    void connection.current?.send(TYPE_ID.HostResume);
+  }, [connState, connection]);
 
   const players = snapshot?.Players ?? [];
 
@@ -220,6 +520,98 @@ export default function GameLandscapeScreen() {
     void connection.current?.send(rollAction, {
       TurnId: snapshot?.Game.CurrentTurnId ?? '',
     });
+
+    // Xúc xắc lăn NGAY, chưa cần biết kết quả - xem `DiceRollOverlay`.
+    waitingDice.current = false;
+    setDice({ value: null });
+  };
+
+  /*
+   * Kết quả tung: đọc từ state, và CHỈ sau khi gói 52 đã về.
+   *
+   * `DiceOne` là một trường của cả ván nên nó vẫn giữ số của lượt TRƯỚC cho tới
+   * khi server ghi số mới. Không chờ gói 52 thì xúc xắc dừng ngay ở số cũ.
+   */
+  useEffect(() => {
+    if (!dice || dice.value != null) return;
+    if (!waitingDice.current) return;
+
+    const rolled = snapshot?.Game.DiceOne ?? 0;
+    if (rolled > 0) {
+      waitingDice.current = false;
+      setDice({ value: rolled });
+    }
+  }, [dice, snapshot]);
+
+  /*
+   * Giữ kết quả trên màn hình rồi mới tắt.
+   *
+   * ⚠️ 3 giây là con số của BẢN WEB, không phải ước lượng: bàn cờ hẹn
+   * `hideAllDice()` sau 3000ms kể từ lúc xúc xắc dừng (`mainHandlers.js`,
+   * `handleRollDice`), và trang người chơi cũng ẩn sau đúng 3000ms
+   * (`player.js`, `AfterRollDice`). Ngắn hơn thì người chơi chưa kịp đọc số;
+   * dài hơn thì ăn vào 15 giây của bước chọn hướng.
+   */
+  const DICE_HOLD_MS = 3000;
+
+  useEffect(() => {
+    if (!dice || dice.value == null) return;
+    const done = setTimeout(() => setDice(null), DICE_HOLD_MS);
+    return () => clearTimeout(done);
+  }, [dice]);
+
+  /*
+   * Lưới an toàn: mất gói hoặc mạng chậm thì cũng KHÔNG để xúc xắc quay mãi.
+   * Bốn giây là quá đủ - nhịp không có bàn cờ chỉ 2 giây một bước.
+   */
+  useEffect(() => {
+    if (!dice || dice.value != null) return;
+    const bail = setTimeout(() => setDice(null), 4000 + DICE_HOLD_MS);
+    return () => clearTimeout(bail);
+  }, [dice]);
+
+  /* Thông báo "ai vừa dùng thẻ" tự tắt sau 2.5 giây. */
+  useEffect(() => {
+    if (!notice) return;
+    const hide = setTimeout(() => setNotice(null), 2500);
+    return () => clearTimeout(hide);
+  }, [notice]);
+
+  /**
+   * Dùng thẻ: gửi `UseCard` rồi ĐỢI server xác nhận (gói 22) mới báo xong.
+   *
+   * ⚠️ Đừng gửi kèm `ActionDone` ở đây. Server phải kịp đổi chủ đề (Changer) hay
+   * ghi nhận thẻ trước; báo xong sớm là câu hỏi cũ nhảy ra, thẻ coi như mất.
+   */
+  const useCard = (cardId: string) => {
+    setCardStep(null);
+    void connection.current?.send(TYPE_ID.UseCard, { selectedCardId: cardId });
+  };
+
+  const skipCard = () => {
+    setCardStep(null);
+    void connection.current?.send(TYPE_ID.ActionDone, {
+      TurnId: turnId.current || snapshot?.Game.CurrentTurnId || '',
+      CompletedAction: CASE_ACTION.ShowCardsBeforeSubCategoryOrQuestion,
+      data: '',
+      IsPendingAction: false,
+    });
+  };
+
+  /**
+   * Chỉ BẢN DEV: nhấn giữ nút xúc xắc để xem lại hiệu ứng mà không cần ván.
+   *
+   * Hiệu ứng là thứ phải chỉnh đi chỉnh lại, mà dựng một ván chỉ để xem nó lăn
+   * thì mất vài phút mỗi lần. Nhấn giữ chạy đúng đường thật (lăn -> dừng ->
+   * giữ 3 giây), chỉ khác là con số bốc tại chỗ và KHÔNG gửi gói tin nào.
+   *
+   * Bản release không có: `__DEV__` là false nên nút vẫn khoá như cũ.
+   */
+  const previewDice = () => {
+    if (!__DEV__ || dice) return;
+    waitingDice.current = false;
+    setDice({ value: null });
+    setTimeout(() => setDice({ value: 1 + Math.floor(Math.random() * 6) }), 1400);
   };
 
   const cards = countCards(
@@ -243,10 +635,24 @@ export default function GameLandscapeScreen() {
     setQuestion(null);
     if (!current || !seat) return;
 
-    void submitAnswerForTurn(
-      { questionId: current.Question.Id, answerId, questionTitle: answerContent },
+    /*
+     * ⚠️ Hai loại câu hỏi đi HAI endpoint khác nhau. Gửi nhầm đường thì server
+     * không tìm ra lượt và câu trả lời rơi vào hư không - không báo lỗi gì.
+     */
+    const send = current.kind === 'race' ? submitAnswerForTurn : submitAnswer;
+    void send(
+      { questionId: current.question.Id, answerId, questionTitle: answerContent },
       seat.token,
     );
+  };
+
+  /*
+   * ⚠️ Đóng overlay NGAY khi gửi, không đợi server. Hết giờ cũng gửi, với
+   * `random` - đúng như bản web. Im lặng là lượt treo.
+   */
+  const chooseDirection = (choice: MoveDirection) => {
+    setDirection(null);
+    void connection.current?.send(TYPE_ID.MoveDirectionSelected, { direction: choice });
   };
 
   const timeoutQuestion = () => {
@@ -254,8 +660,9 @@ export default function GameLandscapeScreen() {
     setQuestion(null);
     if (!current || !seat) return;
 
-    void submitAnswerForTurn(
-      { questionId: current.Question.Id, answerId: EMPTY_GUID, isTimeout: true },
+    const send = current.kind === 'race' ? submitAnswerForTurn : submitAnswer;
+    void send(
+      { questionId: current.question.Id, answerId: EMPTY_GUID, isTimeout: true },
       seat.token,
     );
   };
@@ -531,6 +938,56 @@ export default function GameLandscapeScreen() {
                 />
               </View>
             )}
+
+            {/*
+              ⚠️ Câu hỏi đè lên ĐÚNG VÙNG BÀN CỜ, không phủ cả màn hình. Vì vậy
+              nó là con của `boardCol` chứ không nằm cuối cây: dải người chơi
+              trên cùng và cột phải (mã phòng, bài, xúc xắc) vẫn nhìn thấy trong
+              lúc trả lời. Kéo nó ra ngoài là mất hết chỗ đó.
+
+              ⚠️ Và nó phải nằm SAU `BoardCanvas` trong cây, không phải trước.
+              Trên Android, `zIndex` chỉ đổi thứ tự VẼ chứ không đổi thứ tự nhận
+              chạm - đặt trước thì khung hiện lên đúng nhưng mọi cú chạm rơi
+              xuống bàn cờ phía dưới: chọn đáp án không ăn, SUBMIT mãi tối. Đã
+              dính đúng vậy trên máy thật.
+            */}
+            {direction ? (
+              <MoveDirectionOverlay packet={direction} onSelect={chooseDirection} />
+            ) : null}
+
+            {cardStep ? (
+              <CardChoiceOverlay
+                cards={cardStep.cards}
+                categoryTitle={cardStep.title}
+                durationSeconds={cardStep.duration}
+                onUse={useCard}
+                onSkip={skipCard}
+              />
+            ) : null}
+
+            {question ? (
+              <QuestionOverlay
+                question={question.question}
+                categories={question.categories}
+                durationSeconds={question.duration}
+                /*
+                 * Vòng đua có nhãn cố định ở ô lớn và chuỗi chủ đề tụt xuống một
+                 * bậc. Lượt thường BỎ TRỐNG `banner`: ô lớn chính là chủ đề gốc,
+                 * ô nhỏ là chủ đề con.
+                 */
+                banner={question.kind === 'race' ? t('question.race') : null}
+                onAnswer={answerQuestion}
+                onTimeout={timeoutQuestion}
+              />
+            ) : null}
+
+            {notice ? (
+              <View style={styles.notice} pointerEvents="none">
+                <Text style={styles.noticeText} numberOfLines={1}>
+                  {notice}
+                </Text>
+              </View>
+            ) : null}
           </View>
 
           {/* ===================================================
@@ -735,7 +1192,13 @@ export default function GameLandscapeScreen() {
               */}
               <Pressable
                 onPress={rollDice}
-                disabled={!canRoll}
+                onLongPress={previewDice}
+                /*
+                 * ⚠️ Bản dev để nút BẤM ĐƯỢC cả khi chưa tới lượt, chỉ để nhấn
+                 * giữ xem lại hiệu ứng xúc xắc. Bấm thường vẫn không làm gì -
+                 * `rollDice` tự chặn theo `canRoll`.
+                 */
+                disabled={!canRoll && !__DEV__}
                 style={({ pressed }) => [
                   styles.diceBlock,
                   canRoll && styles.diceBlockLive,
@@ -768,18 +1231,11 @@ export default function GameLandscapeScreen() {
       </View>
 
       {/*
-        Câu hỏi phủ lên TẤT CẢ, nên nằm cuối cây. Nó cũng chặn chạm xuống dưới -
-        đang có câu hỏi thì không được bấm xúc xắc.
+        ⚠️ Xúc xắc nằm ở GỐC màn hình, không nằm trong khung bàn cờ như các
+        overlay khác: nó phải hiện giữa MÀN HÌNH. Khung bàn cờ chỉ chiếm nửa
+        trái, đặt trong đó thì con xúc xắc lệch hẳn sang một bên.
       */}
-      {question ? (
-        <QuestionOverlay
-          question={question.Question}
-          category={question.Category?.Title ?? null}
-          durationSeconds={question.DurationInSeconds || 20}
-          onAnswer={answerQuestion}
-          onTimeout={timeoutQuestion}
-        />
-      ) : null}
+      {dice ? <DiceRollOverlay value={dice.value} /> : null}
     </View>
   );
 }
@@ -1153,7 +1609,29 @@ const styles = StyleSheet.create({
 
     borderColor:
       'rgba(140,160,210,0.28)',
+
+    /*
+     * ⚠️ PHẢI có nền. Không đặt thì nút trong suốt và nền sân khấu (có cả vệt
+     * sáng lẫn quầng tím) lọt thẳng qua chữ ROLL DICE - lúc nút đang xám thì gần
+     * như không đọc được.
+     */
+    backgroundColor: '#0A0D22',
   },
+
+  notice: {
+    position: 'absolute',
+    top: 8,
+    alignSelf: 'center',
+    zIndex: 30,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1.3,
+    borderColor: 'rgba(255,198,30,0.6)',
+    backgroundColor: 'rgba(40,28,4,0.95)',
+    boxShadow: '0 0 14px rgba(255,198,30,0.35)',
+  },
+  noticeText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.6, color: '#FFC61E' },
 
   diceBtn: {
     width: 40,
@@ -1174,6 +1652,8 @@ const styles = StyleSheet.create({
   diceBlockLive: {
     borderColor:
       neon.purple.stroke,
+
+    backgroundColor: '#1B0E3A',
 
     boxShadow: `0 0 16px rgba(${neon.purple.rgb},0.45)`,
   },

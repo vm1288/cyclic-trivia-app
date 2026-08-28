@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#05040f}
+a{color:#c2a8ff}a:hover{color:#e2d4ff}
+@keyframes diceGlowPulse{0%,100%{opacity:.55}50%{opacity:1}}
+@keyframes diceBackdropFade{from{opacity:0}to{opacity:1}}
+@keyframes diceFadeIn{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:scale(1)}}
+@keyframes dicePopIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</helmet>
+
+<div style="width:390px;height:844px;box-sizing:border-box;position:relative;overflow:hidden;background:radial-gradient(120% 90% at 50% 0%,#181033 0%,#0a0718 58%,#050410 100%);font-family:'Saira Condensed',sans-serif;color:#eee6ff;display:flex;flex-direction:column">
+
+  <div style="padding:22px 20px 0;font:700 11px/1 'Saira Condensed',sans-serif;letter-spacing:.22em;color:rgba(190,160,255,.55)">GAME ACTIONS</div>
+
+  <div style="flex:1;display:flex;align-items:center;justify-content:center">
+    <div onClick="{{ rollDice }}" style="position:relative;cursor:pointer;height:62px;padding:0 28px 0 12px;border-radius:31px;display:inline-flex;align-items:center;gap:14px;background:linear-gradient(160deg,#1c1240,#0b0620);border:2px solid #9d6bff">
+      <span style="position:absolute;inset:-3px;border-radius:34px;background:transparent;box-shadow:0 0 22px rgba(157,107,255,.65);animation:diceGlowPulse 2s ease-in-out infinite;pointer-events:none"></span>
+      <div style="position:relative;width:44px;height:44px;flex-shrink:0;perspective:160px;display:flex;align-items:center;justify-content:center">
+        <div style="width:34px;height:34px;position:relative;transform-style:preserve-3d;transform:rotateX(-20deg) rotateY(32deg)">
+          <sc-for list="{{ iconFaces }}" as="face" hint-placeholder-count="6">
+            <div style="position:absolute;inset:0;box-sizing:border-box;border:1px solid rgba(255,255,255,.18);box-shadow:inset 0 0 8px rgba(0,0,0,.3);background:{{ face.bg }};transform:{{ face.transform }};display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:4px">
+              <sc-for list="{{ face.pips }}" as="pip" hint-placeholder-count="2">
+                <div style="grid-row:{{ pip.row }};grid-column:{{ pip.col }};width:{{ face.dot }}px;height:{{ face.dot }}px;border-radius:50%;background:radial-gradient(circle at 32% 30%,#fff,#d3c4f7);align-self:center;justify-self:center"></div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <span style="position:relative;font:800 17px/1 'Saira Condensed',sans-serif;letter-spacing:.14em;color:#fff">ROLL DICE</span>
+    </div>
+  </div>
+
+  <sc-if value="{{ isOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeOverlay }}" style="position:absolute;inset:0;background:rgba(6,3,18,.76);backdrop-filter:blur(8px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:30px;animation:diceBackdropFade 220ms ease-out">
+      <div onClick="{{ stopClick }}" style="display:flex;flex-direction:column;align-items:center;gap:26px">
+
+        <div style="width:128px;height:128px;perspective:700px;animation:diceFadeIn 360ms ease-out">
+          <div style="width:100%;height:100%;position:relative;transform-style:preserve-3d;transform:{{ cubeTransform }};transition:transform 1900ms cubic-bezier(.34,1.4,.4,1)">
+            <sc-for list="{{ dieFaces }}" as="face" hint-placeholder-count="6">
+              <div style="position:absolute;inset:0;box-sizing:border-box;border:1px solid rgba(255,255,255,.2);box-shadow:inset 0 0 26px rgba(0,0,0,.32);background:{{ face.bg }};transform:{{ face.transform }};display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:16px">
+                <sc-for list="{{ face.pips }}" as="pip" hint-placeholder-count="2">
+                  <div style="grid-row:{{ pip.row }};grid-column:{{ pip.col }};width:{{ face.dot }}px;height:{{ face.dot }}px;border-radius:50%;background:radial-gradient(circle at 32% 30%,#fff,#d3c4f7);box-shadow:0 1px 2px rgba(0,0,0,.35);align-self:center;justify-self:center"></div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <sc-if value="{{ isSettled }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;animation:dicePopIn 260ms ease-out">
+            <span style="font:700 11px/1 'Saira Condensed',sans-serif;letter-spacing:.24em;color:rgba(200,170,255,.7)">YOU ROLLED</span>
+            <span style="font:800 46px/1 'Saira Condensed',sans-serif;color:#fff;text-shadow:0 0 24px rgba(157,107,255,.85)">{{ resultValue }}</span>
+            <div onClick="{{ rollDice }}" style="margin-top:12px;padding:11px 24px;border-radius:22px;border:2px solid #9d6bff;color:#fff;font:700 13px/1 'Saira Condensed',sans-serif;letter-spacing:.12em;cursor:pointer;background:rgba(157,107,255,.14)">ROLL AGAIN</div>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:844}}">
+const PIP_PATTERNS = {
+  1: [[2,2]],
+  2: [[1,1],[3,3]],
+  3: [[1,1],[2,2],[3,3]],
+  4: [[1,1],[1,3],[3,1],[3,3]],
+  5: [[1,1],[1,3],[2,2],[3,1],[3,3]],
+  6: [[1,1],[1,3],[2,1],[2,3],[3,1],[3,3]],
+};
+const TARGET = { 1:{x:0,y:0}, 6:{x:0,y:180}, 2:{x:0,y:270}, 5:{x:0,y:90}, 3:{x:270,y:0}, 4:{x:90,y:0} };
+
+class Component extends DCLogic {
+  state = { open: false, phase: 'idle', value: 1, rotX: 0, rotY: 0, scale: 1 };
+
+  buildFaces(size) {
+    const half = size / 2;
+    const defs = [
+      { value: 1, bg: 'linear-gradient(135deg,#9d5cff,#7c3dff)', transform: `translateZ(${half}px)` },
+      { value: 6, bg: 'linear-gradient(135deg,#6a3ad1,#4e2aa8)', transform: `rotateY(180deg) translateZ(${half}px)` },
+      { value: 2, bg: 'linear-gradient(135deg,#8347e8,#6329c2)', transform: `rotateY(90deg) translateZ(${half}px)` },
+      { value: 5, bg: 'linear-gradient(135deg,#7238d6,#5424b0)', transform: `rotateY(-90deg) translateZ(${half}px)` },
+      { value: 3, bg: 'linear-gradient(135deg,#d6b8ff,#a877ff)', transform: `rotateX(90deg) translateZ(${half}px)` },
+      { value: 4, bg: 'linear-gradient(135deg,#4a2a94,#341c6e)', transform: `rotateX(-90deg) translateZ(${half}px)` },
+    ];
+    const dot = Math.max(4, size * 0.15);
+    return defs.map((d) => ({
+      transform: d.transform,
+      bg: d.bg,
+      dot,
+      pips: PIP_PATTERNS[d.value].map(([row, col]) => ({ row, col })),
+    }));
+  }
+
+  spinTo(current, targetMod) {
+    const extra = 720 + Math.floor(Math.random() * 720);
+    const base = Math.ceil((current + extra) / 360) * 360;
+    return base + targetMod;
+  }
+
+  rollDice = () => {
+    if (this.state.phase === 'rolling') return;
+    const value = 1 + Math.floor(Math.random() * 6);
+    const t = TARGET[value];
+    const rotX = this.spinTo(this.state.rotX, t.x);
+    const rotY = this.spinTo(this.state.rotY, t.y);
+    this.setState({ open: true, phase: 'rolling', value, rotX, rotY, scale: 1 });
+    clearTimeout(this._settleTimer);
+    this._settleTimer = setTimeout(() => {
+      this.setState({ phase: 'settled', scale: 1.14 });
+      setTimeout(() => this.setState({ scale: 1 }), 180);
+    }, 1950);
+  };
+
+  closeOverlay = () => this.setState({ open: false, phase: 'idle' });
+  stopClick = (e) => e.stopPropagation();
+
+  renderVals() {
+    return {
+      rollDice: this.rollDice,
+      closeOverlay: this.closeOverlay,
+      stopClick: this.stopClick,
+      isOpen: this.state.open,
+      isSettled: this.state.phase === 'settled',
+      cubeTransform: `rotateX(${this.state.rotX}deg) rotateY(${this.state.rotY}deg) scale(${this.state.scale})`,
+      resultValue: this.state.value,
+      iconFaces: this.buildFaces(34),
+      dieFaces: this.buildFaces(128),
+    };
+  }
+}
+
+</script>
+</body>
+</html>

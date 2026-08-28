@@ -341,6 +341,17 @@ export type GameSnapshot = {
     GameSetup: number;
     /** Xem `CASE_ACTION`. */
     CurrentAction: number;
+    /**
+     * Mặt xúc xắc của cú tung gần nhất.
+     *
+     * ⚠️ Đây là ĐƯỜNG DUY NHẤT để app biết kết quả tung. Server có gói
+     * `RollDice` (14) mang `DiceOne`/`DiceTwo` nhưng dòng gửi cho chính người
+     * chơi đã bị comment lại từ lâu (`RollDiceHandler.cs`, "Send result to
+     * current player") - chỉ bàn cờ nhận. Nên màn xúc xắc đọc từ state, sau khi
+     * gói `AskMoveDirection` (52) về và kéo theo một lượt nạp lại.
+     */
+    DiceOne: number;
+    DiceTwo: number;
   };
   /**
    * Server tạo sẵn ĐỦ số ghế ngay lúc tạo ván, với nickname mặc định
@@ -492,6 +503,25 @@ export const GAME_SETUP = { Started: 0, Instruction: 1, SetNickname: 2 } as cons
 export const CASE_ACTION = {
   /** Tới lượt, được tung xúc xắc. */
   RollDice: 1,
+  /**
+   * "Báo lại đi rồi tôi nói việc kế tiếp."
+   *
+   * Server đặt giá trị này vào trường `Action` của gói `StartTurn` (12). Máy
+   * khách phải gửi `Pub PlayerGetNextAction` thì mới sang được `RollDice`.
+   */
+  PlayerGetNextAction: 2,
+  /** Đang ở màn bắt đầu lượt, CHƯA được tung. */
+  Start: 3,
+  /**
+   * Trước câu hỏi, server mời dùng thẻ bài (Joker / Changer...).
+   *
+   * App CHƯA có màn dùng bài nên bỏ qua bước này - xem `game-landscape.tsx`.
+   */
+  ShowCardsBeforeSubCategoryOrQuestion: 5,
+  /** Câu hỏi của lượt thường - người tới lượt trả lời. */
+  ShowSubCategoriesAndQuestions: 6,
+  /** Cùng câu hỏi đó, nhưng gửi cho NHỮNG NGƯỜI CÒN LẠI để tranh trả lời. */
+  OtherPlayersAnswering: 11,
   /** Vòng đua "ai đi trước" - cũng tung xúc xắc nhưng gói tin khác. */
   RollDiceForTurn: 13,
   QuestionForTurn: 20,
@@ -616,6 +646,76 @@ export function startGame(
   return postForm(`/public/game/${gameId}/start`, {}, token);
 }
 
+/* ─── Ack flow ─────────────────────────────────────────────────────────────── */
+
+/**
+ * Báo server "máy này đã nhận flow đó" (`IsClientReceivedFlow = true`).
+ *
+ * ⚠️ ĐÂY LÀ MẮT XÍCH BẮT BUỘC, không phải tuỳ chọn. `QuestionForTurnHandler`
+ * chỉ ghi câu hỏi vòng đua vào flow của người chơi khi
+ * `CurrentFlow == PlayerStart && IsClientReceivedFlow`. Bản web đặt cờ đó bằng
+ * cách ĐIỀU HƯỚNG TRANG tới `/player/start/{playerId}` - một Razor action đặt cờ
+ * như tác dụng phụ. App không có trang đó, nên nếu không gọi hàm này thì cờ mãi
+ * là `false` và CÂU HỎI KHÔNG BAO GIỜ TỚI.
+ *
+ * ⚠️ CHỈ ack `PlayerStart`. Đừng ack `QuestionForTurn`: cờ đó còn là điều kiện
+ * để server phát lại câu hỏi cho người vừa nối lại (`HostResume`), và
+ * `submitAnswerForTurn` đã tự đặt khi có câu trả lời.
+ *
+ * Tên flow phải khớp enum `CurrentFlow` của server; server so với
+ * `player.CurrentFlow` và bỏ qua nếu lệch (trả `isAcked: false`, không phải lỗi).
+ */
+export function ackFlow(
+  flow: 'PlayerStart',
+  token: string,
+): Promise<ApiResult<{ isAcked?: boolean; flow?: string }>> {
+  return postForm('/public/game/flow-received', { flow }, token);
+}
+
+/* ─── Chọn hướng đi ────────────────────────────────────────────────────────── */
+
+/**
+ * Payload của gói `AskMoveDirection` (52): tung xúc xắc xong, server hỏi đi
+ * hướng nào.
+ *
+ * ⚠️ Gói này MANG SẴN DỮ LIỆU (chủ đề của ô sẽ tới ở mỗi hướng, và nếu là battle
+ * thì cả tên lẫn điểm của người đang đứng đó). Giống gói 67, nó là ngoại lệ của
+ * luật "gói tin chỉ là tín hiệu" - state không có mấy thứ này.
+ *
+ * Trả lời bằng `Pub MoveDirectionSelected` (53) với
+ * `{ direction: 'clockwise' | 'anticlockwise' | 'random' }`. Hết giờ thì gửi
+ * `random`, đúng như bản web (`AskMoveDirection.cshtml`, hàm `skip`).
+ */
+export type DirectionPacket = {
+  DurationInSeconds: number;
+  ClockwiseCategory: string;
+  AntiClockwiseCategory: string;
+  ClockwiseBattle?: boolean;
+  AntiClockwiseBattle?: boolean;
+  /** Thể thức Leaderboard Challenge: thắng/thua battle xử lý khác. */
+  isLeaderBoard?: boolean;
+  /** "crictriv" | "footietriv" | ... - quyết định gọi điểm là "runs" hay "goals". */
+  boardGameId?: string;
+  WaggerPercent?: number;
+  ClockwiseIncumbentNickname?: string;
+  ClockwiseIncumbentTotalPoint?: number;
+  ClockwiseIncumbentPoint?: number;
+  AntiClockwiseIncumbentNickname?: string;
+  AntiClockwiseIncumbentTotalPoint?: number;
+  AntiClockwiseIncumbentPoint?: number;
+};
+
+export type MoveDirection = 'clockwise' | 'anticlockwise' | 'random';
+
+/**
+ * Điểm cho một câu trả lời đúng ở lượt thường.
+ *
+ * ⚠️ Là HẰNG SỐ CỦA SERVER (`Constants.CorrectQuestionPoint = 2`), chép sang đây
+ * để hiện lời mời "trả lời đúng được mấy điểm" y như bản web. Server đổi thì
+ * phải sửa cả đây - nó không nằm trong gói tin nào.
+ */
+export const CORRECT_QUESTION_POINT = 2;
+
 /* ─── Câu hỏi ──────────────────────────────────────────────────────────────── */
 
 /**
@@ -631,12 +731,52 @@ export type GameQuestion = {
   Answers: { Id: string; Content: string }[];
 };
 
+/**
+ * Chủ đề của câu hỏi: một gốc và một cây con nối bằng `ParentId`.
+ *
+ * ⚠️ `Subs` CHỨA CẢ CHÍNH GỐC (mục có `ParentId: null`), không phải chỉ các
+ * nhánh con. Lọc theo `ParentId` chứ đừng lấy cả mảng.
+ */
+export type QuestionCategory = {
+  Root: { Id: string; QuestionCategoryId: string; Title: string };
+  Subs: { Id: string; Title: string; QuestionCategoryId: string; ParentId: string | null }[];
+};
+
 /** Payload của gói `PlayerInstructionQuestion` (67) - câu hỏi vòng đua. */
 export type QuestionPacket = {
   Question: GameQuestion;
-  Category?: { Title?: string } | null;
+  Category?: QuestionCategory | null;
   DurationInSeconds: number;
 };
+
+/**
+ * Chuỗi chủ đề từ GỐC đi xuống: `["Cricket", "Women's Cricket", "World Cup"]`.
+ *
+ * Chép đúng `getFilteredSubs` trong `PlayerQuestionForTurn.cshtml` của bản web:
+ * gốc trước, rồi đệ quy theo `ParentId` xuống từng nhánh.
+ *
+ * Nhiều bộ câu hỏi chỉ có ĐÚNG một cấp - lúc đó chuỗi chỉ có một phần tử, và
+ * màn câu hỏi phải chịu được chuyện đó (ẩn bớt ô thay vì hiện ô rỗng).
+ */
+export function categoryChain(category?: QuestionCategory | null): string[] {
+  const root = category?.Root;
+  if (!root) return [];
+
+  const subs = category?.Subs ?? [];
+  const titles = [root.Title];
+
+  const walk = (parentId: string) => {
+    for (const sub of subs) {
+      if (sub.ParentId === parentId) {
+        titles.push(sub.Title);
+        walk(sub.QuestionCategoryId);
+      }
+    }
+  };
+  walk(root.QuestionCategoryId);
+
+  return titles.filter(Boolean);
+}
 
 /**
  * Trả lời câu hỏi VÒNG ĐUA "ai đi trước".
@@ -671,6 +811,73 @@ export function submitAnswerForTurn(
     token,
   );
 }
+
+/**
+ * Trả lời câu hỏi của LƯỢT CHƠI THƯỜNG.
+ *
+ * ⚠️ Khác đường với vòng đua. Ba loại câu hỏi, ba endpoint:
+ *   vòng đua "ai đi trước" -> `/public/game/submitAnswerForTurn`
+ *   lượt chơi thường       -> `/public/game/submitAnswer`   (đây)
+ *   battle                 -> đường khác nữa, chưa tra
+ * Gửi nhầm đường thì server tìm không ra lượt và câu trả lời rơi vào hư không.
+ *
+ * Hình dạng payload thì giống hệt vòng đua - chép theo
+ * `ShowSubCategoriesAndQuestions.cshtml` của bản web.
+ */
+export function submitAnswer(
+  params: { questionId: string; answerId: string; questionTitle?: string; isTimeout?: boolean; isTooLate?: boolean },
+  token: string,
+): Promise<ApiResult<{}>> {
+  return postJson(
+    '/public/game/submitAnswer',
+    {
+      answerId: params.answerId,
+      questionId: params.questionId,
+      questionTitle: params.questionTitle ?? '',
+      IsTimeout: params.isTimeout ?? false,
+      IsTooLate: params.isTooLate ?? false,
+    },
+    token,
+  );
+}
+
+/**
+ * `Payload` của gói `PlayerGetNextAction` (16) khi tới lượt trả lời câu hỏi
+ * thường.
+ *
+ * ⚠️ Tên trường ở đây viết THƯỜNG (`question`, `category`) - khác gói 67 của
+ * vòng đua vốn viết hoa (`Question`, `Category`). Server dựng payload này bằng
+ * anonymous object nên nó giữ nguyên cách viết trong C#
+ * (`ShowCardsBeforeSubCategoryOrQuestion.cs`). Đừng gộp hai kiểu làm một.
+ */
+export type TurnCard = {
+  Id: string;
+  CardId: 'Joker' | 'Skipper' | 'Eliminator' | 'Changer';
+  Name: string;
+  Quantity: number;
+  IsUsed: boolean;
+};
+
+/**
+ * `Payload` của gói 16 khi server mời dùng thẻ bài (`Action = 5`).
+ *
+ * ⚠️ `cardsToShow` server đã LỌC SẴN: chỉ những thẻ dùng được TRƯỚC câu hỏi
+ * (`ShowBeforeQuestion`), tức Joker và Changer. Skipper/Eliminator dùng trong
+ * lúc có câu hỏi và đi đường khác (`UseCardInQuestion`).
+ */
+export type CardStepPayload = {
+  cardsToShow: TurnCard[];
+  category?: QuestionCategory | null;
+};
+
+export type TurnQuestionPayload = {
+  question: GameQuestion;
+  category?: QuestionCategory | null;
+  lastCategoryId?: string;
+  /** false = mình chỉ đang tranh trả lời câu của người khác. */
+  isQuestionOwner?: boolean;
+  isYourChoice?: boolean;
+};
 
 /** GUID nằm ở CUỐI chuỗi, sau tiền tố. */
 const TRAILING_GUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

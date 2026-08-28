@@ -35,11 +35,47 @@ export const TYPE_ID = {
   Ping: 0,
   PlayerCheckedIn: 8,
   WhosTurn: 9,
+  /**
+   * "Tới lượt bạn rồi" - server CHỈ gửi cho đúng người tới lượt
+   * (`StartTurnHandler.cs`), nên nhận được gói này nghĩa là lượt của mình.
+   *
+   * Gói mang `Action` (một `CaseAction`) nói việc kế tiếp phải làm, và
+   * `CurrentTurnId` để gắn vào gói trả lời.
+   */
+  StartTurn: 12,
   RollDice: 14,
+  /**
+   * "Tôi đã nhận lượt, cho tôi việc kế tiếp."
+   *
+   * ⚠️ MẮT XÍCH BẮT BUỘC để nút xúc xắc sáng - xem `game-landscape.tsx`.
+   * Payload PHẢI có `TurnId`; gửi payload rỗng thì server nổ
+   * `NullReferenceException` (`PlayerGetNextActionHandler.cs:176`).
+   */
+  PlayerGetNextAction: 16,
+  /**
+   * "Bước vừa rồi xong" - server báo sau khi quân cờ đã đi tới nơi.
+   *
+   * ⚠️ Nhận gói này thì PHẢI gửi lại `PlayerGetNextAction` (16), nếu không câu
+   * hỏi của lượt sẽ không bao giờ tới. Không có lưới an toàn nào ở server cho
+   * bước này - `BoardStepWatchdog` chỉ lo phần việc của BÀN CỜ.
+   */
+  ActionDone: 15,
+  /** Gửi lên: "tôi dùng thẻ này". Nhận về: server xác nhận, kèm số lá còn lại. */
+  UseCard: 22,
   /** Xúc xắc của vòng đua "ai đi trước" - KHÁC `RollDice`. */
   RollDiceForTurnClient: 41,
   GameStart: 38,
   GameOver: 39,
+  /**
+   * "Tôi vừa nối xong, còn flow nào đang treo thì phát lại đi."
+   *
+   * Tên gọi đánh lừa: gói này KHÔNG chỉ dành cho host. `HostResumeHandler` rẽ
+   * nhánh theo vai - người chơi gửi thì server tra `player.CurrentFlow` rồi cho
+   * đúng resolver ở `PlayerCurrentFlows/` phát lại flow đang treo. Trang người
+   * chơi bản web gửi nó ở mỗi lần nối (`playerConnection.js`), và đó là lý do
+   * bản web không mất câu hỏi khi đổi màn giữa chừng.
+   */
+  HostResume: 21,
   PlayerStart: 50,
   AskMoveDirection: 52,
   MoveDirectionSelected: 53,
@@ -53,6 +89,15 @@ export const TYPE_ID = {
   Log: 77,
   CheckPlayerScreen: 79,
   PauseGame: 80,
+  /**
+   * "Người chơi khác vừa dùng thẻ" - gói RIÊNG cho app, thêm 2026-08-28.
+   *
+   * Server chỉ gửi `UseCard` (22) cho chính người dùng thẻ và cho bàn cờ, nên
+   * trước đây các máy khác không hề biết. Đừng đổi thành broadcast gói 22: trang
+   * người chơi bản web trả lời gói đó bằng `ActionDone` - xem ghi chú ở
+   * `TypeID.PlayerUsedCard` phía server.
+   */
+  PlayerUsedCard: 86,
 } as const;
 
 /** Gói tin server đẩy xuống. Luôn có `typeID`; phần còn lại tuỳ loại. */
@@ -215,10 +260,26 @@ export function createGameConnection({ token, asBoard, onPacket, onState }: Opti
      */
     async send(typeID: number, payload?: unknown) {
       if (connection.state !== HubConnectionState.Connected) return;
-      await connection.invoke('Pub', {
-        typeID,
-        payload: payload === undefined ? '' : JSON.stringify(payload),
-      });
+
+      try {
+        await connection.invoke('Pub', {
+          typeID,
+          payload: payload === undefined ? '' : JSON.stringify(payload),
+        });
+      } catch {
+        /*
+         * ⚠️ PHẢI nuốt ở đây. Kết nối đứt trong lúc một gói đang bay thì SignalR
+         * huỷ mọi lời gọi đang chờ với "Invocation canceled due to the
+         * underlying connection being closed" - và vì mọi nơi gọi đều `void`
+         * (không `await`), lời hứa bị từ chối đó nổi lên thành **unhandled
+         * rejection**: bản dev hiện màn đỏ, bản release ghi log ầm ĩ. Đã dính
+         * thật khi mở lại app vào một ván đã chết.
+         *
+         * Nuốt là ĐÚNG chứ không phải giấu lỗi: gói tin rơi lúc mất kết nối vốn
+         * đã có đường cứu - nối lại xong app gửi `HostResume` và server phát lại
+         * flow đang treo.
+         */
+      }
     },
 
     state() {
