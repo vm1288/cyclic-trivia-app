@@ -60,8 +60,35 @@ export const TYPE_ID = {
    * bước này - `BoardStepWatchdog` chỉ lo phần việc của BÀN CỜ.
    */
   ActionDone: 15,
+  /** "Lượt của tôi xong rồi" - gửi lên khi server nhờ qua gói 27. */
+  TurnComplete: 13,
+  /**
+   * "Gọi hộ tôi hàm X" - server nhờ máy khách bấm nút thay nó.
+   *
+   * ⚠️ Nghe cực dị nhưng đây là XƯƠNG SỐNG của luật chơi, không phải tiện ích:
+   * server không tự đẩy ván đi tiếp, nó gửi gói này cho máy khách rồi máy khách
+   * gửi ngược lại gói thật (`ActionDone`, `TurnComplete`...). Bản web có một
+   * bảng hàm `callFromServer*` trong `playerHandlers.js` làm đúng việc đó.
+   *
+   * Không xử lý gói này thì mọi nhánh "người tới lượt trả lời sai" đứng im: cả
+   * phòng chờ mãi mà không ai được tranh trả lời.
+   */
+  CallJavascriptFromServer: 27,
   /** Gửi lên: "tôi dùng thẻ này". Nhận về: server xác nhận, kèm số lá còn lại. */
   UseCard: 22,
+  /**
+   * Server vừa cấp/trả lại một lá bài. `isFromStars: true` = phần thưởng đủ 5 sao.
+   */
+  EnableCard: 33,
+  /**
+   * "Câu hỏi khép lại rồi" - CÓ NGƯỜI KHÁC trả lời trước bạn.
+   *
+   * ⚠️ Nhận gói này thì phải đóng màn câu hỏi VÀ gửi câu trả lời `IsTooLate`.
+   * Server đợi đủ câu trả lời của mọi người mới khép vòng; im lặng là lượt treo
+   * tới khi watchdog cắt. Bản web làm y hệt (`handleTriggerTimeoutQuestion` gọi
+   * `TooLate()`).
+   */
+  TimeoutQuestion: 45,
   /** Xúc xắc của vòng đua "ai đi trước" - KHÁC `RollDice`. */
   RollDiceForTurnClient: 41,
   GameStart: 38,

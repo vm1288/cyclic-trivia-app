@@ -180,6 +180,9 @@ export const en = {
   'cards.body.Changer': 'Changes the category.',
   /** Người khác vừa dùng thẻ - hiện thoáng qua rồi tự tắt. */
   'cards.usedBy': '{name} used {card}',
+  /** Đủ 5 sao thì được thưởng một lá bài. */
+  'cards.earned': '5 stars! You earned {card}',
+  'cards.earnedAny': '5 stars! You earned a card',
 
   'dice.rolling': 'ROLLING…',
   'dice.rolled': 'YOU ROLLED',
@@ -377,6 +380,8 @@ const vi: Record<TranslationKey, string> = {
   'cards.body.Eliminator': 'Bỏ bớt một đáp án sai.',
   'cards.body.Changer': 'Đổi sang chủ đề khác.',
   'cards.usedBy': '{name} dùng {card}',
+  'cards.earned': 'Đủ 5 sao! Bạn được thưởng {card}',
+  'cards.earnedAny': 'Đủ 5 sao! Bạn được thưởng một lá bài',
 
   'dice.rolling': 'ĐANG TUNG…',
   'dice.rolled': 'BẠN TUNG ĐƯỢC',

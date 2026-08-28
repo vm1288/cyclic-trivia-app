@@ -41,7 +41,11 @@ const REFRESH_ON = new Set<number>([
   15, // ActionDone
   16, // PlayerGetNextAction - server vừa đổi việc kế tiếp của mình (vd sang RollDice)
   22, // UseCard            - số lá bài của mình vừa đổi
-  24, // PlayerRank
+  13, // TurnComplete      - lượt vừa khép lại
+  24, // PlayerRank        - điểm vừa đổi
+  33, // EnableCard        - vừa được cấp/trả lại một lá bài
+  37, // CardInfoFromStars - đủ 5 sao, vừa được thưởng bài
+  45, // TimeoutQuestion   - vòng trả lời khép lại
   36, // PlayerStars
   38, // GameStart
   39, // GameOver

@@ -235,6 +235,16 @@ export default function GameLandscapeScreen() {
   const turnId = useRef<string>('');
 
   /**
+   * Id câu hỏi mình ĐÃ trả lời trong lượt này.
+   *
+   * ⚠️ Cần thật: người tới lượt trả lời SAI thì server phát lại chính câu hỏi đó
+   * cho CẢ PHÒNG để tranh trả lời (`OtherPlayersAnswering`) - kể cả người vừa
+   * trả lời sai. Không chặn thì họ thấy lại câu vừa sai và trả lời lần hai, mà
+   * server đã tính họ "đã thử" rồi.
+   */
+  const answered = useRef<string>('');
+
+  /**
    * Đang đợi kết quả xúc xắc từ một lượt nạp lại state.
    *
    * Bật lên khi gói `AskMoveDirection` (52) về - lúc đó server đã ghi xong
@@ -382,6 +392,9 @@ export default function GameLandscapeScreen() {
         const payload = packet.Payload as TurnQuestionPayload | undefined;
         if (!payload?.question?.Id) return;
 
+        // Đã trả lời câu này rồi thì thôi - xem ghi chú ở `answered`.
+        if (answered.current === payload.question.Id) return;
+
         setQuestion({
           kind: 'turn',
           question: payload.question,
@@ -419,6 +432,74 @@ export default function GameLandscapeScreen() {
             IsPendingAction: false,
           });
         }, wait);
+        return;
+      }
+
+      /*
+       * ============================================================
+       * SERVER NHỜ GỌI HỘ - thứ đẩy ván đi tiếp sau khi trả lời sai
+       * ============================================================
+       *
+       * Server không tự đẩy ván: nó gửi `CallJavascriptFromServer` rồi CHỜ máy
+       * khách gửi ngược lại gói thật. Bản web có bảng hàm `callFromServer*`
+       * (`playerHandlers.js`); đây là bản rút gọn, chỉ những hàm app đang cần.
+       *
+       * ⚠️ Không xử lý gói này thì nhánh "người tới lượt trả lời SAI" đứng im:
+       * server chờ `ActionDone` để phát câu hỏi cho những người còn lại tranh
+       * trả lời, mà chẳng ai gửi. Đã dính đúng vậy - cả phòng treo ở
+       * `WaitOtherPlayersAnswer`.
+       *
+       * `PlaySound` và `RemoveAllComponents` là việc thuần UI của bản web, bỏ
+       * qua. Battle và 10-sec challenge chưa làm, thêm sau ở ngay đây.
+       */
+      if (packet.typeID === TYPE_ID.CallJavascriptFromServer) {
+        const fn = packet.FunctionName;
+        const id = turnId.current || snapshot?.Game.CurrentTurnId || '';
+
+        if (fn === 'ActionDone' || fn === 'ActionDoneWithPayload') {
+          void connection.current?.send(TYPE_ID.ActionDone, {
+            TurnId: id,
+            // Server hiện BỎ QUA trường này (`ActionDoneRequest` chỉ đọc `data`
+            // và `IsPendingAction`), gửi cho khớp bản web thôi.
+            CompletedAction: me?.CurrentAction ?? 0,
+            data: fn === 'ActionDoneWithPayload' ? JSON.stringify(packet.Payload ?? '') : '',
+            IsPendingAction: false,
+          });
+          return;
+        }
+
+        if (fn === 'TurnCompleteCustom') {
+          void connection.current?.send(TYPE_ID.TurnComplete, {
+            TurnId: id,
+            data: JSON.stringify(packet.Payload ?? ''),
+            isRemoveAllComponent: packet.isRemoveAllComponent ?? true,
+          });
+          return;
+        }
+
+        return;
+      }
+
+      /*
+       * Có người trả lời trước mình -> đóng màn câu hỏi và báo "trả lời muộn".
+       *
+       * ⚠️ PHẢI GỬI, không được im lặng: server đợi đủ câu trả lời của mọi người
+       * mới khép vòng. Bản web làm y hệt (`handleTriggerTimeoutQuestion` gọi
+       * `TooLate()` của màn câu hỏi).
+       */
+      if (packet.typeID === TYPE_ID.TimeoutQuestion) {
+        tooLateQuestion();
+        return;
+      }
+
+      /*
+       * Đủ 5 sao thì server thưởng một lá bài ngẫu nhiên (GAME_RULES mục 6).
+       * Số lá trong tay tự cập nhật qua state; đây chỉ là dòng báo cho biết.
+       */
+      if (packet.typeID === TYPE_ID.EnableCard) {
+        if (!packet.isFromStars) return;
+        const card = me?.Cards.find((c) => c.Id === packet.selectedCardId)?.CardId;
+        setNotice(card ? t('cards.earned', { card }) : t('cards.earnedAny'));
         return;
       }
 
@@ -672,6 +753,8 @@ export default function GameLandscapeScreen() {
      * ⚠️ Hai loại câu hỏi đi HAI endpoint khác nhau. Gửi nhầm đường thì server
      * không tìm ra lượt và câu trả lời rơi vào hư không - không báo lỗi gì.
      */
+    answered.current = current.question.Id;
+
     const send = current.kind === 'race' ? submitAnswerForTurn : submitAnswer;
     void send(
       { questionId: current.question.Id, answerId, questionTitle: answerContent },
@@ -693,9 +776,31 @@ export default function GameLandscapeScreen() {
     setQuestion(null);
     if (!current || !seat) return;
 
+    answered.current = current.question.Id;
+
     const send = current.kind === 'race' ? submitAnswerForTurn : submitAnswer;
     void send(
       { questionId: current.question.Id, answerId: EMPTY_GUID, isTimeout: true },
+      seat.token,
+    );
+  };
+
+  /**
+   * Có người khác trả lời trước: đóng màn và báo "muộn rồi".
+   *
+   * Khác `timeoutQuestion` ở chỗ gửi `IsTooLate` thay vì `IsTimeout` - server
+   * đếm hai loại này khác nhau khi quyết định khép vòng trả lời.
+   */
+  const tooLateQuestion = () => {
+    const current = question;
+    if (!current || !seat) return;
+
+    setQuestion(null);
+    answered.current = current.question.Id;
+
+    const send = current.kind === 'race' ? submitAnswerForTurn : submitAnswer;
+    void send(
+      { questionId: current.question.Id, answerId: EMPTY_GUID, isTooLate: true },
       seat.token,
     );
   };
