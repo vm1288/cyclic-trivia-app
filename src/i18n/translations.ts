@@ -184,6 +184,12 @@ export const en = {
   'dice.rolling': 'ROLLING…',
   'dice.rolled': 'YOU ROLLED',
 
+  /** Vòng đua xong - câu này hiện giữa bàn cờ, giống bàn cờ của bản web. */
+  'race.winner': '{name} is the fastest!',
+  'race.winnerYou': 'You are the fastest!',
+  'race.first': 'They take the first turn',
+  'race.firstYou': 'You take the first turn',
+
   'direction.title': 'WHICH WAY WILL YOU GO?',
   'direction.clockwise': 'CLOCKWISE',
   'direction.anticlockwise': 'ANTI-CLOCKWISE',
@@ -374,6 +380,11 @@ const vi: Record<TranslationKey, string> = {
 
   'dice.rolling': 'ĐANG TUNG…',
   'dice.rolled': 'BẠN TUNG ĐƯỢC',
+
+  'race.winner': '{name} nhanh nhất!',
+  'race.winnerYou': 'Bạn nhanh nhất!',
+  'race.first': 'Người đó đi trước',
+  'race.firstYou': 'Bạn đi trước',
 
   'direction.title': 'BẠN ĐI HƯỚNG NÀO?',
   'direction.clockwise': 'THUẬN CHIỀU',

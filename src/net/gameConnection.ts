@@ -98,6 +98,14 @@ export const TYPE_ID = {
    * `TypeID.PlayerUsedCard` phía server.
    */
   PlayerUsedCard: 86,
+  /**
+   * "Vòng đua xong, X đi trước" - gói RIÊNG cho app, thêm 2026-08-28.
+   *
+   * Bàn cờ web vốn đã hiện câu này giữa màn hình bằng `BoardMessage` (26), nhưng
+   * gói đó mang HTML dựng sẵn nên app không dùng được - và những người THUA thì
+   * không nhận gì cả. Gói này chỉ mang dữ liệu (ai thắng), mỗi máy tự vẽ.
+   */
+  RaceWinner: 87,
 } as const;
 
 /** Gói tin server đẩy xuống. Luôn có `typeID`; phần còn lại tuỳ loại. */

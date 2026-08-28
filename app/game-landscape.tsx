@@ -26,6 +26,7 @@ import { CardChoiceOverlay } from '../src/components/CardChoiceOverlay';
 import { DiceRollOverlay } from '../src/components/DiceRollOverlay';
 import { MoveDirectionOverlay } from '../src/components/MoveDirectionOverlay';
 import { QuestionOverlay } from '../src/components/QuestionOverlay';
+import { RaceWinnerOverlay } from '../src/components/RaceWinnerOverlay';
 import { StageBackground } from '../src/components/StageBackground';
 import { TYPE_ID } from '../src/net/gameConnection';
 import { useGameState } from '../src/net/useGameState';
@@ -202,6 +203,14 @@ export default function GameLandscapeScreen() {
 
   /** Thông báo thoáng qua: người khác vừa dùng thẻ gì. */
   const [notice, setNotice] = useState<string | null>(null);
+
+  /**
+   * Ai thắng vòng đua - hiện giữa bàn cờ vài giây rồi tắt.
+   *
+   * `isMe` để đổi câu chữ: người thắng đọc "Bạn nhanh nhất!", người khác đọc tên
+   * người thắng.
+   */
+  const [raceWinner, setRaceWinner] = useState<{ name: string; isMe: boolean } | null>(null);
 
   /** Xem `waiting.tsx` - ref chỉ chặn lời gọi ĐANG BAY, không chặn vĩnh viễn. */
   const acking = useRef(false);
@@ -414,6 +423,18 @@ export default function GameLandscapeScreen() {
       }
 
       /*
+       * Vòng đua đã có người thắng. Gói riêng của app - bản web hiện câu này
+       * giữa bàn cờ bằng `BoardMessage` (26), nhưng gói đó mang HTML nên app
+       * không dùng được, và người THUA còn không nhận được gì.
+       */
+      if (packet.typeID === TYPE_ID.RaceWinner) {
+        const name = typeof packet.NickName === 'string' ? packet.NickName : '';
+        if (!name) return;
+        setRaceWinner({ name, isMe: packet.PlayerId === seat?.playerId });
+        return;
+      }
+
+      /*
        * Người chơi KHÁC vừa dùng thẻ. Gói riêng của app - xem ghi chú ở
        * `TYPE_ID.PlayerUsedCard`.
        */
@@ -569,6 +590,18 @@ export default function GameLandscapeScreen() {
     const bail = setTimeout(() => setDice(null), 4000 + DICE_HOLD_MS);
     return () => clearTimeout(bail);
   }, [dice]);
+
+  /*
+   * Thông báo thắng vòng đua tự tắt sau 4 giây.
+   *
+   * Lâu hơn thông báo thẻ bài: đây là lúc cả phòng cần hiểu vì sao lượt lại về
+   * tay người đó, và ngay sau nó là 10 giây đếm ngược của bàn cờ web.
+   */
+  useEffect(() => {
+    if (!raceWinner) return;
+    const hide = setTimeout(() => setRaceWinner(null), 4000);
+    return () => clearTimeout(hide);
+  }, [raceWinner]);
 
   /* Thông báo "ai vừa dùng thẻ" tự tắt sau 2.5 giây. */
   useEffect(() => {
@@ -953,6 +986,10 @@ export default function GameLandscapeScreen() {
             */}
             {direction ? (
               <MoveDirectionOverlay packet={direction} onSelect={chooseDirection} />
+            ) : null}
+
+            {raceWinner ? (
+              <RaceWinnerOverlay name={raceWinner.name} isMe={raceWinner.isMe} />
             ) : null}
 
             {cardStep ? (

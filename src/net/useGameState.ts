@@ -56,6 +56,7 @@ const REFRESH_ON = new Set<number>([
   81, // ResumeGameFromPause
   85, // PlayersStatus
   86, // PlayerUsedCard    - người khác vừa dùng thẻ, tay bài của họ đổi
+  87, // RaceWinner        - vòng đua xong, thứ tự lượt vừa xếp lại
 ]);
 
 /**
