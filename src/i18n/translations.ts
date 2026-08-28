@@ -187,6 +187,15 @@ export const en = {
   'dice.rolling': 'ROLLING…',
   'dice.rolled': 'YOU ROLLED',
 
+  /** Kết quả một câu trả lời, hiện giữa bàn cờ. */
+  'result.correct': 'CORRECT!',
+  'result.earned': '+{point}',
+  'result.wrong': 'WRONG',
+  'result.wrongBody': 'The others can answer now',
+  'result.late': 'Someone was faster',
+  'result.lateBy': '{name} was faster',
+  'result.lateBody': 'This question is closed',
+
   /** Vòng đua xong - câu này hiện giữa bàn cờ, giống bàn cờ của bản web. */
   'race.winner': '{name} is the fastest!',
   'race.winnerYou': 'You are the fastest!',
@@ -385,6 +394,14 @@ const vi: Record<TranslationKey, string> = {
 
   'dice.rolling': 'ĐANG TUNG…',
   'dice.rolled': 'BẠN TUNG ĐƯỢC',
+
+  'result.correct': 'ĐÚNG RỒI!',
+  'result.earned': '+{point}',
+  'result.wrong': 'SAI RỒI',
+  'result.wrongBody': 'Những người khác được trả lời',
+  'result.late': 'Có người nhanh hơn',
+  'result.lateBy': '{name} nhanh hơn bạn',
+  'result.lateBody': 'Câu này khép lại rồi',
 
   'race.winner': '{name} nhanh nhất!',
   'race.winnerYou': 'Bạn nhanh nhất!',

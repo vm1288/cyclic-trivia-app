@@ -798,7 +798,7 @@ export const EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
 export function submitAnswerForTurn(
   params: { questionId: string; answerId: string; questionTitle?: string; isTimeout?: boolean; isTooLate?: boolean },
   token: string,
-): Promise<ApiResult<{}>> {
+): Promise<ApiResult<AnswerResult>> {
   return postJson(
     '/public/game/submitAnswerForTurn',
     {
@@ -811,6 +811,22 @@ export function submitAnswerForTurn(
     token,
   );
 }
+
+/**
+ * Kết quả của chính lượt trả lời vừa gửi, server trả thẳng trong HTTP response.
+ *
+ * ⚠️ Đây là ĐƯỜNG DUY NHẤT app biết mình đúng hay sai. Bản web biết nhờ
+ * `BoardMessage` mang HTML dựng sẵn - app không hiển thị được HTML đó.
+ */
+export type AnswerResult = {
+  isCorrect: boolean;
+  /** Điểm vừa được cộng (2 cho người tới lượt, 1 cho người tranh trả lời). */
+  point: number;
+  /** Số sao SAU khi cộng. Đủ ngưỡng thì server tự reset về 0 và thưởng bài. */
+  stars: number;
+  /** Tên lá bài vừa được thưởng, rỗng nếu chưa tới ngưỡng sao. */
+  card: string;
+};
 
 /**
  * Trả lời câu hỏi của LƯỢT CHƠI THƯỜNG.
@@ -827,7 +843,7 @@ export function submitAnswerForTurn(
 export function submitAnswer(
   params: { questionId: string; answerId: string; questionTitle?: string; isTimeout?: boolean; isTooLate?: boolean },
   token: string,
-): Promise<ApiResult<{}>> {
+): Promise<ApiResult<AnswerResult>> {
   return postJson(
     '/public/game/submitAnswer',
     {

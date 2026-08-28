@@ -12,6 +12,7 @@ import {
   EMPTY_GUID,
   submitAnswer,
   submitAnswerForTurn,
+  type AnswerResult,
   type CardStepPayload,
   type DirectionPacket,
   type GamePlayer,
@@ -25,7 +26,9 @@ import { BoardCanvas } from '../src/components/BoardCanvas';
 import { CardChoiceOverlay } from '../src/components/CardChoiceOverlay';
 import { DiceRollOverlay } from '../src/components/DiceRollOverlay';
 import { MoveDirectionOverlay } from '../src/components/MoveDirectionOverlay';
+import { FlyingReward } from '../src/components/FlyingReward';
 import { QuestionOverlay } from '../src/components/QuestionOverlay';
+import { TurnResultOverlay, type TurnResult } from '../src/components/TurnResultOverlay';
 import { RaceWinnerOverlay } from '../src/components/RaceWinnerOverlay';
 import { StageBackground } from '../src/components/StageBackground';
 import { TYPE_ID } from '../src/net/gameConnection';
@@ -33,6 +36,7 @@ import { useGameState } from '../src/net/useGameState';
 import {
   boardColors,
   CARD_ORDER,
+  type CardKey,
   ChatIcon,
   countCards,
   CrownIcon,
@@ -205,6 +209,17 @@ export default function GameLandscapeScreen() {
   const [notice, setNotice] = useState<string | null>(null);
 
   /**
+   * Kết quả câu trả lời vừa gửi - hiện giữa bàn cờ vài giây.
+   *
+   * Nguồn dữ liệu là HTTP response của chính lượt trả lời (đúng/sai/điểm/sao),
+   * hoặc gói `TimeoutQuestion` khi có người chốt câu trước mình.
+   */
+  const [turnResult, setTurnResult] = useState<TurnResult | null>(null);
+
+  /** Sao / thẻ đang bay từ giữa bàn cờ về chỗ của nó. */
+  const [flying, setFlying] = useState<{ id: number; reward: 'star' | CardKey } | null>(null);
+
+  /**
    * Ai thắng vòng đua - hiện giữa bàn cờ vài giây rồi tắt.
    *
    * `isMe` để đổi câu chữ: người thắng đọc "Bạn nhanh nhất!", người khác đọc tên
@@ -243,6 +258,29 @@ export default function GameLandscapeScreen() {
    * server đã tính họ "đã thử" rồi.
    */
   const answered = useRef<string>('');
+
+  /*
+   * Toạ độ MÀN HÌNH của ba mốc mà hiệu ứng phần thưởng cần: bay TỪ giữa bàn cờ,
+   * VỀ hàng sao hoặc về ô bài.
+   *
+   * ⚠️ Phải là toạ độ màn hình (`measureInWindow`), không phải toạ độ tương đối:
+   * điểm đi và điểm đến nằm ở hai nhánh khác nhau của cây view (bàn cờ ở cột
+   * trái, sao và bài ở cột phải), nên chỉ có hệ toạ độ chung mới nối được.
+   */
+  const boardBox = useRef<View | null>(null);
+  const starBox = useRef<View | null>(null);
+  const cardBox = useRef<View | null>(null);
+  const spot = useRef<{
+    board: { x: number; y: number } | null;
+    star: { x: number; y: number } | null;
+    card: { x: number; y: number } | null;
+  }>({ board: null, star: null, card: null });
+
+  const measureSpot = (key: 'board' | 'star' | 'card', node: View | null) => {
+    node?.measureInWindow?.((x, y, w, h) => {
+      spot.current[key] = { x: x + w / 2, y: y + h / 2 };
+    });
+  };
 
   /**
    * Đang đợi kết quả xúc xắc từ một lượt nạp lại state.
@@ -488,6 +526,8 @@ export default function GameLandscapeScreen() {
        * `TooLate()` của màn câu hỏi).
        */
       if (packet.typeID === TYPE_ID.TimeoutQuestion) {
+        const by = typeof packet.Nickname === 'string' && packet.Nickname ? packet.Nickname : undefined;
+        setTurnResult({ kind: 'late', by });
         tooLateQuestion();
         return;
       }
@@ -684,6 +724,17 @@ export default function GameLandscapeScreen() {
     return () => clearTimeout(hide);
   }, [raceWinner]);
 
+  /*
+   * Thông báo kết quả tự tắt sau 3.5 giây - đủ đọc, và vẫn kịp nhường chỗ cho
+   * bước sau của lượt (nhịp không có bàn cờ là 2 giây một bước, nhưng bước kế
+   * tiếp còn phải đi qua watchdog nên không đá nhau).
+   */
+  useEffect(() => {
+    if (!turnResult) return;
+    const hide = setTimeout(() => setTurnResult(null), 3500);
+    return () => clearTimeout(hide);
+  }, [turnResult]);
+
   /* Thông báo "ai vừa dùng thẻ" tự tắt sau 2.5 giây. */
   useEffect(() => {
     if (!notice) return;
@@ -744,6 +795,65 @@ export default function GameLandscapeScreen() {
    * ⚠️ Hết giờ cũng PHẢI gửi. Server đợi câu trả lời của từng người để biết
    * vòng đua đã xong chưa - im lặng là ván đứng đó.
    */
+  /**
+   * Đọc kết quả server trả về rồi hiện thông báo + bắn hiệu ứng.
+   *
+   * ⚠️ KHÔNG tự đoán đúng/sai ở client. Đáp án đúng cố ý không được gửi xuống
+   * (server `[JsonIgnore]` cả `IsCorrect` lẫn `AnswerExplain`), nên chỉ có
+   * response này mới biết.
+   */
+  const showAnswerResult = (res: Awaited<ReturnType<typeof submitAnswer>>) => {
+    if (!res.isSuccess) {
+      /*
+       * Bị từ chối vì có người chốt câu trước. Tên người đó nằm trong thân JSON
+       * server trả về - xem `ApiFailure.data`.
+       */
+      const by = typeof res.data?.answeredBy === 'string' ? res.data.answeredBy : undefined;
+      if (res.message?.startsWith('Too late')) setTurnResult({ kind: 'late', by });
+      return;
+    }
+
+    const result = res as unknown as AnswerResult;
+
+    /*
+     * ⚠️ Chỉ `/public/game/submitAnswer` trả về mấy trường này. Vòng đua đi
+     * `submitAnswerForTurn` - endpoint khác, response chỉ có `isSuccess` - nên
+     * thiếu chốt này thì trả lời ĐÚNG ở vòng đua lại hiện "SAI RỒI".
+     * Vòng đua vốn đã có thông báo riêng (`RaceWinnerOverlay`).
+     */
+    if (typeof result.isCorrect !== 'boolean') return;
+
+    if (!result.isCorrect) {
+      setTurnResult({ kind: 'wrong' });
+      return;
+    }
+
+    /*
+     * Sao KHÔNG cộng cho người tranh trả lời (luật của server: chỉ `isMainPlayer`
+     * mới được sao). Suy ra bằng chính điểm nhận được thì sai; dựa vào `stars`
+     * đổi so với state hiện có cũng sai vì state có thể đã nạp lại. Nên hỏi
+     * thẳng: mình có phải người tới lượt không.
+     */
+    const earnedStar = isMyTurn;
+    setTurnResult({ kind: 'correct', point: result.point, earnedStar });
+
+    /*
+     * Thứ tự bay: SAO trước, THẺ sau. Đủ ngưỡng sao thì server vừa reset sao vừa
+     * thưởng bài trong cùng một lượt, và hai vật bay chồng lên nhau thì rối.
+     */
+    if (earnedStar) fly('star');
+    const card = result.card as CardKey | '';
+    if (card) setTimeout(() => fly(card), 1500);
+  };
+
+  /** Bắn một vật bay từ giữa bàn cờ về chỗ của nó. */
+  const fly = (reward: 'star' | CardKey) => {
+    measureSpot('board', boardBox.current);
+    measureSpot('star', starBox.current);
+    measureSpot('card', cardBox.current);
+    setFlying({ id: Date.now(), reward });
+  };
+
   const answerQuestion = (answerId: string, answerContent: string) => {
     const current = question;
     setQuestion(null);
@@ -759,7 +869,10 @@ export default function GameLandscapeScreen() {
     void send(
       { questionId: current.question.Id, answerId, questionTitle: answerContent },
       seat.token,
-    );
+    ).then((res) => {
+      // Vòng đua có thông báo riêng - xem ghi chú trong `showAnswerResult`.
+      if (current.kind === 'turn') showAnswerResult(res);
+    });
   };
 
   /*
@@ -1052,7 +1165,11 @@ export default function GameLandscapeScreen() {
               BOARD
               =================================================== */}
 
-          <View style={styles.boardCol}>
+          <View
+            style={styles.boardCol}
+            ref={boardBox}
+            onLayout={() => measureSpot('board', boardBox.current)}
+          >
             {board ? (
               <BoardCanvas
                 board={board}
@@ -1096,6 +1213,8 @@ export default function GameLandscapeScreen() {
             {raceWinner ? (
               <RaceWinnerOverlay name={raceWinner.name} isMe={raceWinner.isMe} />
             ) : null}
+
+            {turnResult ? <TurnResultOverlay result={turnResult} /> : null}
 
             {cardStep ? (
               <CardChoiceOverlay
@@ -1250,6 +1369,8 @@ export default function GameLandscapeScreen() {
                     style={
                       styles.meStarsRow
                     }
+                    ref={starBox}
+                    onLayout={() => measureSpot('star', starBox.current)}
                   >
                     <Stars
                       filled={me.Stars}
@@ -1284,6 +1405,8 @@ export default function GameLandscapeScreen() {
 
             <View
               style={styles.handGrid}
+              ref={cardBox}
+              onLayout={() => measureSpot('card', cardBox.current)}
             >
               {[
                 CARD_ORDER.slice(
@@ -1378,6 +1501,23 @@ export default function GameLandscapeScreen() {
         trái, đặt trong đó thì con xúc xắc lệch hẳn sang một bên.
       */}
       {dice ? <DiceRollOverlay value={dice.value} /> : null}
+
+      {/*
+        Vật bay cũng ở GỐC màn hình như xúc xắc: nó đi từ khung bàn cờ (cột
+        trái) sang cột phải, nên phải nằm ngoài cả hai.
+      */}
+      {flying && spot.current.board ? (
+        <FlyingReward
+          key={flying.id}
+          from={spot.current.board}
+          to={
+            (flying.reward === 'star' ? spot.current.star : spot.current.card) ??
+            spot.current.board
+          }
+          reward={flying.reward}
+          onDone={() => setFlying(null)}
+        />
+      ) : null}
     </View>
   );
 }

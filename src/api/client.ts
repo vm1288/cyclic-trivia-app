@@ -21,6 +21,14 @@ export type ApiFailure = {
   messageVars?: Record<string, string | number>;
   /** Mã lỗi nghiệp vụ của server, vd "max_devices". */
   errorCode?: string;
+  /**
+   * Thân JSON server trả về, giữ nguyên - chỉ có khi kind === 'rejected'.
+   *
+   * Cần vì có những lời từ chối MANG THEO DỮ LIỆU: `submitAnswer` trả
+   * "Too late..." kèm `answeredBy` (ai chốt câu trước bạn). Không giữ lại thì
+   * phải thêm một gói tin nữa cho một thông tin đã nằm sẵn trong response.
+   */
+  data?: Record<string, unknown>;
 };
 
 export type ApiResult<T> = ({ isSuccess: true } & T) | ApiFailure;
@@ -101,6 +109,8 @@ async function post<T>(
         message: data.errorMessage,
         messageKey: data.errorMessage ? undefined : 'error.rejected',
         errorCode: data.errorCode,
+        // Giữ nguyên thân JSON - có lời từ chối mang theo dữ liệu, xem `data`.
+        data: data as unknown as Record<string, unknown>,
       };
     }
 
