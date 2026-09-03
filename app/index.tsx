@@ -63,7 +63,7 @@ const MENU = [
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const license = useLicense();
   const t = useT();
   const confirm = useConfirm();
@@ -195,11 +195,25 @@ export default function HomeScreen() {
       : undefined;
 
   /**
-   * Cột nút hẹp hơn bề rộng màn hình là CỐ Ý: hai bức tường chấm halftone trong
-   * ảnh nền nằm sát hai mép, nút tràn viền sẽ che mất chúng và màn hình mất
-   * chiều sâu. 78% chừa vừa đủ để thấy tường ở hai bên.
+   * BỐ CỤC NGANG: logo bên trái, cột nút bên phải.
+   *
+   * Chiều cao khả dụng chỉ còn ~393dp (trước là ~800), nên xếp dọc như cũ là
+   * logo đẩy hết nút xuống dưới màn. Chia đôi bề ngang thì cả hai cùng nằm
+   * trong tầm mắt và không phải cuộn.
+   *
+   * Cột nút hẹp hơn nửa màn là CỐ Ý: hai bức tường chấm halftone trong ảnh nền
+   * nằm sát hai mép, nút tràn tới viền sẽ che mất chúng và màn hình mất chiều
+   * sâu.
    */
-  const menuWidth = Math.min(width * 0.78, 300);
+  const menuWidth = Math.min(width * 0.38, 340);
+
+  /**
+   * Logo co theo CHIỀU CAO, không theo bề ngang.
+   *
+   * Ở chiều ngang thì bề cao mới là thứ khan hiếm; buộc theo bề ngang cột trái
+   * là logo cao quá khung và bị cắt đầu đuôi.
+   */
+  const logoHeight = Math.min(height * 0.58, 230);
 
   /**
    * Logo trôi lên xuống 6px, chu kỳ 6s - đúng keyframe `cyc-float` của bản
@@ -222,32 +236,46 @@ export default function HomeScreen() {
     <View style={styles.root}>
       <StageBackground />
 
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-        <ScrollView
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-        >
-          <Animated.View style={floatStyle}>
-            <Image
-              source={sponsorLogoUri ? { uri: sponsorLogoUri } : LOGO_LOCKUP}
-              style={[styles.logo, { width: menuWidth * 0.8 }]}
-              resizeMode="contain"
-            />
-          </Animated.View>
+      {/* ⚠️ Ở chiều ngang, tai thỏ nằm ở cạnh TRÁI hoặc PHẢI - phải khai báo cả
+          `left`/`right`, nếu không logo chui xuống dưới tai thỏ. Bản dọc cũ chỉ
+          cần `top`/`bottom`. */}
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
+        <View style={styles.row}>
+          <View style={styles.logoCol}>
+            {/* ⚠️ `alignSelf: 'stretch'` là BẮT BUỘC: `logoCol` căn giữa ngang,
+                nên lớp bọc không stretch sẽ co về đúng bề ngang nội dung - mà
+                nội dung là một <Image> rộng '100%' của chính nó, tức 0. Logo
+                biến mất, không có lỗi nào. */}
+            <Animated.View style={[styles.logoWrap, floatStyle]}>
+              <Image
+                source={sponsorLogoUri ? { uri: sponsorLogoUri } : LOGO_LOCKUP}
+                style={[styles.logo, { height: logoHeight }]}
+                resizeMode="contain"
+              />
+            </Animated.View>
 
-          {showDefaultLockup && !LOCKUP_INCLUDES_TAGLINE && (
-            <View style={styles.tagline}>
-              <View style={styles.taglineRule} />
-              <Text style={[styles.taglineWord, { color: tagline.play }]}>PLAY</Text>
-              <Text style={styles.taglineDot}>•</Text>
-              <Text style={[styles.taglineWord, { color: tagline.think }]}>THINK</Text>
-              <Text style={styles.taglineDot}>•</Text>
-              <Text style={[styles.taglineWord, { color: tagline.win }]}>WIN</Text>
-              <View style={styles.taglineRule} />
-            </View>
-          )}
+            {showDefaultLockup && !LOCKUP_INCLUDES_TAGLINE && (
+              <View style={styles.tagline}>
+                <View style={styles.taglineRule} />
+                <Text style={[styles.taglineWord, { color: tagline.play }]}>PLAY</Text>
+                <Text style={styles.taglineDot}>•</Text>
+                <Text style={[styles.taglineWord, { color: tagline.think }]}>THINK</Text>
+                <Text style={styles.taglineDot}>•</Text>
+                <Text style={[styles.taglineWord, { color: tagline.win }]}>WIN</Text>
+                <View style={styles.taglineRule} />
+              </View>
+            )}
+          </View>
 
-          <View style={[styles.menu, { width: menuWidth }]}>
+          {/*
+            Cột nút vẫn cuộn được: mở đủ tiếng Đức/tiếng Việt dài, hoặc bật cỡ
+            chữ hệ thống lên, là năm nút vượt quá 393dp bề cao.
+          */}
+          <ScrollView
+            style={[styles.menuCol, { width: menuWidth }]}
+            contentContainerStyle={styles.menuContent}
+            showsVerticalScrollIndicator={false}
+          >
             <NeonButton
               label={t(firstButton.key)}
               sublabel={resumeDetail}
@@ -308,8 +336,8 @@ export default function HomeScreen() {
                 </Text>
               </Pressable>
             ) : null}
-          </View>
-        </ScrollView>
+          </ScrollView>
+        </View>
       </SafeAreaView>
 
       <SwitchGameSheet
@@ -365,27 +393,40 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#04061A' },
   safe: { flex: 1 },
-  /**
-   * Neo lên trên chứ không căn giữa dọc: bệ phát sáng nằm ở đáy ảnh nền, căn
-   * giữa sẽ đẩy cột nút xuống đè lên nó.
-   */
-  content: {
-    flexGrow: 1,
-    alignItems: 'center',
-    paddingTop: 18,
-    paddingBottom: 32,
-  },
 
-  // Chiều cao cố định, resizeMode="contain" lo phần tỉ lệ - nên đổi sang logo
-  // khác tỉ lệ khác vẫn không vỡ bố cục.
-  logo: { height: 190 },
+  /** Hàng ngoài cùng: logo trái | cột nút phải. */
+  row: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 },
+
+  /**
+   * `flex: 1` để cột logo NUỐT phần dư, còn cột nút giữ đúng bề ngang đã tính.
+   * Làm ngược lại (cố định cột logo) thì máy bề ngang khác sẽ đẩy cột nút lệch
+   * ra ngoài mép.
+   */
+  logoCol: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+
+  /**
+   * Bề rộng do `menuWidth` quyết định, ở đây chỉ chặn cột không phình theo nội
+   * dung. `flexGrow: 0` giữ ScrollView bám đúng bề cao khả dụng.
+   */
+  menuCol: { flexGrow: 0 },
+  /**
+   * Căn giữa dọc khi nội dung còn thấp hơn khung (`flexGrow: 1` +
+   * `justifyContent: 'center'`), và tự chuyển sang cuộn từ trên xuống khi vượt.
+   */
+  menuContent: { flexGrow: 1, justifyContent: 'center', gap: 11, paddingVertical: 10 },
+
+  /**
+   * ⚠️ Ở bố cục ngang, logo buộc theo CHIỀU CAO (`logoHeight`) chứ không phải
+   * bề ngang. `resizeMode="contain"` lo phần tỉ lệ, nên đổi sang logo sponsor
+   * tỉ lệ khác vẫn không vỡ bố cục.
+   */
+  logoWrap: { alignSelf: 'stretch' },
+  logo: { width: '100%' },
 
   tagline: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
   taglineWord: { fontSize: 14, fontWeight: '800', letterSpacing: 2.5 },
   taglineDot: { color: text.muted, fontSize: 12 },
   taglineRule: { width: 26, height: 1, backgroundColor: 'rgba(120,180,255,0.55)' },
-
-  menu: { marginTop: 30, gap: 14 },
 
   /*
    * Nút phụ: viền sáng bạc, nền tối, quầng sáng nhẹ.
@@ -396,7 +437,7 @@ const styles = StyleSheet.create({
    * xung quanh.
    */
   startAnother: {
-    height: 42,
+    height: 32,
     borderRadius: 12,
     borderWidth: 1.5,
     borderColor: 'rgba(205,228,255,0.75)',
@@ -418,11 +459,11 @@ const styles = StyleSheet.create({
 
   // Quầng loang của GlowDivider cao gấp 12 lần sợi chính và tràn ra ngoài
   // khung, nên chừa khoảng dọc rộng hơn một vạch phẳng cùng vai trò.
-  groupDivider: { marginVertical: 10 },
+  groupDivider: { marginVertical: 2 },
 
   // Link chữ, không phải nút: đây là hành động hiếm và không nên tranh chỗ với
   // bốn nút neon ngay trên nó.
-  switchLink: { alignSelf: 'center', marginTop: 6, paddingVertical: 6 },
+  switchLink: { alignSelf: 'center', marginTop: 2, paddingVertical: 4 },
   switchText: {
     color: 'rgba(198,212,240,0.85)',
     fontSize: 14,

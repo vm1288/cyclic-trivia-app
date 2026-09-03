@@ -103,10 +103,7 @@ export default function WaitingScreen() {
   const live = racing || started;
 
   /*
-   * Ván đã chạy -> sang màn bàn cờ (bố cục NẰM NGANG).
-   *
-   * ⚠️ `app/game.tsx` là bản bố cục DỌC, giờ KHÔNG còn màn nào dẫn tới nữa.
-   * Giữ lại để đối chiếu; xoá được khi bản ngang đã chốt.
+   * Ván đã chạy -> sang màn bàn cờ.
    *
    * `replace` chứ không `push`: back từ bàn cờ phải về màn hình chính, không
    * quay lại phòng chờ của một ván đã bắt đầu.
@@ -123,7 +120,7 @@ export default function WaitingScreen() {
     return (
       <View style={styles.root}>
         <StageBackground />
-        <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+        <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
           <View style={styles.centerBlock}>
             <Text style={styles.note}>{t('waiting.noSeat')}</Text>
             <NeonButton
@@ -141,23 +138,37 @@ export default function WaitingScreen() {
     <View style={styles.root}>
       <StageBackground />
 
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          <Text style={styles.title}>{live ? t('waiting.liveTitle') : t('waiting.title')}</Text>
-          <Text style={styles.subtitle}>
-            {live ? t('waiting.liveSubtitle') : t('waiting.subtitle')}
-          </Text>
+      {/* Ngang thì tai thỏ nằm ở cạnh trái/phải - phải khai báo cả `left`/`right`. */}
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
+        {/*
+          Cột trái là phần TĨNH (tiêu đề + thẻ "bạn là ai"), cột phải là danh
+          sách ghế - thứ duy nhất thay đổi theo thời gian thực và cần cuộn.
+        */}
+        <View style={styles.row}>
+          <View style={styles.leftCol}>
+            <Text style={styles.title}>{live ? t('waiting.liveTitle') : t('waiting.title')}</Text>
+            <Text style={styles.subtitle}>
+              {live ? t('waiting.liveSubtitle') : t('waiting.subtitle')}
+            </Text>
 
-          <View style={styles.youCard}>
-            <Text style={styles.youLabel}>{t('waiting.you')}</Text>
-            <Text style={styles.youName}>{seat.nickname ?? '—'}</Text>
-            {seat.roomCode ? (
-              <Text style={styles.roomCode}>
-                {t('waiting.room', { code: seat.roomCode })}
-              </Text>
-            ) : null}
+            <View style={styles.youCard}>
+              <Text style={styles.youLabel}>{t('waiting.you')}</Text>
+              <Text style={styles.youName}>{seat.nickname ?? '—'}</Text>
+              {seat.roomCode ? (
+                <Text style={styles.roomCode}>
+                  {t('waiting.room', { code: seat.roomCode })}
+                </Text>
+              ) : null}
+            </View>
+
+            {live ? <Text style={styles.liveNote}>{t('waiting.opening')}</Text> : null}
           </View>
 
+          <ScrollView
+            style={styles.rightCol}
+            contentContainerStyle={styles.scroll}
+            showsVerticalScrollIndicator={false}
+          >
           <SectionHeader title={t('lobby.seats')} />
 
           <View style={styles.progressRow}>
@@ -190,9 +201,8 @@ export default function WaitingScreen() {
               ))}
             </View>
           )}
-
-          {live ? <Text style={styles.liveNote}>{t('waiting.opening')}</Text> : null}
-        </ScrollView>
+          </ScrollView>
+        </View>
       </SafeAreaView>
     </View>
   );
@@ -201,8 +211,20 @@ export default function WaitingScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#04061A' },
   safe: { flex: 1 },
-  scroll: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 30 },
+  scroll: { paddingVertical: 8 },
   spacer: { flex: 1 },
+
+  /** Hàng ngoài: phần tĩnh bên trái | danh sách ghế bên phải. */
+  row: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    gap: 22,
+  },
+  leftCol: { flex: 1, justifyContent: 'center' },
+  rightCol: { flex: 1.1 },
 
   // Chiếm trọn bề ngang + căn giữa: Android đo hụt bề rộng chữ nghiêng rồi cắt
   // cụt nếu để View bọc ngoài tự co (đã dính ở màn NEW GAME).

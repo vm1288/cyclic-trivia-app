@@ -94,7 +94,6 @@ export const en = {
   'newGame.noLicence': 'This device is not activated. Register a licence first.',
 
   'lobby.title': 'WAITING FOR PLAYERS',
-  'lobby.subtitle': 'Share the code, let players scan the QR,\nor invite them to join.',
   'lobby.roomCode': 'ROOM CODE',
   'lobby.qrLabel': 'COMMON QR CODE',
   'lobby.inviteCopy': 'Invite friends to join\nyour trivia game',
@@ -109,7 +108,6 @@ export const en = {
   'lobby.host': 'HOST',
   'lobby.joinedCount': '{joined} of {total} joined',
   'lobby.start': 'START GAME',
-  'lobby.startBlocked': 'Waiting for everyone to take a seat.',
   'lobby.loading': 'Preparing the room…',
   'lobby.retry': 'TRY AGAIN',
   'lobby.noGame': 'No game to show. Create one first.',
@@ -306,7 +304,6 @@ const vi: Record<TranslationKey, string> = {
   'newGame.noLicence': 'Máy này chưa kích hoạt. Hãy đăng ký license trước.',
 
   'lobby.title': 'ĐANG CHỜ NGƯỜI CHƠI',
-  'lobby.subtitle': 'Đọc mã cho mọi người, để họ quét QR,\nhoặc gửi lời mời.',
   'lobby.roomCode': 'MÃ PHÒNG',
   'lobby.qrLabel': 'MÃ QR CHUNG',
   'lobby.inviteCopy': 'Mời bạn bè vào\nchơi cùng',
@@ -321,7 +318,6 @@ const vi: Record<TranslationKey, string> = {
   'lobby.host': 'CHỦ VÁN',
   'lobby.joinedCount': 'đã vào {joined}/{total}',
   'lobby.start': 'BẮT ĐẦU',
-  'lobby.startBlocked': 'Chờ mọi người nhận chỗ đã.',
   'lobby.loading': 'Đang mở phòng…',
   'lobby.retry': 'THỬ LẠI',
   'lobby.noGame': 'Không có ván nào để hiện. Hãy tạo ván trước.',

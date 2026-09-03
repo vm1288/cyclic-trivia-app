@@ -12,15 +12,20 @@ import { bg } from '../src/theme/colors';
 
 export default function RootLayout() {
   /*
-   * Mặc định KHOÁ DỌC cho toàn app.
+   * KHOÁ NGANG cho TOÀN APP (2026-09-03).
    *
-   * `app.json` để `orientation: "default"` vì màn trong ván cần xoay ngang -
-   * nhưng mọi màn còn lại đều dựng cho chiều dọc và sẽ vỡ nếu bị xoay theo
-   * máy. Khoá ở đây, rồi để riêng `app/game-landscape.tsx` tự mở khoá sang
-   * ngang lúc nó mở và trả về dọc lúc rời đi.
+   * Trước đây chỗ này khoá `PORTRAIT_UP` và chỉ riêng `game-landscape.tsx` mở
+   * khoá sang ngang. Nay mọi màn đều dựng cho chiều ngang, nên khoá một lần ở
+   * đây là đủ và không màn nào được tự đổi lại nữa.
+   *
+   * ⚠️ `app.json` vẫn để `orientation: "default"`. Khoá lúc chạy như thế này
+   * có tác dụng ngay sau khi JS nạp xong, nhưng KHÔNG chặn được nhịp đầu tiên:
+   * máy đang cầm dọc thì splash và khung màn hình đầu vẫn dựng dọc rồi mới
+   * xoay. Muốn hết hẳn nhịp đó thì đổi `app.json` sang `"landscape"` - và như
+   * vậy PHẢI chạy lại `scripts/build-apk.ps1` (prebuild), sửa `.tsx` không đủ.
    */
   useEffect(() => {
-    void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+    void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
   }, []);
 
   return (

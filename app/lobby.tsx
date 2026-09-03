@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Text,
   View,
+  type LayoutChangeEvent,
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -49,6 +50,59 @@ import { neon, text } from '../src/theme/colors';
  */
 /** Bằng đúng bản web (`beginCountdown` trong main.js). Đọc ghi chú ở `beginStart`. */
 const COUNTDOWN_SECONDS = 10;
+
+/**
+ * Khoảng kẹp cho chiều cao một hàng ghế - xem `rowHeight` trong component.
+ *
+ * `MAX` là cỡ cũ, dùng khi ván ít người và còn dư chỗ. `MIN` là mức mà avatar
+ * 28dp vẫn còn nằm lọt trong hàng; thấp hơn nữa thì nó chạm hai mép.
+ *
+ * ⚠️ Chạm `MIN` mà vẫn không đủ chỗ thì danh sách CUỘN, không cắt - xem
+ * `ScrollView` bọc `styles.rows`.
+ */
+const ROW_HEIGHT_MAX = 52;
+const ROW_HEIGHT_MIN = 30;
+const ROW_GAP = 6;
+
+/*
+ * ─── Kích thước khung QR: TÍNH RA từ chỗ trống, không đặt cứng ─────────────
+ *
+ * Cỡ cứng chỉ đúng trên đúng một máy. Máy thấp hơn vài dp là mép dưới khung
+ * QR (kể cả quầng sáng của nó) bị vùng cuộn cắt mất - đã dính. Nên đo bề cao
+ * THẬT của vùng cuộn rồi trừ dần ra.
+ *
+ * Các hằng dưới đây là phần chiều cao KHÔNG đổi, phải khớp với `styles`:
+ */
+/** Khối mã phòng: `codeRim.marginTop` 6 + viền 3 + `codeInner` 44. */
+const CODE_BLOCK_HEIGHT = 53;
+/** `panel.marginTop`. */
+const PANEL_GAP = 8;
+/**
+ * Lề dưới trong vùng cuộn.
+ *
+ * ⚠️ Đây mới là thứ làm mất viền dưới, không phải chiều cao. Khung QR có
+ * `boxShadow` loang ra ngoài mép, mà `ScrollView` thì cắt mọi thứ vượt khung -
+ * kết quả là viền dưới trông như biến mất dù hộp vẫn vừa.
+ */
+const PANEL_GLOW_PAD = 8;
+/** Ruột khung QR khi CÒN nhãn: padding 18 + viền 3 + nhãn 15 + gap 7 + khung ảnh 14. */
+const QR_CHROME_FULL = 57;
+/** Ruột khung QR khi ĐÃ BỎ nhãn: padding 18 + viền 3 + khung ảnh 14. */
+const QR_CHROME_BARE = 35;
+const PANEL_MIN = 84;
+const PANEL_MAX = 168;
+const QR_MIN = 40;
+const QR_MAX = 104;
+
+/*
+ * Hai nấc co của khung QR, mỗi nấc một ngưỡng. Thứ tự hi sinh đi từ ít thông
+ * tin nhất: icon người -> nhãn "COMMON QR CODE" và dòng mời rút còn một dòng.
+ * Chính mã QR là thứ cuối cùng bị đụng tới.
+ */
+/** Dưới mức này thì bỏ icon người. */
+const PANEL_ICON_MIN = 132;
+/** Dưới mức này thì bỏ nhãn và rút dòng mời còn một dòng. */
+const PANEL_LABEL_MIN = 112;
 
 export default function LobbyScreen() {
   const params = useLocalSearchParams<{ gameId?: string }>();
@@ -121,7 +175,60 @@ export default function LobbyScreen() {
    * VẪN ĐẾN LƯỢT họ - bàn cờ sẽ đứng chờ một người không tồn tại.
    */
   const everyoneIn = total > 0 && joined >= total;
-  const progress = total > 0 ? joined / total : 0;
+
+  /*
+   * ─── Chiều cao mỗi hàng ghế: TÍNH RA, không đặt cứng ──────────────────────
+   *
+   * Ván tối đa sáu người, mà cột phải ở chiều ngang chỉ cao ~275dp sau tiêu đề
+   * mục. Để cứng 52dp như trước là sáu hàng thành 342dp và phải cuộn - danh
+   * sách ghế thì phải liếc một cái thấy hết, cuộn để đếm người là hỏng.
+   *
+   * Nên đo bề cao THẬT của khung bằng `onLayout` rồi chia đều. Đo thay vì suy
+   * từ `useWindowDimensions` vì bề cao còn phụ thuộc tai thỏ, thanh điều hướng
+   * và cỡ chữ hệ thống - những thứ không tính trước được.
+   */
+  const [rowsHeight, setRowsHeight] = useState(0);
+  const onRowsLayout = useCallback(
+    (e: LayoutChangeEvent) => setRowsHeight(e.nativeEvent.layout.height),
+    [],
+  );
+
+  const rowHeight = (() => {
+    // Chưa đo xong thì dùng cỡ cũ; nó đúng cho hai, ba ghế và chỉ hụt ở sáu.
+    if (rowsHeight <= 0 || seats.length === 0) return ROW_HEIGHT_MAX;
+    const usable = rowsHeight - ROW_GAP * (seats.length - 1);
+    // Kẹp hai đầu: dưới `MIN` thì avatar 28dp và chữ 15dp bắt đầu chạm nhau;
+    // trên `MAX` thì hai, ba ghế sẽ phình thành những khối cao vô lý.
+    return Math.max(ROW_HEIGHT_MIN, Math.min(ROW_HEIGHT_MAX, usable / seats.length));
+  })();
+
+  /*
+   * Cùng cách làm với `rowHeight`: đo bề cao thật của vùng cuộn cột trái, rồi
+   * chia phần còn lại cho khung QR. Xem cụm hằng ở đầu file.
+   */
+  const [leftAvail, setLeftAvail] = useState(0);
+  const onLeftLayout = useCallback(
+    (e: LayoutChangeEvent) => setLeftAvail(e.nativeEvent.layout.height),
+    [],
+  );
+
+  const panelHeight = (() => {
+    if (leftAvail <= 0) return PANEL_MIN;
+    const left = leftAvail - CODE_BLOCK_HEIGHT - PANEL_GAP - PANEL_GLOW_PAD;
+    return Math.max(PANEL_MIN, Math.min(PANEL_MAX, left));
+  })();
+
+  const showPanelIcon = panelHeight >= PANEL_ICON_MIN;
+  const showPanelLabel = panelHeight >= PANEL_LABEL_MIN;
+
+  // Làm tròn: `react-native-qrcode-svg` nhận số lẻ vẫn vẽ, nhưng cạnh ô mã lệch
+  // nửa pixel thì máy quét kém sáng đọc chậm hơn hẳn.
+  const qrSize = Math.round(
+    Math.max(
+      QR_MIN,
+      Math.min(QR_MAX, panelHeight - (showPanelLabel ? QR_CHROME_FULL : QR_CHROME_BARE)),
+    ),
+  );
 
   const joinUrl = room ? roomJoinUrl(room.SiteUrl, room.SessionId) : '';
 
@@ -227,23 +334,40 @@ export default function LobbyScreen() {
     <View style={styles.root}>
       <StageBackground />
 
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          <Pressable
-            onPress={() => router.back()}
-            style={styles.backRow}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.back')}
-          >
-            <View style={styles.backCircle}>
-              <ArrowLeftIcon color="#8FD0FF" />
-            </View>
-            <Text style={styles.backLabel}>{t('common.back').toUpperCase()}</Text>
-          </Pressable>
+      {/* Ngang thì tai thỏ nằm ở cạnh trái/phải - phải khai báo cả `left`/`right`. */}
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
+        {/*
+          ⚠️ Lớp bọc `flex: 1` này là BẮT BUỘC, không phải div thừa.
 
-          <Text style={styles.title}>{t('lobby.title')}</Text>
-          <Text style={styles.subtitle}>{t('lobby.subtitle')}</Text>
+          `SafeAreaView` chèn khoảng an toàn bằng PADDING, mà con
+          `position: 'absolute'` thì neo theo mép ngoài chứ không theo padding
+          đó. Đặt nút back thẳng dưới `SafeAreaView` là `top: 4` tính từ đỉnh
+          màn hình thật - và ở chiều ngang thanh trạng thái VẪN nằm trên cạnh
+          trên (xem NEXT_STEPS, mục `insets.top` vẫn cần ở màn ngang), nên chữ
+          BACK chồng lên đồng hồ. Đã dính đúng vậy.
+        */}
+        <View style={styles.body}>
+        {/* Nút back nổi đè lên, không nằm trong dòng chảy - xem `FormScreen`. */}
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.backRow}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back')}
+        >
+          <View style={styles.backCircle}>
+            <ArrowLeftIcon color="#8FD0FF" />
+          </View>
+          <Text style={styles.backLabel}>{t('common.back').toUpperCase()}</Text>
+        </Pressable>
+
+        <View style={styles.stack}>
+          {/* Tiêu đề ngang hàng nút back, căn giữa - cùng khuôn với
+              `new-game.tsx`. Nút back là lớp phủ tuyệt đối nên không chiếm chỗ
+              trong hàng, tiêu đề mới căn giữa theo màn hình được. */}
+          <View style={styles.header}>
+            <Text style={styles.title}>{t('lobby.title')}</Text>
+          </View>
 
           {!gameId || !session ? (
             <View style={styles.centerBlock}>
@@ -265,8 +389,29 @@ export default function LobbyScreen() {
               <NeonButton label={t('lobby.retry')} color={neon.orange} onPress={openRoom} />
             </View>
           ) : (
-            <>
+            <View style={styles.middle}>
+              {/*
+                Cột trái là phần MỜI NGƯỜI VÀO (mã phòng, QR, chia sẻ) và nút
+                START. Nút nằm bên này chứ không bên danh sách ghế: cột phải
+                phải chừa đủ chỗ cho SÁU hàng ghế mà không cuộn.
+              */}
+              <View style={styles.col}>
               <SectionHeader title={t('lobby.roomCode')} />
+
+              {/*
+                Mã phòng + QR CUỘN ĐƯỢC, nút START thì không - nó nằm ngoài
+                vùng cuộn nên luôn ghim ở đáy cột.
+
+                ⚠️ Đừng gộp nút vào trong đây rồi đẩy xuống bằng `flex: 1`:
+                làm vậy thì cột vừa khít đúng một máy, và máy tỉ lệ khác chỉ
+                lệch vài dp là nút bị cắt mép dưới. Đã dính đúng vậy.
+              */}
+              <ScrollView
+                style={styles.colScroll}
+                contentContainerStyle={styles.colScrollInner}
+                onLayout={onLeftLayout}
+                showsVerticalScrollIndicator={false}
+              >
 
               <LinearGradient
                 colors={[lobbyColors.purple, '#E2A7FF']}
@@ -285,20 +430,31 @@ export default function LobbyScreen() {
                 </LinearGradient>
               </LinearGradient>
 
-              <View style={styles.panel}>
+              <View style={[styles.panel, { height: panelHeight }]}>
                 <View style={styles.qrCol}>
-                  <Text style={styles.panelLabel}>{t('lobby.qrLabel')}</Text>
+                  {showPanelLabel ? (
+                    <Text style={styles.panelLabel}>{t('lobby.qrLabel')}</Text>
+                  ) : null}
                   {/* Nền TRẮNG là bắt buộc: máy quét cần tương phản cao. */}
                   <View style={styles.qrFrame}>
-                    <QRCode value={joinUrl} size={92} backgroundColor="#FFFFFF" color="#05041A" />
+                    <QRCode
+                      value={joinUrl}
+                      size={qrSize}
+                      backgroundColor="#FFFFFF"
+                      color="#05041A"
+                    />
                   </View>
                 </View>
 
                 <View style={styles.panelDivider} />
 
                 <View style={styles.inviteCol}>
-                  <PeopleIcon />
-                  <Text style={styles.inviteCopy}>{t('lobby.inviteCopy')}</Text>
+                  {/* Icon là thứ hi sinh đầu tiên khi khung hẹp: chữ và nút mời
+                      còn mang thông tin, nó thì không. */}
+                  {showPanelIcon ? <PeopleIcon /> : null}
+                  <Text style={styles.inviteCopy} numberOfLines={showPanelLabel ? 2 : 1}>
+                    {t('lobby.inviteCopy')}
+                  </Text>
                   <Pressable
                     onPress={invite}
                     accessibilityRole="button"
@@ -316,49 +472,14 @@ export default function LobbyScreen() {
                   </Pressable>
                 </View>
               </View>
-
-              <SectionHeader title={t('lobby.seats')} />
-
-              <View style={styles.progressRow}>
-                <Text style={styles.joinedText}>{t('lobby.joinedCount', { joined, total })}</Text>
-                <View style={styles.spacer} />
-                <View style={styles.track}>
-                  <LinearGradient
-                    colors={[lobbyColors.violet, lobbyColors.purple]}
-                    start={{ x: 0, y: 0.5 }}
-                    end={{ x: 1, y: 0.5 }}
-                    // Chừa tối thiểu 4% để thanh không biến mất hoàn toàn lúc
-                    // chưa ai vào - trông như hỏng.
-                    style={[styles.fillBar, { width: `${Math.max(progress, 0.04) * 100}%` }]}
-                  />
-                </View>
-                <Text style={styles.countText}>
-                  {joined}/{total}
-                </Text>
-              </View>
-
-              <View style={styles.rows}>
-                {seats.map((p, i) => (
-                  <PlayerRow
-                    key={p.Id}
-                    index={i + 1}
-                    name={p.IsSetupNickName ? p.NickName : t('lobby.seatEmpty')}
-                    colour={p.PlayerColor || lobbyColors.blue}
-                    ready={p.IsSetupNickName}
-                    isHost={p.IsHost}
-                    hostLabel={t('lobby.host')}
-                    statusLabel={
-                      p.IsSetupNickName ? t('lobby.statusReady') : t('lobby.statusWaiting')
-                    }
-                  />
-                ))}
-              </View>
+              </ScrollView>
 
               <Pressable
                 onPress={beginStart}
                 disabled={!everyoneIn || phase !== 'idle'}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: !everyoneIn || phase !== 'idle' }}
+                accessibilityLabel={`${t('lobby.start')} — ${t('lobby.joinedCount', { joined, total })}`}
                 style={({ pressed }) => [
                   styles.ctaWrap,
                   pressed && everyoneIn && styles.pressed,
@@ -381,11 +502,56 @@ export default function LobbyScreen() {
                 )}
               </Pressable>
 
-              {!everyoneIn ? <Text style={styles.note}>{t('lobby.startBlocked')}</Text> : null}
               {startError ? <Text style={styles.error}>{startError}</Text> : null}
-            </>
+              </View>
+
+              {/* Cột phải chỉ còn danh sách ghế. `onLayout` đo bề cao thật để
+                  tính chiều cao mỗi hàng - xem `rowHeight`. */}
+              <View style={styles.col}>
+                {/*
+                  Số ghế đã vào neo ở GÓC PHẢI hàng PLAYERS, thay cho thanh tiến
+                  độ cũ. Đứng cạnh chính danh sách nó đang đếm thì đọc thẳng
+                  được, và không tốn thêm dòng nào - bề cao ở đây đang khan.
+                */}
+                <SectionHeader
+                  title={t('lobby.seats')}
+                  trailing={t('lobby.joinedCount', { joined, total })}
+                />
+
+                {/*
+                  Lưới an toàn: bình thường `rowHeight` đã tính sao cho sáu ghế
+                  vừa khít nên không bao giờ cuộn. Nhưng máy quá thấp (hoặc cỡ
+                  chữ hệ thống quá lớn) có thể ép `rowHeight` chạm `MIN` mà vẫn
+                  thiếu chỗ - lúc đó cuộn được vẫn hơn là cắt mất ghế cuối.
+                */}
+                <ScrollView
+                  style={styles.rowsScroll}
+                  onLayout={onRowsLayout}
+                  showsVerticalScrollIndicator={false}
+                >
+                <View style={styles.rows}>
+                  {seats.map((p, i) => (
+                    <PlayerRow
+                      key={p.Id}
+                      height={rowHeight}
+                      index={i + 1}
+                      name={p.IsSetupNickName ? p.NickName : t('lobby.seatEmpty')}
+                      colour={p.PlayerColor || lobbyColors.blue}
+                      ready={p.IsSetupNickName}
+                      isHost={p.IsHost}
+                      hostLabel={t('lobby.host')}
+                      statusLabel={
+                        p.IsSetupNickName ? t('lobby.statusReady') : t('lobby.statusWaiting')
+                      }
+                    />
+                  ))}
+                </View>
+                </ScrollView>
+              </View>
+            </View>
           )}
-        </ScrollView>
+        </View>
+        </View>
       </SafeAreaView>
 
       {/*
@@ -416,11 +582,38 @@ export default function LobbyScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#04061A' },
   safe: { flex: 1 },
-  scroll: { paddingHorizontal: 18, paddingTop: 6, paddingBottom: 30 },
-  spacer: { flex: 1 },
+  /** Mốc định vị cho nút back nổi - xem ghi chú ở chỗ dùng. */
+  body: { flex: 1 },
   pressed: { transform: [{ scale: 0.98 }] },
 
-  backRow: { flexDirection: 'row', alignItems: 'center', gap: 12, alignSelf: 'flex-start' },
+  /**
+   * Ba tầng như `new-game.tsx`: tiêu đề - hai cột - (nút nằm trong cột trái).
+   * `body` bọc ngoài giữ mốc cho nút back nổi, `stack` mang lề.
+   */
+  stack: { flex: 1, paddingHorizontal: 20, paddingBottom: 10 },
+
+  /** Cao đúng bằng nút back để tiêu đề nằm ngang hàng với nó. */
+  header: { height: 44, justifyContent: 'center' },
+
+  /** Mời người vào + START bên trái | danh sách ghế bên phải. */
+  middle: { flex: 1, flexDirection: 'row', gap: 22, paddingTop: 4 },
+  col: { flex: 1 },
+  /** Phần cuộn được của cột trái; nút START nằm NGOÀI nó - xem chỗ dùng. */
+  colScroll: { flex: 1 },
+  // ⚠️ `paddingBottom` là chỗ cho QUẦNG SÁNG của khung QR loang ra. Bỏ đi thì
+  // `ScrollView` cắt đúng ở mép hộp và viền dưới trông như mất - xem
+  // `PANEL_GLOW_PAD`.
+  colScrollInner: { paddingBottom: PANEL_GLOW_PAD },
+
+  backRow: {
+    position: 'absolute',
+    top: 4,
+    left: 14,
+    zIndex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   backCircle: {
     width: 40,
     height: 40,
@@ -438,9 +631,11 @@ const styles = StyleSheet.create({
   title: {
     alignSelf: 'stretch',
     textAlign: 'center',
-    marginTop: 12,
-    fontSize: 30,
-    lineHeight: 36,
+    // Nhỏ dần theo từng vòng: 30 (bản dọc) -> 26 -> 22. Giờ nó nằm trong hàng
+    // cao 44dp cùng nút back, và mọi dp tiết kiệm được ở đây đều rơi xuống cột
+    // ghế bên phải - nơi cần chỗ cho sáu hàng.
+    fontSize: 22,
+    lineHeight: 28,
     fontWeight: '800',
     fontStyle: 'italic',
     color: '#F2F6FF',
@@ -448,16 +643,9 @@ const styles = StyleSheet.create({
     textShadowRadius: 14,
     textShadowOffset: { width: 0, height: 0 },
   },
-  subtitle: {
-    marginTop: 6,
-    fontSize: 14,
-    lineHeight: 20,
-    color: lobbyColors.dim,
-    textAlign: 'center',
-  },
 
-  codeRim: { marginTop: 9, padding: 1.5, borderRadius: 13, boxShadow: '0 0 18px rgba(200,107,255,0.6)' },
-  codeInner: { height: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  codeRim: { marginTop: 6, padding: 1.5, borderRadius: 13, boxShadow: '0 0 18px rgba(200,107,255,0.6)' },
+  codeInner: { height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   codeText: {
     fontSize: 24,
     fontWeight: '800',
@@ -469,17 +657,19 @@ const styles = StyleSheet.create({
   },
 
   panel: {
-    marginTop: 11,
+    marginTop: 8,
     flexDirection: 'row',
     borderRadius: 16,
     borderWidth: 1.5,
     borderColor: 'rgba(63,224,255,0.55)',
     backgroundColor: 'rgba(10,12,40,0.78)',
-    padding: 11,
+    padding: 9,
     gap: 12,
     boxShadow: '0 0 12px rgba(47,143,255,0.35)',
   },
-  qrCol: { alignItems: 'center', gap: 7 },
+  // `justifyContent` cần từ khi khung có chiều cao đặt sẵn: QR bị kẹp ở
+  // `QR_MAX` thì cột này thấp hơn khung, để mặc định nó dính lên đỉnh.
+  qrCol: { alignItems: 'center', justifyContent: 'center', gap: 7 },
   panelLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 1.3, color: lobbyColors.cyan },
   qrFrame: {
     padding: 5,
@@ -504,23 +694,18 @@ const styles = StyleSheet.create({
   },
   inviteBtnText: { fontSize: 13.5, fontWeight: '700', letterSpacing: 1.1, color: '#FFFFFF' },
 
-  progressRow: { marginTop: 7, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  joinedText: { fontSize: 14, color: lobbyColors.dim },
-  track: {
-    width: 120,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(120,140,200,0.22)',
-    overflow: 'hidden',
-  },
-  fillBar: { height: '100%', borderRadius: 3 },
-  countText: { fontSize: 14, fontWeight: '700', color: text.primary },
+  /**
+   * `flex: 1` để vùng cuộn nhận trọn phần cao còn lại của cột - đó chính là con
+   * số `onLayout` đo được và `rowHeight` chia ra. Đặt bề cao cố định ở đây là
+   * phép đo mất nghĩa.
+   */
+  rowsScroll: { flex: 1, marginTop: 8 },
+  // ⚠️ `gap` phải khớp `ROW_GAP` ở đầu file, phép chia dùng đúng con số đó.
+  rows: { gap: ROW_GAP },
 
-  rows: { gap: 6, marginTop: 9 },
-
-  ctaWrap: { marginTop: 16 },
+  ctaWrap: { marginTop: 8 },
   cta: {
-    height: 58,
+    height: 54,
     borderRadius: 13,
     flexDirection: 'row',
     alignItems: 'center',

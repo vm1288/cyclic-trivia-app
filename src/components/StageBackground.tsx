@@ -11,37 +11,28 @@ import { bg } from '../theme/colors';
  * halftone, tia sáng và bệ phát sáng trong ảnh phong phú hơn nhiều so với mức
  * dựng lại được bằng code.
  *
- * Ảnh tỉ lệ 852x1846 (~9:19.5), đúng tỉ lệ điện thoại dọc hiện đại, nên
- * `cover` gần như không cắt gì trên máy mục tiêu. Trên máy tỉ lệ khác thì cắt
- * đều hai đầu; giữ `backgroundColor` cùng tông ở dưới để mép cắt không lộ.
+ * Toàn app khoá NGANG (`app/_layout.tsx`) nên chỉ còn một ảnh, vẽ riêng cho
+ * chiều ngang chứ không phải bản dọc xoay 90°. Ảnh 1846×852 (tỉ lệ 2.167)
+ * trùng khít tỉ lệ máy test khi nằm ngang (850.9×392.7 dp), `cover` gần như
+ * không cắt gì. Máy tỉ lệ khác thì cắt đều hai đầu; giữ `backgroundColor` cùng
+ * tông ở dưới để mép cắt không lộ.
  */
-const STAGE = {
-  /** Mặc định: dùng cho mọi màn ngoài ván chơi. */
-  main: require('../../assets/brand/main-background.png'),
-  /**
-   * Chỉ dùng TRONG PHÒNG CHƠI (`app/game.tsx`).
-   *
-   * Nền chính có bệ phát sáng và tường chấm rất nổi - hợp với các màn chỉ có
-   * vài nút, nhưng trong ván thì nó chen với bàn cờ và bộ bài. Bản `alt` trầm
-   * hơn, để bàn cờ là thứ bắt mắt duy nhất.
-   */
-  alt: require('../../assets/brand/main-background-alt.png'),
-  /**
-   * Chỉ dùng cho màn NẰM NGANG trong ván (`app/game-landscape.tsx`).
-   *
-   * Là bản vẽ riêng cho chiều ngang, không phải bản dọc xoay 90°. Ảnh
-   * 1846×852 (tỉ lệ 2.167) trùng khít tỉ lệ máy test khi nằm ngang
-   * (850.9×392.7 dp = 2.167), nên `cover` gần như không cắt gì.
-   */
-  landscape: require('../../assets/brand/main-background-landscape.png'),
-} as const;
+/**
+ * ⚠️ MỘT ảnh duy nhất cho cả app - không còn `variant` nữa (2026-09-03).
+ *
+ * Trước đây có ba biến thể: `main`/`alt` (dọc) và `landscape`. Hai bản dọc chỉ
+ * còn `app/game.tsx` dùng, mà màn đó đã xoá, nên chúng bị gỡ khỏi đây để không
+ * bundle thừa hai ảnh ~1.6MB.
+ *
+ * Hai file `main-background.png` / `main-background-alt.png` vẫn nằm trong
+ * `assets/brand/` - còn `require` nào trỏ tới thì mới vào APK.
+ */
+const STAGE = require('../../assets/brand/main-background-landscape.png');
 
-export type StageVariant = keyof typeof STAGE;
-
-export function StageBackground({ variant = 'main' }: { variant?: StageVariant } = {}) {
+export function StageBackground() {
   return (
     <View style={styles.root} pointerEvents="none">
-      <Image source={STAGE[variant]} resizeMode="cover" style={styles.image} />
+      <Image source={STAGE} resizeMode="cover" style={styles.image} />
 
       {/* Làm tối phần đỉnh để logo và thanh trạng thái luôn đủ tương phản, kể
           cả khi ảnh bị cắt lệch trên máy tỉ lệ lạ. */}

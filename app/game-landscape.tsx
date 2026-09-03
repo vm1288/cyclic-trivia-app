@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as ScreenOrientation from 'expo-screen-orientation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -142,20 +141,13 @@ export default function GameLandscapeScreen() {
 
   const seat = player.status === 'ready' ? player.seat : null;
 
-  /**
-   * Khoá ngang khi vào, trả về dọc khi rời.
+  /*
+   * ⚠️ KHÔNG khoá hướng ở đây nữa (2026-09-03).
+   *
+   * Toàn app đã khoá ngang một lần ở `app/_layout.tsx`. Bản cũ khoá ngang lúc
+   * vào rồi TRẢ VỀ DỌC trong hàm dọn dẹp - giữ lại là bấm back ra khỏi ván sẽ
+   * lật mọi màn còn lại về dọc, đúng cái vừa bỏ đi.
    */
-  useEffect(() => {
-    void ScreenOrientation.lockAsync(
-      ScreenOrientation.OrientationLock.LANDSCAPE,
-    );
-
-    return () => {
-      void ScreenOrientation.lockAsync(
-        ScreenOrientation.OrientationLock.PORTRAIT_UP,
-      );
-    };
-  }, []);
 
   /*
    * Trạng thái ván do SignalR đẩy nhịp - xem `useGameState`.
@@ -963,7 +955,7 @@ export default function GameLandscapeScreen() {
         riêng chứ không phải bản dọc xoay 90°. Ảnh 1846×852 (tỉ lệ 2.167) trùng
         khít tỉ lệ máy test khi nằm ngang nên `cover` gần như không cắt gì.
       */}
-      <StageBackground variant="landscape" />
+      <StageBackground />
 
       <View
         style={[

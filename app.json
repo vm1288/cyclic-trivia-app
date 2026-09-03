@@ -3,7 +3,7 @@
     "name": "Cyclic",
     "slug": "cyclic-trivia",
     "version": "1.0.0",
-    "orientation": "default",
+    "orientation": "landscape",
     "icon": "./assets/icon.png",
     "scheme": "cyclic",
     "userInterfaceStyle": "dark",

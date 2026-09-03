@@ -33,8 +33,14 @@ export function SwitchGameSheet({
   onClose: () => void;
 }) {
   const t = useT();
-  // Modal nằm NGOÀI SafeAreaView của màn hình, nên phải tự chừa thanh điều
-  // hướng - nếu không, nút cuối sheet bị nó che mất.
+  /*
+   * Modal nằm NGOÀI `SafeAreaView` của màn hình, nên phải tự chừa mọi cạnh.
+   *
+   * ⚠️ Ở chiều ngang thì `insets.bottom` gần như bằng 0, còn tai thỏ và thanh
+   * điều hướng chuyển sang hai cạnh BÊN. Chỉ chừa đáy như bản dọc là logo
+   * sponsor bị tai thỏ cắt ở mép trái và nút gỡ bị thanh điều hướng che ở mép
+   * phải - mà `paddingHorizontal` cố định thì không cứu được.
+   */
   const insets = useSafeAreaInsets();
 
   return (
@@ -50,7 +56,16 @@ export function SwitchGameSheet({
       <View style={styles.backdrop}>
         <Pressable style={styles.backdropTouch} onPress={onClose} accessibilityRole="button" />
 
-        <View style={[styles.sheet, { paddingBottom: 20 + insets.bottom }]}>
+        <View
+          style={[
+            styles.sheet,
+            {
+              paddingBottom: 20 + insets.bottom,
+              paddingLeft: 20 + insets.left,
+              paddingRight: 20 + insets.right,
+            },
+          ]}
+        >
           <LinearGradient
             colors={['rgba(24,16,56,0.97)', 'rgba(9,6,30,1)']}
             style={styles.fill}
@@ -150,11 +165,18 @@ const styles = StyleSheet.create({
     borderTopWidth: 1.5,
     borderColor: 'rgba(200,107,255,0.55)',
     overflow: 'hidden',
-    paddingHorizontal: 20,
+    // Lề ngang do chỗ dùng đặt (`20 + insets.left/right`), đừng đặt lại
+    // `paddingHorizontal` ở đây - nó sẽ ghi đè và mất phần chừa tai thỏ.
     paddingTop: 10,
-    // Chừa chỗ cho danh sách dài mà không chiếm trọn màn hình - vẫn thấy được
-    // mình đang đứng trên màn nào.
-    maxHeight: '80%',
+    /*
+     * Chừa chỗ để vẫn thấy mình đang đứng trên màn nào, nhưng không nhiều.
+     *
+     * ⚠️ 80% như bản dọc là sai ở chiều ngang: 80% của 393dp chỉ còn ~314dp, và
+     * sau tiêu đề + phụ đề + nút ADD thì danh sách chỉ hiện nổi một hàng rưỡi -
+     * hàng thứ hai bị nút đè lên, nhìn như hỏng. 92% của 393dp là ~360dp, đủ
+     * hai hàng trọn vẹn.
+     */
+    maxHeight: '92%',
   },
   grabber: {
     alignSelf: 'center',

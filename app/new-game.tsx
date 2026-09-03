@@ -184,25 +184,38 @@ export default function NewGameScreen() {
     <View style={styles.root}>
       <StageBackground />
 
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          <Pressable
-            onPress={() => router.back()}
-            style={styles.backRow}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.back')}
-          >
-            <View style={styles.backCircle}>
-              <ArrowLeftIcon color="#8FD0FF" />
-            </View>
-            <Text style={styles.backLabel}>{t('common.back').toUpperCase()}</Text>
-          </Pressable>
-
-          <View style={styles.titleBlock}>
-            <Text style={styles.title}>{t('newGame.title')}</Text>
-            <Text style={styles.subtitle}>{t('newGame.subtitle')}</Text>
+      {/* Ngang thì tai thỏ nằm ở cạnh trái/phải - phải khai báo cả `left`/`right`. */}
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
+        {/* ⚠️ Lớp bọc `flex: 1` BẮT BUỘC cho nút back nổi - xem `lobby.tsx`.
+            `SafeAreaView` chèn khoảng an toàn bằng padding, mà con
+            `position: 'absolute'` neo theo mép ngoài, nên thiếu lớp này là chữ
+            BACK chồng lên thanh trạng thái. */}
+        <View style={styles.body}>
+        {/* Nút back nổi đè lên, không nằm trong dòng chảy - xem `FormScreen`. */}
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.backRow}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back')}
+        >
+          <View style={styles.backCircle}>
+            <ArrowLeftIcon color="#8FD0FF" />
           </View>
+          <Text style={styles.backLabel}>{t('common.back').toUpperCase()}</Text>
+        </Pressable>
+
+        <View style={styles.stack}>
+          {/*
+            Tiêu đề nằm NGANG HÀNG với nút back và căn giữa màn hình.
+            Nút back là lớp phủ tuyệt đối nên không chiếm chỗ trong hàng này -
+            tiêu đề chiếm trọn bề ngang rồi tự căn giữa, không bị lệch theo bề
+            rộng của chữ BACK.
+          */}
+          <View style={styles.header}>
+            <Text style={styles.title}>{t('newGame.title')}</Text>
+          </View>
+          <Text style={styles.subtitle}>{t('newGame.subtitle')}</Text>
 
           {!session ? (
             <View style={styles.centerBlock}>
@@ -225,6 +238,19 @@ export default function NewGameScreen() {
             </View>
           ) : (
             <>
+              {/* Hai lựa chọn nằm CẠNH NHAU, mỗi thứ một cột, tiêu đề mục
+                  ngang hàng nhau. */}
+              <View style={styles.middle}>
+                {/*
+                  Cột thời lượng cuộn được, cột số người thì không: số mốc thời
+                  lượng do server cấp và có thể nhiều hơn bốn, còn số người thì
+                  luôn gọn trong một hàng chip.
+                */}
+                <ScrollView
+                  style={styles.col}
+                  contentContainerStyle={styles.colInner}
+                  showsVerticalScrollIndicator={false}
+                >
               <SectionHeader title={t('newGame.duration')} />
 
               <View style={styles.grid}>
@@ -269,7 +295,9 @@ export default function NewGameScreen() {
                   );
                 })}
               </View>
+                </ScrollView>
 
+                <View style={styles.col}>
               <SectionHeader title={t('newGame.players')} />
 
               <View style={styles.chipRow}>
@@ -306,9 +334,13 @@ export default function NewGameScreen() {
                   );
                 })}
               </View>
+                </View>
+              </View>
 
               {error ? <Text style={styles.error}>{error}</Text> : null}
 
+              {/* Nút tạo ván neo DƯỚI CÙNG và căn giữa - nó là hành động kết
+                  thúc màn này, không thuộc riêng cột nào ở trên. */}
               <Pressable
                 onPress={submit}
                 disabled={busy || !players || !duration || !dice}
@@ -332,7 +364,8 @@ export default function NewGameScreen() {
               </Pressable>
             </>
           )}
-        </ScrollView>
+        </View>
+        </View>
       </SafeAreaView>
     </View>
   );
@@ -341,11 +374,40 @@ export default function NewGameScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#04061A' },
   safe: { flex: 1 },
-  scroll: { paddingHorizontal: 22, paddingTop: 8, paddingBottom: 40 },
+  /** Mốc định vị cho nút back nổi - xem ghi chú ở chỗ dùng. */
+  body: { flex: 1 },
   // Không dùng `StyleSheet.absoluteFillObject`: RN 0.86 bỏ khai báo kiểu của nó.
   fill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
 
-  backRow: { flexDirection: 'row', alignItems: 'center', gap: 12, alignSelf: 'flex-start' },
+  /**
+   * Ba tầng xếp dọc: tiêu đề - hai cột lựa chọn - nút tạo ván.
+   *
+   * `body` bọc ngoài vẫn giữ nguyên để nút back nổi có mốc neo; `stack` là chỗ
+   * đặt lề, vì con `position: 'absolute'` sẽ bỏ qua padding của cha.
+   */
+  stack: { flex: 1, paddingHorizontal: 20, paddingBottom: 12 },
+
+  /**
+   * Cao đúng bằng nút back (36dp vòng tròn + lề) để tiêu đề nằm NGANG HÀNG với
+   * nó. Nút back không nằm trong hàng này - nó là lớp phủ tuyệt đối - nên tiêu
+   * đề chiếm trọn bề ngang và căn giữa theo màn hình, không theo phần còn lại.
+   */
+  header: { height: 44, justifyContent: 'center' },
+
+  /** Hai cột lựa chọn, tiêu đề mục ngang hàng nhau. */
+  middle: { flex: 1, flexDirection: 'row', gap: 22, paddingTop: 8 },
+  col: { flex: 1 },
+  colInner: { paddingBottom: 4 },
+
+  backRow: {
+    position: 'absolute',
+    top: 6,
+    left: 14,
+    zIndex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   backCircle: {
     width: 36,
     height: 36,
@@ -358,7 +420,6 @@ const styles = StyleSheet.create({
   },
   backLabel: { color: text.primary, fontSize: 15, fontWeight: '700', letterSpacing: 2.4 },
 
-  titleBlock: { marginTop: 22 },
   /*
    * `alignSelf: 'stretch'` + `textAlign: 'center'` chứ KHÔNG phải bọc trong
    * View `alignItems: 'center'`.
@@ -373,8 +434,10 @@ const styles = StyleSheet.create({
   title: {
     alignSelf: 'stretch',
     textAlign: 'center',
-    fontSize: 42,
-    lineHeight: 52,
+    // Nhỏ hơn bản dọc (42/52): tiêu đề giờ nằm trong hàng cao 44dp cùng nút
+    // back, cỡ cũ tràn khỏi hàng đó.
+    fontSize: 28,
+    lineHeight: 34,
     fontWeight: '800',
     fontStyle: 'italic',
     color: '#F4F9FF',
@@ -383,9 +446,9 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 0 },
   },
   subtitle: {
-    marginTop: 8,
-    fontSize: 14,
-    lineHeight: 20,
+    marginTop: 2,
+    fontSize: 13,
+    lineHeight: 18,
     textAlign: 'center',
     color: 'rgba(206,222,245,0.85)',
   },
@@ -428,10 +491,14 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 0 },
   },
 
-  ctaWrap: { marginTop: 52 },
+  /**
+   * Căn giữa và chặn bề ngang: trải hết 810dp thì nút trông như một thanh
+   * ngang chứ không còn là nút, và mắt không biết bấm vào đâu.
+   */
+  ctaWrap: { marginTop: 10, alignSelf: 'center', width: '100%', maxWidth: 360 },
   ctaBusy: { opacity: 0.7 },
   cta: {
-    height: 68,
+    height: 54,
     borderRadius: 15,
     borderWidth: 2.5,
     borderColor: cta.line,
@@ -460,7 +527,16 @@ const styles = StyleSheet.create({
   pressedChip: { transform: [{ scale: 0.96 }] },
   pressedCta: { transform: [{ scale: 0.99 }] },
 
-  centerBlock: { marginTop: 40, gap: 18, alignItems: 'stretch' },
+  // `flex: 1` để khối báo lỗi/đang tải chiếm nốt phần giữa và tự căn giữa,
+  // thay vì `marginTop` cố định như hồi còn nằm trong vùng cuộn.
+  centerBlock: {
+    flex: 1,
+    justifyContent: 'center',
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 420,
+    gap: 18,
+  },
   note: { color: text.muted, fontSize: 14, lineHeight: 21, textAlign: 'center' },
-  error: { color: '#FF4D6A', fontSize: 13, lineHeight: 19, marginTop: 14 },
+  error: { color: '#FF4D6A', fontSize: 13, lineHeight: 19, marginTop: 6, textAlign: 'center' },
 });

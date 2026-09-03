@@ -10,7 +10,20 @@ import { section } from '../theme/colors';
  * thành từng khối rõ ràng mà không cần thêm khung viền, vốn sẽ đụng với viền
  * neon của các ô bên dưới.
  */
-export function SectionHeader({ title }: { title: string }) {
+export function SectionHeader({
+  title,
+  trailing,
+}: {
+  title: string;
+  /**
+   * Chữ nhỏ neo ở GÓC PHẢI của hàng tiêu đề, thay chỗ dấu ◇ cuối.
+   *
+   * Dùng cho những con số chỉ có nghĩa kèm tiêu đề - vd "1 of 6 joined" bên
+   * cạnh PLAYERS ở màn phòng chờ. Đặt ở đây thì nó đọc như một phần của tiêu
+   * đề, và không phải cấp cho nó một dòng riêng trong khi bề cao đang khan.
+   */
+  trailing?: string;
+}) {
   return (
     <View style={styles.row}>
       <Text style={styles.diamond}>◇</Text>
@@ -21,7 +34,11 @@ export function SectionHeader({ title }: { title: string }) {
         end={{ x: 1, y: 0.5 }}
         style={styles.rule}
       />
-      <Text style={[styles.diamond, styles.diamondTrailing]}>◇</Text>
+      {trailing ? (
+        <Text style={styles.trailing}>{trailing}</Text>
+      ) : (
+        <Text style={[styles.diamond, styles.diamondTrailing]}>◇</Text>
+      )}
     </View>
   );
 }
@@ -40,4 +57,12 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 0 },
   },
   rule: { flex: 1, height: 1 },
+  // Mờ hơn và nhẹ hơn tiêu đề: đây là số liệu đi kèm, không được tranh chỗ với
+  // chính cái tiêu đề nó đứng cạnh.
+  trailing: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    letterSpacing: 0.4,
+    color: 'rgba(198,212,240,0.8)',
+  },
 });

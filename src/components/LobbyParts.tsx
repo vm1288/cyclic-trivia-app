@@ -120,6 +120,7 @@ export function PlayerRow({
   isHost,
   hostLabel,
   statusLabel,
+  height,
 }: {
   index: number;
   name: string;
@@ -128,13 +129,20 @@ export function PlayerRow({
   isHost: boolean;
   hostLabel: string;
   statusLabel: string;
+  /**
+   * Chiều cao hàng, do chỗ gọi TÍNH RA từ bề cao khung và số ghế.
+   *
+   * Có mặt vì màn phòng chờ ở chiều ngang phải nhét vừa sáu ghế mà không cuộn
+   * - xem `rowHeight` trong `app/lobby.tsx`. Bỏ trống thì dùng cỡ mặc định.
+   */
+  height?: number;
 }) {
   // Ghế trống dùng màu trung tính: màu của người chơi chỉ có nghĩa sau khi họ
   // chọn nhân vật, hiện sớm sẽ khiến ghế trống trông như đã có người.
   const ring = ready ? colour : lobbyColors.blue;
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, height ? { height } : null]}>
       <View style={styles.indexBox}>
         <Text style={styles.indexText}>{index}</Text>
       </View>

@@ -152,46 +152,58 @@ export default function SeatScreen() {
   }
 
   return (
-    <FormScreen title={t('seat.title')} subtitle={t('seat.subtitle')}>
-      <NeonField
-        label={t('seat.nameLabel')}
-        color={neon.blue}
-        value={nickname}
-        onChangeText={(value) => {
-          setNickname(value);
-          if (error) setError(null);
-        }}
-        error={error}
-        placeholder={t('seat.namePlaceholder')}
-        autoCorrect={false}
-        autoComplete="off"
-        spellCheck={false}
-        maxLength={NICKNAME_MAX}
-        returnKeyType="go"
-        onSubmitEditing={submit}
-        editable={!busy}
-      />
+    <FormScreen
+      title={t('seat.title')}
+      subtitle={t('seat.subtitle')}
+      /*
+       * Tên + giới tính xuống CỘT TRÁI, chừa cả cột phải cho lưới nhân vật.
+       *
+       * Bốn khối chồng trong một cột thì ở chiều ngang (cột phải cao ~340dp)
+       * nút TAKE MY SEAT rơi xuống dưới đáy và phải cuộn mới thấy - đã dính.
+       */
+      aside={
+        <>
+          <NeonField
+            label={t('seat.nameLabel')}
+            color={neon.blue}
+            value={nickname}
+            onChangeText={(value) => {
+              setNickname(value);
+              if (error) setError(null);
+            }}
+            error={error}
+            placeholder={t('seat.namePlaceholder')}
+            autoCorrect={false}
+            autoComplete="off"
+            spellCheck={false}
+            maxLength={NICKNAME_MAX}
+            returnKeyType="go"
+            onSubmitEditing={submit}
+            editable={!busy}
+          />
 
-      <View style={styles.genderRow}>
-        {(['male', 'female'] as const).map((option) => {
-          const active = gender === option;
-          return (
-            <Pressable
-              key={option}
-              onPress={() => setGender(option)}
-              disabled={busy}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: active }}
-              style={[styles.genderCell, active && styles.genderCellOn]}
-            >
-              <Text style={[styles.genderText, active && styles.genderTextOn]}>
-                {t(option === 'male' ? 'seat.male' : 'seat.female')}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
+          <View style={styles.genderRow}>
+            {(['male', 'female'] as const).map((option) => {
+              const active = gender === option;
+              return (
+                <Pressable
+                  key={option}
+                  onPress={() => setGender(option)}
+                  disabled={busy}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: active }}
+                  style={[styles.genderCell, active && styles.genderCellOn]}
+                >
+                  <Text style={[styles.genderText, active && styles.genderTextOn]}>
+                    {t(option === 'male' ? 'seat.male' : 'seat.female')}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </>
+      }
+    >
       <SectionHeader title={t('seat.pickCharacter')} />
 
       <View style={styles.grid}>
@@ -264,10 +276,21 @@ const styles = StyleSheet.create({
   genderText: { fontSize: 14, fontWeight: '700', color: 'rgba(198,212,240,0.72)' },
   genderTextOn: { color: text.primary },
 
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
+  /*
+   * 64 thay vì 88 khi chuyển sang bố cục ngang.
+   *
+   * Cột phải cao ~340dp. Ở cỡ 88 thì bộ 12 nhân vật xếp 4 ô một hàng = 3 hàng,
+   * đẩy nút I'M READY xuống dưới đáy. Ở cỡ 56 thì 6 ô một hàng = 2 hàng, vừa
+   * đủ cả nút.
+   *
+   * ⚠️ Đo lại nếu đổi số nhân vật hoặc tỉ lệ hai cột: mốc quyết định là
+   * `6*width + 5*gap` phải ≤ bề ngang cột phải, nếu không nó rớt xuống 5 ô một
+   * hàng và thành 3 hàng như cũ.
+   */
   character: {
-    width: 88,
-    height: 88,
+    width: 56,
+    height: 56,
     borderRadius: 12,
     borderWidth: 2,
     backgroundColor: 'rgba(10,13,34,0.8)',

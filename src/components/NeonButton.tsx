@@ -31,7 +31,17 @@ type Props = {
   disabled?: boolean;
 };
 
-const BODY_HEIGHT = 58;
+/**
+ * Hạ từ 58 xuống 42 khi toàn app chuyển sang NẰM NGANG (2026-09-03).
+ *
+ * Bề cao khả dụng còn ~393dp thay vì ~800. Ở cỡ cũ, năm mục của màn chính
+ * (RESUME + "tạo ván khác" + ba nút menu + link đổi game) cộng lại vượt khung
+ * và mục cuối bị cắt mất dưới đáy.
+ *
+ * ⚠️ Đừng hạ tiếp: 42 + 3 viền mỗi bên = 48dp, đúng ngưỡng tối thiểu của một
+ * vùng chạm. Thấp hơn là bấm hụt.
+ */
+const BODY_HEIGHT = 42;
 
 /**
  * Nút viền neon của màn hình chính.
