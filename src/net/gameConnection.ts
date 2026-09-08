@@ -198,6 +198,8 @@ const PING_MS = 30000;
 
 export type GameConnection = {
   start: () => Promise<void>;
+  /** Xem ghi chú ở chỗ cài đặt. Dùng cho vòng nối lại khi đã đóng hẳn. */
+  restart: () => Promise<void>;
   stop: () => Promise<void>;
   send: (typeID: number, payload?: unknown) => Promise<void>;
   state: () => ConnectionState;
@@ -283,6 +285,32 @@ export function createGameConnection({ token, asBoard, onPacket, onState }: Opti
   return {
     async start() {
       if (connection.state !== HubConnectionState.Disconnected) return;
+      report('connecting');
+      await connection.start();
+      startPing();
+      report('connected');
+    },
+
+    /*
+     * Nối lại sau khi đã đóng hẳn - ÉP DỪNG trước rồi mới nối.
+     *
+     * ⚠️ Đừng gọi `start()` cho việc này. Chốt đầu `start()` là
+     * `if (connection.state !== Disconnected) return;`, mà một lần nối HỤT để
+     * SignalR nằm ở trạng thái KHÁC `Disconnected`. Từ đó mọi lời gọi `start()`
+     * đều thoát ngay, KHÔNG ném lỗi, nên vòng thử lại tưởng mình đang chạy mà
+     * thật ra không làm gì - app kẹt ở `connecting` (chấm vàng) vĩnh viễn.
+     * Đã đo đúng vậy trên máy: chấm RGB(254,198,30) đứng im, server sống lại
+     * cũng không nối.
+     *
+     * `stopped = false` vì đây là chủ động nối lại, không phải rời ván.
+     */
+    async restart() {
+      stopped = false;
+      try {
+        await connection.stop();
+      } catch {
+        /* đang dở dang thì kệ, cái cần là về Disconnected */
+      }
       report('connecting');
       await connection.start();
       startPing();
