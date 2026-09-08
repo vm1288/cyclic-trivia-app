@@ -1,4 +1,4 @@
-import Svg, { Circle, Polygon } from 'react-native-svg';
+import Svg, { Circle, Polygon, Rect } from 'react-native-svg';
 
 /**
  * Viên xúc xắc: khối lập phương vẽ bằng SVG, chiếu isometric - ba mặt nhìn thấy
@@ -64,6 +64,44 @@ const SIDES: Record<number, { left: number; right: number }> = {
   5: { left: 1, right: 3 },
   6: { left: 5, right: 3 },
 };
+
+/**
+ * MẶT xúc xắc nhìn TRỰC DIỆN - dùng lúc đã dừng.
+ *
+ * ⚠️ Vì sao cần cái này bên cạnh `DiceCube`: mặt trên của khối isometric là một
+ * HÌNH THOI, nên lưới chấm 3×3 bị xô nghiêng theo. Mặt 6 (hai cột ba chấm) chiếu
+ * lên hình thoi thành **hai đường chéo** - đúng về hình học nhưng người chơi
+ * không đọc ra là số 6. Đã dính đúng vậy khi server bỏ ép cứng `diceOne = 3`.
+ *
+ * Nên: LĂN thì hiện khối (mới có cảm giác ba chiều), DỪNG thì lật sang mặt vuông
+ * này - chấm thẳng hàng, đọc ra số ngay mà không cần nhìn chữ bên dưới.
+ *
+ * Dùng chung `PIPS` với khối, nên hai bên không bao giờ lệch cách xếp chấm.
+ */
+export function DiceFace({ value, size }: { value: number; size: number }) {
+  const dot = size * 0.105;
+
+  // Lưới chấm nằm trong khoảng 0.22-0.78 của cạnh, y hệt `facePips` của khối.
+  const at = (i: number) => size * (0.22 + 0.28 * i);
+
+  return (
+    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <Rect
+        x={0}
+        y={0}
+        width={size}
+        height={size}
+        rx={size * 0.18}
+        fill={C.top}
+        stroke={C.edge}
+        strokeWidth={1.5}
+      />
+      {(PIPS[value] ?? PIPS[1]).map(([row, col], i) => (
+        <Circle key={i} cx={at(col)} cy={at(row)} r={dot} fill="#3B1E7A" />
+      ))}
+    </Svg>
+  );
+}
 
 export function DiceCube({ value, size }: { value: number; size: number }) {
   const S = size / 2;

@@ -7,6 +7,7 @@ import Animated, {
   useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withRepeat,
   withSequence,
   withSpring,
@@ -14,7 +15,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { useT } from '../i18n/I18nProvider';
-import { DiceCube } from './DiceCube';
+import { DiceCube, DiceFace } from './DiceCube';
 
 /**
  * Xúc xắc lăn, phủ giữa màn hình.
@@ -60,6 +61,16 @@ const SPIN_MS = 1100;
 /** Cú hạ cánh: xoay nốt cho tròn vòng rồi dừng. */
 const LAND_MS = 700;
 
+/** Cú lật từ khối sang mặt trực diện, chạy NGAY SAU khi hạ cánh xong. */
+const FLIP_MS = 320;
+
+/**
+ * Cạnh mặt vuông. Nhỏ hơn `SIZE` vì khối isometric cao bằng `SIZE` nhưng chỉ
+ * rộng `SIZE * 0.866` - lấy đúng bề rộng đó thì hai hình cùng khối lượng thị
+ * giác, lật xong không thấy nó "phình ra".
+ */
+const FACE_SIZE = Math.round(SIZE * 0.866);
+
 export function DiceRollOverlay({
   /** `null` = vẫn đang lăn, chưa biết kết quả. */
   value,
@@ -87,6 +98,15 @@ export function DiceRollOverlay({
    */
   const locked = useSharedValue(0);
 
+  /**
+   * Cú LẬT về mặt trực diện: 0 = còn là khối, 1 = đã thành mặt vuông.
+   *
+   * ⚠️ Vì sao phải lật: mặt trên của khối isometric là hình thoi, nên lưới chấm
+   * 3×3 bị xô nghiêng - mặt 6 hoá ra hai đường chéo và người chơi không đọc ra
+   * số. Lăn thì cần khối cho ra cảm giác ba chiều; dừng thì cần đọc được số.
+   */
+  const flip = useSharedValue(0);
+
   useEffect(() => {
     enter.value = withTiming(1, { duration: 360, easing: Easing.out(Easing.quad) });
   }, [enter]);
@@ -94,6 +114,7 @@ export function DiceRollOverlay({
   useEffect(() => {
     if (!settled) {
       locked.value = 0;
+      flip.value = 0;
 
       spin.value = withRepeat(
         withTiming(spin.value + 360, { duration: SPIN_MS, easing: Easing.linear }),
@@ -133,7 +154,13 @@ export function DiceRollOverlay({
       withTiming(1.16, { duration: 130 }),
       withSpring(1, { damping: 9, stiffness: 180 }),
     );
-  }, [settled, value, spin, hop, pop, locked]);
+
+    /*
+     * Hạ cánh xong mới lật, không lật giữa lúc còn xoay - lật sớm thì mặt vuông
+     * xuất hiện trong lúc khối vẫn đang quay, nhìn như hai vật khác nhau.
+     */
+    flip.value = withDelay(LAND_MS, withTiming(1, { duration: FLIP_MS, easing: Easing.out(Easing.cubic) }));
+  }, [settled, value, spin, hop, pop, locked, flip]);
 
   /*
    * Đổi mặt mỗi nhịp nảy - tức đúng lúc khối chạm "mặt bàn", chứ không phải giữa
@@ -154,13 +181,25 @@ export function DiceRollOverlay({
   );
 
   const cubeStyle = useAnimatedStyle(() => ({
-    opacity: enter.value,
+    // Nửa đầu cú lật là khối co lại rồi biến mất.
+    opacity: enter.value * (1 - flip.value),
     transform: [
       { translateY: hop.value },
       { rotate: `${spin.value}deg` },
       // `diceFadeIn` của thiết kế bắt đầu ở scale .4 rồi lớn dần lên 1.
       { scale: pop.value * (0.4 + enter.value * 0.6) },
+      // Ép ngang dần về 0: đọc ra là khối đang xoay đi để lộ mặt.
+      { scaleX: 1 - flip.value },
     ],
+  }));
+
+  /*
+   * Mặt trực diện: nửa sau cú lật. Bắt đầu ở `scaleX: 0` (nhìn nghiêng, mỏng
+   * như tờ giấy) rồi mở ra đúng lúc khối đã biến mất.
+   */
+  const faceStyle = useAnimatedStyle(() => ({
+    opacity: enter.value * flip.value,
+    transform: [{ translateY: hop.value }, { scale: pop.value }, { scaleX: flip.value }],
   }));
 
   const backdrop = useAnimatedStyle(() => ({ opacity: enter.value }));
@@ -168,8 +207,12 @@ export function DiceRollOverlay({
   return (
     <Animated.View style={[styles.root, backdrop]} pointerEvents="none">
       <View style={styles.dieWrap}>
-        <Animated.View style={cubeStyle}>
+        <Animated.View style={[styles.layer, cubeStyle]}>
           <DiceCube value={face} size={SIZE} />
+        </Animated.View>
+
+        <Animated.View style={[styles.layer, faceStyle]}>
+          <DiceFace value={settled ? (value as number) : face} size={FACE_SIZE} />
         </Animated.View>
       </View>
 
@@ -201,6 +244,12 @@ const styles = StyleSheet.create({
 
   // Cao hơn cạnh khối: viên xúc xắc còn nảy lên khỏi chỗ đứng.
   dieWrap: { width: SIZE, height: SIZE * 1.35, alignItems: 'center', justifyContent: 'flex-end' },
+
+  /*
+   * Khối và mặt vuông nằm CHỒNG lên nhau, cùng một chỗ - cú lật là chuyển giữa
+   * hai lớp chứ không phải đổi bố cục. Xếp thường thì lớp sau đẩy lớp trước đi.
+   */
+  layer: { position: 'absolute', bottom: 0, alignItems: 'center', justifyContent: 'center' },
 
   result: { alignItems: 'center', gap: 4 },
   label: { fontSize: 11, fontWeight: '700', letterSpacing: 2.6, color: 'rgba(200,170,255,0.7)' },

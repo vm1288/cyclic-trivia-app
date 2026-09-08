@@ -15,6 +15,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
+  ackFlow,
   ensureRoomCode,
   getGameState,
   markPlayersReady,
@@ -38,6 +39,7 @@ import { apiErrorText } from '../src/i18n/apiError';
 import { useT } from '../src/i18n/I18nProvider';
 import { useLicense } from '../src/session/LicenseSession';
 import { usePlayer } from '../src/session/PlayerSession';
+import { TYPE_ID } from '../src/net/gameConnection';
 import { useGameState } from '../src/net/useGameState';
 import { neon, text } from '../src/theme/colors';
 
@@ -158,9 +160,48 @@ export default function LobbyScreen() {
    * `submitNickname`), nên `seat` đã có. Chưa có thì hook chỉ chạy lưới an toàn
    * 20 giây - vẫn dùng được, chỉ chậm hơn.
    */
+  /**
+   * Đang gửi ack, đừng gửi chồng. Chép đúng cách `waiting.tsx` làm.
+   *
+   * Không chặn vĩnh viễn: `/ready` bấm lại sẽ đặt lại cờ ở server và bắn lại gói
+   * 50 - chặn cứng là lần đó không ai ack và ván kẹt y như cũ.
+   */
+  const acking = useRef(false);
+
   const { snapshot } = useGameState({
     gameId,
     token: seat?.token ?? null,
+    /*
+     * ⚠️ ACK NGAY TẠI MÀN LOBBY, đừng để dành cho `waiting.tsx`.
+     *
+     * `/ready` đặt mọi người sang `PlayerStart` rồi bắn gói 50, nhưng chủ phòng
+     * còn Ở ĐÂY suốt lúc đếm ngược - `fireStart` chỉ `router.replace('/waiting')`
+     * SAU khi đã gọi `/start`. Nếu chỉ `waiting.tsx` mới ack thì tới lúc
+     * `QuestionForTurnHandler` chạy, cờ `IsClientReceivedFlow` của chủ phòng vẫn
+     * là false, và điều kiện
+     *
+     *     player.CurrentFlow == PlayerStart && player.IsClientReceivedFlow
+     *
+     * trượt ở vế thứ hai -> chủ phòng bị BỎ QUA trong im lặng, không có nhánh nào
+     * quét lại. Họ chỉ nhận được câu hỏi ở lượt phát lại, tức muộn khoảng 60 giây,
+     * nên gần như không bao giờ thắng nổi vòng đua đầu.
+     *
+     * ⚠️ Đây KHÔNG phải đua tin: nâng đếm ngược lên 40 giây cũng vô ích, vì chủ
+     * phòng không thể ack khi còn ở màn này. Đã đo đúng vậy 2026-09-08.
+     *
+     * Khách không dính vì họ đã ngồi ở `/waiting` từ lúc nhận ghế.
+     *
+     * ⚠️ CHỈ ack `PlayerStart`. Đừng ack `QuestionForTurn` - xem ghi chú ở
+     * `ackFlow`.
+     */
+    onPacket: (packet) => {
+      if (packet.typeID !== TYPE_ID.PlayerStart) return;
+      if (acking.current || !seat) return;
+      acking.current = true;
+      void ackFlow('PlayerStart', seat.token).finally(() => {
+        acking.current = false;
+      });
+    },
   });
 
   const seats = snapshot?.Players ?? [];

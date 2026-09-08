@@ -282,7 +282,19 @@ export default function GameLandscapeScreen() {
    */
   const waitingDice = useRef(false);
 
-  const { snapshot, board, connState, connection } = useGameState({
+  /**
+   * Cú tung đang chờ báo "hiệu ứng xong" cho server (`HostDoneRollDice`, 51).
+   *
+   * ⚠️ CHỈ bật cho lượt thường (`RollDice`), KHÔNG bật cho vòng đua
+   * (`RollDiceForTurnClient`) - vòng đua không có bước chọn hướng nên không có
+   * gói 51 nào để chờ.
+   *
+   * Cờ dùng một lần: bật lúc tung, tắt ngay khi đã gửi. Xúc xắc hiện lại vì
+   * người chơi vào lại giữa chừng thì không được bắn thêm gói nữa.
+   */
+  const owesDoneRollDice = useRef(false);
+
+  const { snapshot, board, connState, connection, refresh } = useGameState({
     gameId: seat?.gameId ?? null,
     token: seat?.token ?? null,
     includeBoard: true,
@@ -559,9 +571,6 @@ export default function GameLandscapeScreen() {
         return;
       }
 
-      /* Tung xong: server đã chốt mặt xúc xắc, lượt nạp lại tới đây sẽ mang nó. */
-      if (packet.typeID === TYPE_ID.AskMoveDirection) waitingDice.current = true;
-
       if (packet.typeID !== TYPE_ID.PlayerInstructionQuestion) return;
 
       const data = packet as unknown as QuestionPacket;
@@ -655,9 +664,34 @@ export default function GameLandscapeScreen() {
       TurnId: snapshot?.Game.CurrentTurnId ?? '',
     });
 
-    // Xúc xắc lăn NGAY, chưa cần biết kết quả - xem `DiceRollOverlay`.
-    waitingDice.current = false;
+    // Lượt thường thì CHÍNH MÁY NÀY nợ server gói 51 sau khi hiệu ứng chạy xong.
+    owesDoneRollDice.current = rollAction === TYPE_ID.RollDice;
+
+    /*
+     * ⚠️ Bật cờ NGAY TẠI ĐÂY, đừng đợi gói `AskMoveDirection` (52).
+     *
+     * Đợi gói 52 là VÒNG LẶP CHẾT: gói 52 chỉ tới sau khi app gửi
+     * `HostDoneRollDice` (51), mà app chỉ gửi 51 khi xúc xắc tắt, mà xúc xắc chỉ
+     * tắt khi đã có số. Kết quả: lần nào cũng rơi vào lưới an toàn 7 giây và
+     * KHÔNG BAO GIỜ ra số. Đã đo đúng vậy trên máy (11:25:29 tung -> 11:25:37
+     * mới gửi 51).
+     *
+     * Đọc sớm an toàn vì `RolldiceHandler` ghi `DiceOne` NGAY lúc nhận gói tung
+     * (log `RolldiceHandler 5 - 3 - 0 - 20` cách cú chạm 0,2 giây), nên lượt nạp
+     * lại 500ms sau chắc chắn đã thấy số mới.
+     */
+    waitingDice.current = true;
     setDice({ value: null });
+
+    /*
+     * Tự nạp lại state để lấy `DiceOne`.
+     *
+     * Server KHÔNG gửi mặt xúc xắc cho người tung (dòng gửi trong
+     * `RollDiceHandler` bị comment từ lâu), nên không có gói tin nào kích hoạt
+     * `REFRESH_ON` ở bước này - không tự gọi thì phải đợi hết lưới an toàn 20
+     * giây.
+     */
+    setTimeout(() => void refresh(), 500);
   };
 
   /*
@@ -703,6 +737,32 @@ export default function GameLandscapeScreen() {
     const bail = setTimeout(() => setDice(null), 4000 + DICE_HOLD_MS);
     return () => clearTimeout(bail);
   }, [dice]);
+
+  /*
+   * Hiệu ứng xúc xắc xong -> báo server bằng `HostDoneRollDice` (51).
+   *
+   * ⚠️ ĐÂY MỚI LÀ CHỖ MỞ CỔNG SANG BƯỚC CHỌN HƯỚNG, không phải một gói cho có.
+   * `HostDoneRollDiceHandler` gỡ watchdog rồi mới gửi `AskMoveDirection` (52).
+   * Vốn dĩ gói này là việc của BÀN CỜ (`handleRollDice` trong `mainHandlers.js`)
+   * - luồng app không có Main Device nên trước đây không ai gửi, và watchdog
+   * `WaitBoardStep` phải bắn hộ sau 2 giây. Hậu quả: gói 52 tới lúc xúc xắc còn
+   * đang lăn, khung chọn hướng nằm dưới viên xúc xắc và đồng hồ 10 giây cháy
+   * mất quá nửa trước khi người chơi kịp nhìn.
+   *
+   * Mỗi điện thoại tự vẽ bàn cờ của mình, nên máy vừa tung ĐÚNG LÀ bàn cờ của
+   * nước đi đó và gửi gói này là đúng vai. Chỉ một máy gửi: overlay xúc xắc chỉ
+   * hiện cho người vừa tung.
+   *
+   * Bắn cả khi lưới an toàn 7 giây dọn xúc xắc đi mà chưa có số - lúc đó vẫn
+   * phải đẩy lượt tiếp, đừng để nó nằm chờ hết 8 giây của watchdog.
+   */
+  useEffect(() => {
+    if (dice) return;
+    if (!owesDoneRollDice.current) return;
+
+    owesDoneRollDice.current = false;
+    void connection.current?.send(TYPE_ID.HostDoneRollDice);
+  }, [dice, connection]);
 
   /*
    * Thông báo thắng vòng đua tự tắt sau 4 giây.

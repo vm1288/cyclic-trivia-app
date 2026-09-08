@@ -104,6 +104,18 @@ export const TYPE_ID = {
    */
   HostResume: 21,
   PlayerStart: 50,
+  /**
+   * "Hiệu ứng xúc xắc của tôi chạy xong rồi, đi tiếp đi."
+   *
+   * ⚠️ Đây là CỔNG sang bước chọn hướng, không phải gói báo cho vui:
+   * `HostDoneRollDiceHandler` gỡ watchdog rồi mới gửi `AskMoveDirection` (52).
+   *
+   * Vốn là việc của BÀN CỜ (`handleRollDice` trong `mainHandlers.js`). Luồng app
+   * không có Main Device, nhưng mỗi điện thoại tự vẽ bàn cờ của mình nên máy vừa
+   * tung ĐÚNG LÀ bàn cờ của nước đi đó. Không gửi thì watchdog `WaitBoardStep`
+   * bắn hộ và gói 52 tới lúc xúc xắc còn đang lăn.
+   */
+  HostDoneRollDice: 51,
   AskMoveDirection: 52,
   MoveDirectionSelected: 53,
   PlayerBattle: 54,
