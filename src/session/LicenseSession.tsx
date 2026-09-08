@@ -1,7 +1,17 @@
 import * as SecureStore from 'expo-secure-store';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { clearSponsorLogos, deleteSponsorLogo } from './sponsorLogo';
+import { checkActivationCode } from '../api/activation';
+import { setTokenRefresher } from '../api/client';
 
 /**
  * Các license đã kích hoạt trên MÁY NÀY, và license đang dùng.
@@ -22,8 +32,37 @@ import { clearSponsorLogos, deleteSponsorLogo } from './sponsorLogo';
 
 const KEY = 'cyclic.license.session';
 
+/**
+ * Còn dưới ngần này là làm mới token ngay lúc mở app.
+ *
+ * 3 ngày, trong khi token sống tối đa 14 - tức là app có tới ba ngày và nhiều
+ * lần mở để làm mới thành công. Người dùng đi chơi xa không mạng vài hôm về vẫn
+ * còn token dùng được.
+ */
+const REFRESH_BEFORE_MS = 3 * 24 * 60 * 60 * 1000;
+
+/**
+ * Những `errorCode` nghĩa là license ĐÃ CHẾT - gỡ phiên khỏi máy.
+ *
+ * ⚠️ Danh sách này phải khớp `PublicController.Activation.cs`. Đừng thêm mã lỗi
+ * tạm thời (vd `max_devices`) vào đây: chúng không có nghĩa là license hỏng, và
+ * đăng xuất vì chúng là xoá nhầm license của người dùng.
+ */
+const DEAD_LICENSE_CODES = ['license_not_found', 'license_inactive', 'license_expired'];
+
 export type LicenseSession = {
   token: string;
+  /**
+   * Thời điểm `token` hết hạn (ISO 8601 UTC), do server trả về.
+   *
+   * ⚠️ KHÔNG cố định. Server tính `min(License.ExpiredTime + 12h, now + 14 ngày)`
+   * nên license gia hạn thì lần refresh sau dài ra. Dùng để refresh CHỦ ĐỘNG -
+   * xem `REFRESH_BEFORE_MS`.
+   *
+   * Thiếu (server bản cũ, hoặc phiên lưu từ bản app trước) thì coi như "không
+   * biết" và refresh ngay lần mở app kế tiếp.
+   */
+  expiresAt?: string | null;
   /** Do server sinh - xem ghi chú trong api/activation.ts */
   deviceId: string;
   /** Khoá chính để phân biệt các license trên máy: mỗi license một host. */
@@ -152,7 +191,18 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  /*
+   * Bản sao `store` đọc được từ callback mà không cần đưa nó vào dependency.
+   *
+   * Cần vì `refreshToken` được lớp API giữ lại lâu dài (`setTokenRefresher`):
+   * nếu nó đóng gói (closure) `store` thì sẽ đọc phải bản chụp cũ, và ghi đè
+   * mất những thay đổi xảy ra sau đó.
+   */
+  const storeRef = useRef<Stored | null>(null);
+  storeRef.current = store;
+
   const persist = useCallback((next: Stored) => {
+    storeRef.current = next;
     setStore(next);
     // Ghi xuống đĩa là việc phụ, không chặn UI; state đã đúng ngay lập tức.
     void SecureStore.setItemAsync(KEY, JSON.stringify(next));
@@ -238,6 +288,97 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
     await clearSponsorLogos();
     setStore({ sessions: [], activeHostId: null });
   }, []);
+
+  /*
+   * ─── Làm mới token ────────────────────────────────────────────────────────
+   *
+   * Token license sống tối đa 14 ngày (server cắt theo hạn license, xem
+   * `AuthHelper.LicenseTokenExpiry`). Hết hạn mà không làm mới thì MỌI lời gọi
+   * cần token đều 401 và app không có đường nào tự gỡ - đúng lỗi đã gặp
+   * 2026-09-08.
+   *
+   * Đường làm mới chính là `checkActivationCode` với `deviceId` đã lưu: server
+   * thấy host cũ thì cấp token mới cho đúng host đó, không tốn thêm suất
+   * `MaxDevices` nào, và tính lại hạn theo `License.ExpiredTime` hiện tại - nên
+   * gia hạn gói là token sau tự dài ra.
+   */
+  const refreshToken = useCallback(
+    async (hostId: string): Promise<string | null> => {
+      const current = storeRef.current;
+      const target = current?.sessions.find((s) => s.hostId === hostId);
+      if (!target) return null;
+
+      const result = await checkActivationCode(target.licenseCode, target.deviceId);
+
+      if (result.isSuccess) {
+        const next: Stored = {
+          ...current!,
+          sessions: current!.sessions.map((s) =>
+            s.hostId === hostId
+              ? {
+                  ...s,
+                  token: result.data,
+                  expiresAt: result.expiresAt ?? null,
+                  activated: result.isActivated,
+                }
+              : s,
+          ),
+        };
+        persist(next);
+        return result.data;
+      }
+
+      /*
+       * ⚠️ CHỈ đăng xuất khi server PHÁN QUYẾT RÕ RÀNG.
+       *
+       * `kind === 'rejected'` nghĩa là server đã trả lời và từ chối. Mất mạng
+       * hay timeout thì `kind` là 'network'/'timeout' - lúc đó giữ nguyên token,
+       * vì xoá license của người dùng chỉ vì họ đi qua chỗ mất sóng là hỏng.
+       */
+      if (result.kind === 'rejected' && result.errorCode && DEAD_LICENSE_CODES.includes(result.errorCode)) {
+        await remove(hostId);
+      }
+
+      return null;
+    },
+    [persist, remove],
+  );
+
+  /*
+   * Cho lớp API đổi token khi ăn 401 giữa chừng.
+   *
+   * Nhận `staleToken` chứ không nhận hostId: lúc 401 xảy ra, lớp API chỉ biết
+   * cái token nó vừa gửi. Tra ngược ra phiên nào đang giữ token đó.
+   */
+  useEffect(() => {
+    setTokenRefresher(async (staleToken) => {
+      const owner = storeRef.current?.sessions.find((s) => s.token === staleToken);
+      if (!owner) return null;
+      return refreshToken(owner.hostId);
+    });
+    return () => setTokenRefresher(null);
+  }, [refreshToken]);
+
+  /*
+   * Làm mới CHỦ ĐỘNG lúc mở app, khi token sắp hết hoặc không rõ hạn.
+   *
+   * Chạy trước để người dùng không bao giờ ăn 401 giữa ván - lưới an toàn ở
+   * `client.ts` chỉ để đỡ những trường hợp lọt lưới này.
+   */
+  useEffect(() => {
+    const active = store?.sessions.find((s) => s.hostId === store.activeHostId);
+    if (!active) return;
+
+    const due =
+      !active.expiresAt ||
+      Number.isNaN(Date.parse(active.expiresAt)) ||
+      Date.parse(active.expiresAt) - Date.now() < REFRESH_BEFORE_MS;
+
+    if (due) void refreshToken(active.hostId);
+    // Chỉ theo dõi phiên ĐANG DÙNG: đổi license thì kiểm lại, còn `store` đổi vì
+    // lý do khác (ghi currentGameId chẳng hạn) thì không gọi lại server.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store?.activeHostId, store?.sessions.find((s) => s.hostId === store?.activeHostId)?.expiresAt]);
 
   const value = useMemo<LicenseContextValue>(() => {
     const state: LicenseState = store === null ? { status: 'loading' } : toState(store);

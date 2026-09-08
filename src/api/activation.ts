@@ -20,6 +20,17 @@ export type ActivationCheckResult = {
   /** JWT, đính vào header Authorization cho mọi lời gọi sau */
   data: string;
   /**
+   * Thời điểm token hết hạn, ISO 8601 UTC.
+   *
+   * Server tính `min(License.ExpiredTime + 12h, now + 14 ngày)`, nên con số này
+   * KHÔNG cố định - license gia hạn thì lần lấy sau dài ra. App lưu lại để
+   * refresh CHỦ ĐỘNG trước khi hết, thay vì đợi ăn 401 giữa ván.
+   *
+   * Có thể thiếu nếu server là bản cũ - lúc đó bỏ qua phần refresh chủ động và
+   * chỉ còn lưới an toàn bắt 401.
+   */
+  expiresAt?: string | null;
+  /**
    * DeviceId do SERVER sinh (Guid), không phải client. Phải lưu lại và gửi kèm
    * ở những lần kiểm tra sau - nếu không, mỗi lần nhập lại cùng một license sẽ
    * bị tính là một thiết bị mới và ăn hết hạn mức `MaxDevices`.

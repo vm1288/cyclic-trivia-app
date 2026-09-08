@@ -68,6 +68,8 @@ export default function RegisterScreen() {
 
     await license.save({
       token: result.data,
+      // Lưu để `LicenseProvider` refresh chủ động trước khi token hết hạn.
+      expiresAt: result.expiresAt ?? null,
       deviceId: result.deviceId,
       hostId: result.HostId,
       licenseCode: trimmed,

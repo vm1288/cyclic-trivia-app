@@ -1,5 +1,8 @@
 # Ghi chú môi trường — đọc trước khi debug "app không chạy"
 
+> **Chỉ muốn chạy lên thôi? Xem [START.md](START.md).** File này là kho bẫy môi
+> trường, mở khi có thứ gì đó hỏng — không phải quy trình hằng ngày.
+
 ## Quyết định: ở lại Expo SDK 57 (2026-08-25)
 
 SDK 57 (React 19.2, RN 0.86) là bản rất mới và có cạnh sắc thật — Reanimated 4 vừa tách `react-native-worklets` ra package riêng, và hệ sinh thái còn tự mâu thuẫn peer dependency (`react-dom@19.2.8` đòi `react@^19.2.8` trong khi SDK ghim `19.2.3`, phải dùng `--legacy-peer-deps`).
@@ -59,12 +62,12 @@ Máy đang dùng: Samsung **SM-A175F**, serial `R5GL607M1TW`.
 ```bash
 adb -s R5GL607M1TW install -r android/app/build/outputs/apk/debug/app-debug.apk
 adb -s R5GL607M1TW reverse tcp:8081 tcp:8081   # Metro
-adb -s R5GL607M1TW reverse tcp:7025 tcp:7025   # server CyclicTrivia
+adb -s R5GL607M1TW reverse tcp:5276 tcp:5276   # server CyclicTrivia
 adb -s R5GL607M1TW shell am start -a android.intent.action.VIEW \
   -d "cyclic://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081"
 ```
 
-> Cần **hai** forward: 8081 cho Metro (nếu không thì treo ở splash) và 7025 cho server (nếu không thì app báo "Cannot reach the server"). Rất dễ nhớ cái đầu mà quên cái sau.
+> Cần **hai** forward: 8081 cho Metro (nếu không thì treo ở splash) và 5276 cho server (nếu không thì app báo "Cannot reach the server"). Rất dễ nhớ cái đầu mà quên cái sau.
 
 Trên máy thật thì dùng `localhost`, **không** phải `10.0.2.2` - xem ngay dưới.
 

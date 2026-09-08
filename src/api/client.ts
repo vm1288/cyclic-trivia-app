@@ -69,11 +69,30 @@ export function postForm<T>(
   return post<T>(path, 'application/x-www-form-urlencoded', body, token);
 }
 
+/**
+ * Hàm đổi một token đã hết hạn lấy token mới.
+ *
+ * `LicenseSession` đăng ký hàm này lúc mount. Để ở đây dưới dạng biến module vì
+ * lớp API là hàm thuần, không đọc được React context - mà chỗ duy nhất biết
+ * `licenseCode` + `deviceId` để xin token mới lại là phiên license.
+ *
+ * Trả `null` khi không đổi được (mất mạng, hoặc server nói license đã chết).
+ */
+type TokenRefresher = (staleToken: string) => Promise<string | null>;
+
+let tokenRefresher: TokenRefresher | null = null;
+
+export function setTokenRefresher(fn: TokenRefresher | null) {
+  tokenRefresher = fn;
+}
+
 async function post<T>(
   path: string,
   contentType: string,
   body: string,
   token?: string | null,
+  /** Nội bộ: đánh dấu đây đã là lần thử lại, đừng refresh lần nữa. */
+  isRetry = false,
 ): Promise<ApiResult<T>> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -90,6 +109,21 @@ async function post<T>(
       body,
       signal: controller.signal,
     });
+
+    /*
+     * 401 = token hết hạn (hoặc license bị tắt). Đổi token rồi thử LẠI ĐÚNG MỘT
+     * LẦN - lưới an toàn cho trường hợp token chết giữa chừng mà refresh chủ
+     * động lúc mở app chưa kịp bắt.
+     *
+     * ⚠️ `isRetry` chặn đệ quy: nếu token mới cũng bị 401 thì dừng, trả lỗi lên
+     * trên. Không có nó thì license chết = vòng lặp gọi server vô tận.
+     */
+    if (response.status === 401 && token && !isRetry && tokenRefresher) {
+      const fresh = await tokenRefresher(token);
+      if (fresh && fresh !== token) {
+        return post<T>(path, contentType, body, fresh, true);
+      }
+    }
 
     if (!response.ok) {
       return {
