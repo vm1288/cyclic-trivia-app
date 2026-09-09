@@ -280,6 +280,14 @@ export type GameCard = {
   Quantity: number;
   Ordering: number;
   IsUsed: boolean;
+  /**
+   * `true` = lá dùng TRƯỚC câu hỏi (Joker, Changer, gói 22).
+   * `false` = lá dùng TRONG lúc câu hỏi đang hiện (Skipper, Eliminator, gói 25).
+   *
+   * ⚠️ Đây là thứ chia hai nhóm thẻ, đừng suy từ tên lá. Server gửi kèm trong
+   * `cardsToShow` và trong `Players[].Cards`. Luật đầy đủ: GAME_RULES mục 6b.
+   */
+  ShowBeforeQuestion?: boolean;
 };
 
 export type GamePlayer = {
@@ -520,6 +528,10 @@ export function isGameLive(game: { CurrentAction: number; GameSetup: number }): 
 
 /** `CaseAction` ở server (`Hubs/PacketType.cs`). Chỉ khai báo cái app đang dùng. */
 export const CASE_ACTION = {
+  /** Skipper: bốc câu khác CÙNG chủ đề. Tới trong gói 25. */
+  ReloadQuestion: 7,
+  /** Eliminator: giữ câu, bớt đáp án sai, cộng 5 giây. Tới trong gói 25. */
+  RemoveQuestionWrongAnswers: 8,
   /** Tới lượt, được tung xúc xắc. */
   RollDice: 1,
   /**

@@ -166,6 +166,23 @@ export const TYPE_ID = {
    * còn đang đi - người chơi không bao giờ thấy nó nhúc nhích.
    */
   HostActionDone: 23,
+  /**
+   * Dùng thẻ TRONG LÚC câu hỏi đang hiện - chỉ Skipper và Eliminator.
+   *
+   * Khác gói 22 `UseCard` (Joker/Changer, dùng TRƯỚC câu hỏi). Hai nhóm chia
+   * bằng `ShowBeforeQuestion` và không bao giờ dùng chung một lúc - xem
+   * GAME_RULES mục 6b.
+   *
+   * Server trả lời bằng CHÍNH gói 25 kèm `NextAction`:
+   *   7 `ReloadQuestion`            -> Skipper: câu khác CÙNG chủ đề
+   *   8 `RemoveQuestionWrongAnswers`-> Eliminator: bớt đáp án sai, +5 giây
+   */
+  UseCardInQuestion: 25,
+  /**
+   * Server báo cho BÀN CỜ biết có người vừa bấm Eliminator (chỉ Eliminator).
+   * Máy người chơi không cần xử lý, khai ở đây để khỏi tưởng là gói lạ.
+   */
+  UsingCardInQuestion: 48,
   PlayerBattle: 54,
   PlayerBattleInstruction: 55,
   GameState: 62,

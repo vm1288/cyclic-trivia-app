@@ -19,6 +19,7 @@ import {
   type MoveDirection,
   type QuestionPacket,
   type TurnCard,
+  type GameCard,
   type TurnQuestionPayload,
 } from '../src/api/game';
 import { BoardCanvas, HOP_MS, type PendingMove } from '../src/components/BoardCanvas';
@@ -53,6 +54,7 @@ import {
   Stars,
   TurnPulse,
 } from '../src/components/GameBoardParts';
+import { useConfirm } from '../src/components/ConfirmDialog';
 import { useT } from '../src/i18n/I18nProvider';
 import { usePlayer } from '../src/session/PlayerSession';
 import { neon, text } from '../src/theme/colors';
@@ -142,11 +144,28 @@ type ActiveQuestion = {
   question: GameQuestion;
   categories: string[];
   duration: number;
+  /**
+   * ⚠️ ĐỌC THẲNG TỪ SERVER, đừng tự tính bằng cách so `CurrentTurnPlayerId`.
+   *
+   * Server ép cờ này về `false` khi câu hỏi đến từ ô YOUR CHOICE - kể cả cho
+   * NGƯỜI TỚI LƯỢT (`ShowCardsBeforeSubCategoryOrQuestion.cs:96`). Tự tính ở máy
+   * khách thì đúng ở ca thường và SAI ở ô đó. Xem GAME_RULES mục 6b.
+   *
+   * `false` = mình không được dùng Skipper/Eliminator cho câu này.
+   */
+  isQuestionOwner: boolean;
+  /**
+   * Đã dùng Eliminator cho CHÍNH câu này chưa. Bản web gọi là `isUsedCardE` và
+   * đặt lại `false` mỗi khi câu mới hiện - ở đây nó nằm trong state câu hỏi nên
+   * tự reset theo.
+   */
+  usedEliminator: boolean;
 };
 
 export default function GameLandscapeScreen() {
   const player = usePlayer();
   const t = useT();
+  const confirm = useConfirm();
   const insets = useSafeAreaInsets();
 
   const seat = player.status === 'ready' ? player.seat : null;
@@ -430,6 +449,44 @@ export default function GameLandscapeScreen() {
        * phải báo xong; máy người khác chỉ diễn, không báo gì (báo hộ là server
        * ăn hai lần).
        */
+      /*
+       * ============================================================
+       * DÙNG THẺ TRONG CÂU HỎI - gói 25
+       * ============================================================
+       *
+       * Server trả lời bằng CHÍNH gói 25, mang `NextAction` nói phải làm gì:
+       *
+       *   7 `ReloadQuestion`             Skipper -> thay bằng câu KHÁC cùng chủ đề
+       *   8 `RemoveQuestionWrongAnswers` Eliminator -> giữ câu, bớt đáp án sai
+       *
+       * ⚠️ Đồng hồ ĐỌC TỪ `DurationInSeconds` của gói, đừng giữ số cũ. Nhánh
+       * Eliminator server cộng thêm 5 giây (`model.countdown + 5`) - đó là phần
+       * thưởng của lá bài, tự tính lại ở máy khách là mất.
+       *
+       * ⚠️ `answered.current` phải được xoá theo: Skipper đổi sang câu mới, mà
+       * chốt chống trả lời trùng đang giữ id câu CŨ.
+       */
+      if (packet.typeID === TYPE_ID.UseCardInQuestion) {
+        const payload = packet.Payload as TurnQuestionPayload | undefined;
+        if (!payload?.question?.Id) return;
+
+        const isEliminator = String(packet.Cardname ?? '').toLowerCase() === 'eliminator';
+        const dur = typeof packet.DurationInSeconds === 'number' ? packet.DurationInSeconds : 0;
+
+        answered.current = '';
+        setQuestion((prev) => ({
+          kind: 'turn',
+          question: payload.question,
+          categories: prev ? prev.categories : categoryChain(payload.category),
+          duration: dur > 0 ? dur : (prev?.duration ?? 20),
+          /* Giữ nguyên quyền của câu đang chơi - gói 25 cũng gửi kèm nhưng
+             `prev` mới là thứ đã qua đúng nhánh ô YOUR CHOICE. */
+          isQuestionOwner: prev ? prev.isQuestionOwner : payload.isQuestionOwner === true,
+          usedEliminator: (prev?.usedEliminator ?? false) || isEliminator,
+        }));
+        return;
+      }
+
       if (packet.typeID === TYPE_ID.MoveDirectionSelected) {
         const moverId = typeof packet.PlayerId === 'string' ? packet.PlayerId : '';
         const steps = typeof packet.totalIndex === 'number' ? packet.totalIndex : 0;
@@ -558,6 +615,8 @@ export default function GameLandscapeScreen() {
           question: payload.question,
           categories: categoryChain(payload.category),
           duration: typeof packet.DurationInSeconds === 'number' ? packet.DurationInSeconds : 20,
+          isQuestionOwner: payload.isQuestionOwner === true,
+          usedEliminator: false,
         });
         return;
       }
@@ -830,6 +889,9 @@ export default function GameLandscapeScreen() {
         question: data.Question,
         categories: categoryChain(data.Category),
         duration: data.DurationInSeconds || 20,
+        /* Vòng đua KHÔNG dùng thẻ được: chưa ai tới lượt cả. */
+        isQuestionOwner: false,
+        usedEliminator: false,
       });
     },
   });
@@ -1305,6 +1367,50 @@ export default function GameLandscapeScreen() {
     if (!mover) return;
     if (mover.CurrentStepIndex !== pendingMove.fromStepIndex) setPendingMove(null);
   }, [snapshot, pendingMove]);
+
+  /**
+   * Dùng thẻ TRONG lúc câu hỏi đang hiện - chỉ Skipper và Eliminator (gói 25).
+   *
+   * Luật đầy đủ ở GAME_RULES mục 6b. Bốn điều kiện của bản web
+   * (`handleCardClick`), thiếu một là không được bấm:
+   *
+   *   1. câu hỏi đang hiện
+   *   2. lá còn số lượng
+   *   3. KHÔNG phải lá trước-câu-hỏi (Joker/Changer)
+   *   4. `isQuestionOwner` - đọc từ server, KHÔNG tự tính
+   *
+   * Cộng thêm luật riêng của Eliminator: mỗi câu chỉ dùng được MỘT lần.
+   *
+   * ⚠️ Có hộp xác nhận trước khi gửi, y như bản web - lá bài quý và bấm nhầm
+   * thì mất hẳn.
+   *
+   * ⚠️ `countdown` gửi kèm là số giây CÒN LẠI: server lấy nó cộng 5 cho nhánh
+   * Eliminator. Gửi sai là người chơi mất phần thưởng của lá bài.
+   */
+  const canUseCardInQuestion = (card: GameCard): boolean => {
+    if (!question || question.kind !== 'turn') return false;
+    if (!question.isQuestionOwner) return false;
+    if (card.ShowBeforeQuestion === true) return false;
+    if (card.IsUsed || card.Quantity <= 0) return false;
+    if (card.CardId?.toLowerCase() === 'eliminator' && question.usedEliminator) return false;
+    return true;
+  };
+
+  const useCardInQuestion = async (card: GameCard, secondsLeft: number) => {
+    if (!canUseCardInQuestion(card)) return;
+
+    const ok = await confirm({
+      title: t('card.confirmTitle', { card: card.Name ?? card.CardId ?? '' }),
+      confirmLabel: t('card.confirmUse'),
+      cancelLabel: t('card.confirmSkip'),
+    });
+    if (!ok) return;
+
+    void connection.current?.send(TYPE_ID.UseCardInQuestion, {
+      selectedCardId: card.Id,
+      countdown: Math.max(0, Math.round(secondsLeft)),
+    });
+  };
 
   const pickCategory = (questionCategoryId: string) => {
     setChoice(null);

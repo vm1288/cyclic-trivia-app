@@ -161,6 +161,10 @@ export const en = {
   'game.card.Skipper': 'SKIPPER',
   'game.card.Eliminator': 'ELIMINATOR',
   'game.card.Changer': 'CHANGER',
+  /* Hộp xác nhận trước khi dùng thẻ trong câu hỏi - chép chữ bản web. */
+  'card.confirmTitle': 'Use {card} card now?',
+  'card.confirmUse': 'USE',
+  'card.confirmSkip': 'SKIP',
   'game.rollDice': 'ROLL DICE',
   'game.noSeat': 'You do not have a seat in this game.',
   /** Loại bàn cờ chưa có nhánh vẽ - thà nói ra còn hơn để bàn cờ trắng trơn. */
@@ -416,6 +420,9 @@ const vi: Record<TranslationKey, string> = {
   'game.card.Skipper': 'SKIPPER',
   'game.card.Eliminator': 'ELIMINATOR',
   'game.card.Changer': 'CHANGER',
+  'card.confirmTitle': 'Dùng thẻ {card} ngay bây giờ?',
+  'card.confirmUse': 'DÙNG',
+  'card.confirmSkip': 'BỎ QUA',
   'game.rollDice': 'TUNG XÚC XẮC',
   'game.noSeat': 'Bạn không có ghế trong ván này.',
   'game.boardUnsupported': 'Loại bàn cờ này chưa hỗ trợ.',
