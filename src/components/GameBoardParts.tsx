@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -250,11 +250,23 @@ export const HandTile = ({
   count,
   dimmed,
   compact,
+  usable,
+  active,
+  onPress,
 }: {
   cardKey: CardKey;
   label: string;
   count: number;
   dimmed: boolean;
+  /**
+   * Lá này BẤM ĐƯỢC ngay bây giờ - bản web cho nó rung (`cardshaking`).
+   * Ở đây làm viền sáng lên thay vì rung: màn nhỏ, bốn lá rung một lúc rất rối.
+   */
+  usable?: boolean;
+  /** Lá ĐANG CÓ TÁC DỤNG cho câu hỏi này (`used-highlight` của bản web). */
+  active?: boolean;
+  /** Có thì lá thành nút. Không có thì vẫn chỉ là ô hiển thị như cũ. */
+  onPress?: () => void;
   /**
    * Bố cục nằm ngang: lá bài chỉ rộng ~56dp thay vì ~78dp, và "ELIMINATOR" bị
    * cắt ở cỡ chữ thường. Chỉ hạ cỡ chữ ở đó, đừng hạ chung - bản dọc rộng rãi
@@ -273,12 +285,17 @@ export const HandTile = ({
    */
   const empty = count === 0;
 
+  const Box: React.ElementType = onPress ? Pressable : View;
+
   return (
-    <View
+    <Box
+      onPress={onPress}
       style={[
         styles.handCard,
         compact && styles.handCardCompact,
         { borderColor: empty ? 'rgba(150,170,215,0.30)' : style.glow },
+        usable && styles.handCardUsable,
+        active && styles.handCardActive,
       ]}
     >
       <LinearGradient
@@ -326,7 +343,7 @@ export const HandTile = ({
           ))}
         </View>
       </View>
-    </View>
+    </Box>
   );
 };
 
@@ -563,6 +580,17 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   // Phủ tối lên thân lá bài, giữ nguyên độ đục. Xem ghi chú ở HandTile.
+  /* Lá dùng được: viền sáng + quầng, đủ nổi mà không cần rung. */
+  handCardUsable: {
+    borderWidth: 2,
+    boxShadow: '0 0 12px rgba(255,255,255,0.45)',
+  },
+  /* Lá đang có tác dụng cho câu hỏi này. */
+  handCardActive: {
+    borderColor: '#FFC61E',
+    borderWidth: 2,
+    boxShadow: '0 0 16px rgba(255,198,30,0.75)',
+  },
   handDim: { backgroundColor: 'rgba(6,8,20,0.38)' },
   handIconEmpty: { opacity: 0.5 },
   handName: { fontSize: 9.5, fontWeight: '700', letterSpacing: 0.4 },

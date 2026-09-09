@@ -1237,6 +1237,53 @@ export default function GameLandscapeScreen() {
     me?.Cards ?? [],
   );
 
+  /**
+   * Trạng thái hiển thị của từng lá trong cột bên phải.
+   *
+   * Chép đúng ba nhánh `disablecard` của bản web (GAME_RULES mục 6b). Trước đây
+   * chỗ này truyền `dimmed` là hằng `true` cho cả bốn lá - lúc nào cũng mờ, nên
+   * nhìn giống luật mà thực ra không mang thông tin gì.
+   *
+   * ⚠️ Không có câu hỏi thì KHÔNG làm mờ - cả ba nhánh của bản web đều đòi
+   * `isShowingQuestion`.
+   */
+  const handState = (key: CardKey) => {
+    const card = (me?.Cards ?? []).find((c) => c.CardId === key);
+    const showing = question?.kind === 'turn';
+
+    if (!card || !showing) return { dimmed: false, usable: false, active: false };
+
+    const before = card.ShowBeforeQuestion === true;
+    const isElim = key === 'Eliminator';
+
+    /* 1. câu hỏi đã hiện -> lá TRƯỚC-câu-hỏi hết cửa */
+    if (before) return { dimmed: true, usable: false, active: false };
+    /* 2. không phải chủ câu hỏi -> lá TRONG-câu-hỏi cũng không được */
+    if (!question.isQuestionOwner) return { dimmed: true, usable: false, active: false };
+    /* 3. Eliminator chỉ một lần cho mỗi câu */
+    if (isElim && question.usedEliminator) {
+      return { dimmed: true, usable: false, active: true };
+    }
+
+    const canUse = !card.IsUsed && card.Quantity > 0;
+    return { dimmed: !canUse, usable: canUse, active: false };
+  };
+
+  /**
+   * Số giây còn lại của câu hỏi, để gửi kèm gói 25.
+   *
+   * ⚠️ Server lấy chính con số này CỘNG 5 cho nhánh Eliminator, nên gửi sai là
+   * người chơi mất phần thưởng. Đồng hồ thật nằm trong `QuestionOverlay`; ở đây
+   * tính lại từ mốc bắt đầu để khỏi phải kéo state lên - lệch dưới một giây,
+   * không đáng kể với một phép cộng 5.
+   */
+  const questionAt = useRef(0);
+  const secondsLeftNow = () => {
+    if (!question) return 0;
+    const gone = (Date.now() - questionAt.current) / 1000;
+    return Math.max(0, question.duration - gone);
+  };
+
   /*
    * ============================================================
    * TRẢ LỜI CÂU HỎI
@@ -1361,6 +1408,11 @@ export default function GameLandscapeScreen() {
    * Mốc chắc chắn duy nhất là `CurrentStepIndex` của chính người đó đã khác ô
    * xuất phát, tức server đã chạy `HostActionDone` và state mới đã về.
    */
+  /* Mốc để tính giây còn lại - xem `secondsLeftNow`. */
+  useEffect(() => {
+    if (question) questionAt.current = Date.now();
+  }, [question?.question.Id, question?.duration]);
+
   useEffect(() => {
     if (!pendingMove) return;
     const mover = (snapshot?.Players ?? []).find((pl) => pl.Id === pendingMove.playerId);
@@ -2022,20 +2074,29 @@ export default function GameLandscapeScreen() {
                     styles.handRow
                   }
                 >
-                  {row.map((key) => (
-                    <HandTile
-                      key={key}
-                      cardKey={key}
-                      label={t(
-                        `game.card.${key}` as 'game.card.Joker',
-                      )}
-                      count={
-                        cards[key]
-                      }
-                      dimmed
-                      compact
-                    />
-                  ))}
+                  {row.map((key) => {
+                    const st = handState(key);
+                    const card = (me?.Cards ?? []).find((c) => c.CardId === key);
+                    return (
+                      <HandTile
+                        key={key}
+                        cardKey={key}
+                        label={t(
+                          `game.card.${key}` as 'game.card.Joker',
+                        )}
+                        count={cards[key]}
+                        dimmed={st.dimmed}
+                        usable={st.usable}
+                        active={st.active}
+                        onPress={
+                          st.usable && card
+                            ? () => void useCardInQuestion(card, secondsLeftNow())
+                            : undefined
+                        }
+                        compact
+                      />
+                    );
+                  })}
                 </View>
               ))}
             </View>
