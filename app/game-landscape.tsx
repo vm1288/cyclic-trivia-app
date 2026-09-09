@@ -840,7 +840,36 @@ export default function GameLandscapeScreen() {
         ? TYPE_ID.RollDiceForTurnClient
         : null;
 
-  const canRoll = rollAction !== null && connState === 'connected';
+  /**
+   * ⚠️ Lượt THƯỜNG phải kiểm THÊM `isMyTurn`. `CurrentAction` là điều kiện CẦN,
+   * không phải điều kiện ĐỦ.
+   *
+   * Lý do rất cụ thể: **không ai xoá `CurrentAction` của người vừa bị bỏ lượt.**
+   * `TurnCompleteHandler.cs:136` chỉ đặt `game.CurrentAction = DoNothing` (của
+   * VÁN), còn `NextTurnHandler.cs:113` chỉ đặt `nextPlayer.CurrentAction =
+   * Start` (của NGƯỜI KẾ). Người vừa mất lượt giữ nguyên `RollDice` trong
+   * `Players`, nên nạp lại state cũng KHÔNG cứu - nút vẫn sáng.
+   *
+   * Đo thật 2026-09-09 (TEST_CASES mục K12, ca KA-3): mất mạng 60 giây đúng đầu
+   * lượt -> `RollDiceCountDown` bỏ lượt của Tony lúc 17:41:00, lượt sang Bot,
+   * mà app vẫn để nút sáng. Bấm thì gói tin TỚI server thật:
+   *
+   *   RolldiceHandler player by turn Bot     <- người tới lượt
+   *   RolldiceHandler player by AuthTony     <- người bấm
+   *
+   * Server chặn đúng (chốt `CurrentTurnId != LastTurnId`, cả phiên không sinh
+   * một xúc xắc nào), nên đây là lỗi GIAO DIỆN chứ không phải lỗi luật - nhưng
+   * người chơi bấm mà không thấy gì xảy ra thì tưởng app treo.
+   *
+   * ⚠️ CHỈ áp cho lượt thường. Vòng đua "ai đi trước" (`RollDiceForTurn`) thì
+   * `CurrentTurnPlayerId` là `Guid.Empty` - chưa xác định ai đi trước, mà mọi
+   * người đều phải tung. Gộp chung một điều kiện là khoá chết vòng đua trên bàn
+   * dùng xúc xắc.
+   */
+  const canRoll =
+    rollAction !== null &&
+    connState === 'connected' &&
+    (rollAction !== TYPE_ID.RollDice || isMyTurn);
 
   /*
    * Chặn bấm dồn 2 giây, chép theo `canTriggerRollDice` của bản web.
