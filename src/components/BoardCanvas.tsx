@@ -74,9 +74,34 @@ import { useT } from '../i18n/I18nProvider';
  * ngoài đã khoá đúng tỉ lệ của ViewBox.
  */
 
+/**
+ * Một nước đi ĐANG DIỄN, tới từ gói 53 `MoveDirectionSelected`.
+ *
+ * ⚠️ Cần cái này vì `CurrentStepIndex` trong snapshot CHƯA đổi lúc quân bắt đầu
+ * đi: server chỉ ghi ô mới ở `HostActionDone`, tức SAU khi máy khách báo diễn
+ * xong. Không có nó thì quân chỉ "nhảy cóc" sang ô mới ở lần nạp state kế tiếp,
+ * và người chơi không bao giờ thấy nó đi.
+ */
+export type PendingMove = {
+  playerId: string;
+  /** Số ô phải đi (mặt xúc xắc). */
+  steps: number;
+  /** `clockwise` -> tiến, `anticlockwise` -> lùi. */
+  direction: string;
+  /**
+   * Ô người này ĐANG đứng lúc nước đi bắt đầu.
+   *
+   * Dùng để biết khi nào snapshot đã bắt kịp mà xoá `pendingMove` - xem
+   * `game-landscape`. `BoardCanvas` không đọc trường này.
+   */
+  fromStepIndex: number;
+};
+
 type Props = {
   board: GameBoard;
   players: GamePlayer[];
+  /** Nước đi đang diễn; `null` = không có ai đang đi. */
+  pendingMove?: PendingMove | null;
   /** Quân của người đang tới lượt vẽ to hơn. */
   currentTurnPlayerId: string;
   /**
@@ -255,7 +280,13 @@ const CHAR_HEIGHT = 72;
 const HOP_RISE = 0.55;
 
 /** Thời gian nhảy QUA MỘT ô. */
-const HOP_MS = 320;
+/**
+ * Thời gian đi qua MỘT ô.
+ *
+ * Xuất ra ngoài vì `game-landscape` phải biết nước đi dài bao lâu để chờ diễn
+ * xong rồi mới gửi `HostActionDone` - xem ghi chú ở chỗ nhận gói 53.
+ */
+export const HOP_MS = 320;
 
 /**
  * Nháy mắt: đảo giữa khung `-0` (mắt mở) và `-1` (mắt nhắm).
@@ -300,6 +331,7 @@ function BoardCharacter({
   aspect,
   footRatio,
   hasBlink,
+  walkSigned,
 }: {
   player: GamePlayer;
   /** Toạ độ tâm từng ô theo ĐÚNG thứ tự đi vòng, đơn vị px của khung. */
@@ -321,6 +353,17 @@ function BoardCharacter({
   footRatio: number;
   /** `{id}-1.png` có phải khung mắt nhắm THẬT không. False thì đừng tải. */
   hasBlink: boolean;
+  /**
+   * Đi ĐÚNG DẤU của `targetIndex`, cho phép LÙI.
+   *
+   * ⚠️ Mặc định (false) luôn đi TIẾN và vòng qua cuối bàn - cần thế cho nước đi
+   * lấy từ snapshot, vì ở đó chỉ biết ô đích chứ không biết đi đường nào, mà
+   * nhảy thẳng từ ô cuối về ô đầu là nhân vật bay ngang giữa bàn cờ.
+   *
+   * Nhưng nước đi THẬT có hướng: `anticlockwise` là LÙI. Ép nó đi tiếp vòng
+   * quanh bàn thì vừa sai vừa lâu (n-steps ô thay vì steps ô).
+   */
+  walkSigned?: boolean;
 }) {
   const progress = useSharedValue(targetIndex);
   const previous = useRef(targetIndex);
@@ -339,13 +382,14 @@ function BoardCharacter({
      */
     const n = path.length;
     const forward = ((to - from) % n + n) % n;
+    const delta = walkSigned ? to - from : forward;
 
     progress.value = from;
-    progress.value = withTiming(from + forward, {
-      duration: HOP_MS * Math.max(1, forward),
+    progress.value = withTiming(from + delta, {
+      duration: HOP_MS * Math.max(1, Math.abs(delta)),
       easing: Easing.linear,
     });
-  }, [targetIndex, path.length, progress]);
+  }, [targetIndex, path.length, progress, walkSigned]);
 
   /*
    * Nháy mắt, chạy mãi và ĐỘC LẬP với nước đi.
@@ -469,6 +513,7 @@ function BoardCharacter({
  */
 function Characters({
   players,
+  pendingMove,
   currentTurnPlayerId,
   characterInfo,
   centres,
@@ -480,6 +525,7 @@ function Characters({
   demoFrom,
 }: {
   players: GamePlayer[];
+  pendingMove?: PendingMove | null;
   currentTurnPlayerId: string;
   /**
    * Bộ nhân vật của board này (`Board.Characters`), để tra tỉ lệ ảnh.
@@ -565,7 +611,20 @@ function Characters({
     const isDemo = demoFrom !== null && player.Id === demoPlayerId;
     const home = order.indexOf(player.CurrentStepIndex);
     const base = home >= 0 ? home : 0;
-    return isDemo ? base + demoStep : base;
+    if (isDemo) return base + demoStep;
+
+    /*
+     * Đang có nước đi diễn dở thì đi từ ô CŨ tới ô mới.
+     *
+     * `base` vẫn là ô cũ (snapshot chưa đổi), nên cộng/trừ số ô ra đúng đích.
+     * Khi state nạp lại xong, `base` thành ô mới và `pendingMove` được xoá -
+     * lúc đó hai giá trị bằng nhau nên không có cú nhảy thừa nào.
+     */
+    if (pendingMove && pendingMove.playerId === player.Id) {
+      const sign = pendingMove.direction === 'anticlockwise' ? -1 : 1;
+      return base + sign * pendingMove.steps;
+    }
+    return base;
   });
 
   const counts = new Map<number, number>();
@@ -594,6 +653,7 @@ function Characters({
             charHeight={charHeight * scale}
             scale={scale}
             isTurn={player.Id === currentTurnPlayerId}
+            walkSigned={!!pendingMove && pendingMove.playerId === player.Id}
             lane={lane}
             laneCount={counts.get(key) ?? 1}
             aspect={characterInfo.get(player.CharacterId)?.Aspect ?? 0.8}
@@ -626,7 +686,7 @@ function Characters({
  */
 const CROP = { left: 0.012, right: 0.012, top: 0.09, bottom: 0.025 };
 
-function OvalBoard({ board, players, currentTurnPlayerId, demoJump }: Props) {
+function OvalBoard({ board, players, currentTurnPlayerId, demoJump, pendingMove }: Props) {
   // Tra cứu nhanh theo `CharacterId`; `Board.Characters` do server cấp.
   const characterInfo = useMemo(
     () => new Map((board.Characters ?? []).map((c) => [c.Id, c])),
@@ -871,6 +931,7 @@ function OvalBoard({ board, players, currentTurnPlayerId, demoJump }: Props) {
         <View pointerEvents="none" style={[styles.charLayer, { width, height }]}>
           <Characters
             players={players}
+            pendingMove={pendingMove}
             currentTurnPlayerId={currentTurnPlayerId}
             characterInfo={characterInfo}
             centres={centres}
@@ -966,7 +1027,7 @@ function rectangleRing(hozStep: number, verStep: number): RectSlot[] {
   return slots;
 }
 
-function RectangleBoard({ board, players, currentTurnPlayerId, demoJump }: Props) {
+function RectangleBoard({ board, players, currentTurnPlayerId, demoJump, pendingMove }: Props) {
   // Tra cứu nhanh theo `CharacterId`; `Board.Characters` do server cấp.
   const characterInfo = useMemo(
     () => new Map((board.Characters ?? []).map((c) => [c.Id, c])),
@@ -1179,6 +1240,7 @@ function RectangleBoard({ board, players, currentTurnPlayerId, demoJump }: Props
           <View pointerEvents="none" style={[styles.charLayer, { width, height }]}>
             <Characters
               players={players}
+              pendingMove={pendingMove}
               currentTurnPlayerId={currentTurnPlayerId}
               characterInfo={characterInfo}
               centres={layers.centres}

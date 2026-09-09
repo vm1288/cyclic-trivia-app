@@ -157,6 +157,15 @@ export const TYPE_ID = {
   HostDoneRollDice: 51,
   AskMoveDirection: 52,
   MoveDirectionSelected: 53,
+  /**
+   * "Quân cờ đã đi tới nơi" - máy khách gửi SAU khi diễn xong hoạt ảnh nước đi.
+   *
+   * ⚠️ Đây là mắt xích app từng THIẾU HẲN. Bản web để bàn cờ gửi nó
+   * (`jumpCharacterThroughPath` xong mới gọi), còn app không gửi gì, nên server
+   * phải tự chạy `HostActionDone` sau 2 giây và bước kế tiếp đè lên lúc quân
+   * còn đang đi - người chơi không bao giờ thấy nó nhúc nhích.
+   */
+  HostActionDone: 23,
   PlayerBattle: 54,
   PlayerBattleInstruction: 55,
   GameState: 62,

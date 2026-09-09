@@ -21,7 +21,7 @@ import {
   type TurnCard,
   type TurnQuestionPayload,
 } from '../src/api/game';
-import { BoardCanvas } from '../src/components/BoardCanvas';
+import { BoardCanvas, HOP_MS, type PendingMove } from '../src/components/BoardCanvas';
 import { CardChoiceOverlay } from '../src/components/CardChoiceOverlay';
 import { DiceRollOverlay } from '../src/components/DiceRollOverlay';
 import { MoveDirectionOverlay } from '../src/components/MoveDirectionOverlay';
@@ -187,6 +187,15 @@ export default function GameLandscapeScreen() {
    * tin battle) mà `/api/game/{id}/state` không có.
    */
   const [direction, setDirection] = useState<DirectionPacket | null>(null);
+
+  /**
+   * Nước đi ĐANG DIỄN của một người bất kỳ, tới qua gói 53.
+   *
+   * ⚠️ Giữ cho tới khi snapshot bắt kịp, đừng xoá theo đồng hồ. `CurrentStepIndex`
+   * chỉ đổi sau khi server chạy `HostActionDone`; xoá sớm là quân bị kéo NGƯỢC
+   * về ô cũ rồi mới nhảy tới - nhìn như giật hai lần.
+   */
+  const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
 
   /**
    * Bước mời dùng thẻ bài, tới qua gói 16 với `Action = 5`.
@@ -406,6 +415,48 @@ export default function GameLandscapeScreen() {
        * ⚠️ Không trả lời là KẸT HẲN. `BoardStepWatchdog` chỉ chạy thay phần việc
        * của BÀN CỜ; bước này là việc của người chơi, không ai làm hộ.
        */
+      /*
+       * ============================================================
+       * NƯỚC ĐI CỦA QUÂN CỜ - gói 53 `MoveDirectionSelected`
+       * ============================================================
+       *
+       * Server phát cho MỌI người chơi, nên ai cũng thấy quân của người tới lượt
+       * đi. Bản web không cần thế vì cả phòng nhìn chung một bàn cờ; app thì mỗi
+       * máy vẽ một bàn riêng.
+       *
+       * ⚠️ Nguyên tắc của cả luồng: **diễn xong một hành động rồi mới đi tiếp.**
+       * Server đang chờ `HostActionDone` - `MoveDirectionSelectedHandler` arm sẵn
+       * lưới đó với 8 giây khi người chơi còn kết nối. Máy của NGƯỜI TỚI LƯỢT
+       * phải báo xong; máy người khác chỉ diễn, không báo gì (báo hộ là server
+       * ăn hai lần).
+       */
+      if (packet.typeID === TYPE_ID.MoveDirectionSelected) {
+        const moverId = typeof packet.PlayerId === 'string' ? packet.PlayerId : '';
+        const steps = typeof packet.totalIndex === 'number' ? packet.totalIndex : 0;
+        const dir = typeof packet.direction === 'string' ? packet.direction : 'clockwise';
+        if (!moverId || steps <= 0) return;
+
+        const moverNow = snapshot?.Players?.find((pl) => pl.Id === moverId);
+        setPendingMove({
+          playerId: moverId,
+          steps,
+          direction: dir,
+          fromStepIndex: moverNow?.CurrentStepIndex ?? -1,
+        });
+
+        const isMine = !!seat && moverId.toLowerCase() === seat.playerId.toLowerCase();
+        /* Dư 400ms cho máy yếu; `HOP_MS` là thời gian đi MỘT ô. */
+        const walkMs = HOP_MS * steps + 400;
+        setTimeout(() => {
+          if (isMine) {
+            void connection.current?.send(TYPE_ID.HostActionDone, {
+              TurnId: turnId.current || snapshot?.Game.CurrentTurnId || '',
+            });
+          }
+        }, walkMs);
+        return;
+      }
+
       if (packet.typeID === TYPE_ID.ActionDone) {
         if (packet.IsPendingAction) return;
 
@@ -1220,6 +1271,20 @@ export default function GameLandscapeScreen() {
    * ⚠️ GUID rỗng là **Pot Luck** (server tự bốc chủ đề + điểm ×2), không phải
    * giá trị hỏng - xem `YourChoiceOverlay`.
    */
+  /*
+   * Xoá `pendingMove` khi snapshot ĐÃ bắt kịp, không xoá theo đồng hồ.
+   *
+   * ⚠️ Xoá sớm là quân bị kéo NGƯỢC về ô cũ rồi mới nhảy tới - giật hai lần.
+   * Mốc chắc chắn duy nhất là `CurrentStepIndex` của chính người đó đã khác ô
+   * xuất phát, tức server đã chạy `HostActionDone` và state mới đã về.
+   */
+  useEffect(() => {
+    if (!pendingMove) return;
+    const mover = (snapshot?.Players ?? []).find((pl) => pl.Id === pendingMove.playerId);
+    if (!mover) return;
+    if (mover.CurrentStepIndex !== pendingMove.fromStepIndex) setPendingMove(null);
+  }, [snapshot, pendingMove]);
+
   const pickCategory = (questionCategoryId: string) => {
     setChoice(null);
     void connection.current?.send(TYPE_ID.YourChoice, { QuestionCategoryId: questionCategoryId });
@@ -1550,6 +1615,7 @@ export default function GameLandscapeScreen() {
               <BoardCanvas
                 board={board}
                 players={players}
+                pendingMove={pendingMove}
                 currentTurnPlayerId={
                   currentTurnPlayerId
                 }
