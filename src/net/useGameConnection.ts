@@ -44,6 +44,13 @@ export function useGameConnection(options: {
    * nó trong `catch` là tự bịt đường re-arm. Đã dính đúng vậy.
    */
   const mounted = useRef(true);
+  /**
+   * Đang có một `restart()` chạy dở hay chưa.
+   *
+   * Dùng `ref` chứ không phải state: đây là cái chốt chống gọi chồng, không phải
+   * thứ để vẽ lại màn hình. Xem ghi chú ở chỗ dùng nó.
+   */
+  const restarting = useRef(false);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -113,7 +120,27 @@ export function useGameConnection(options: {
     let alive = true;
     const retry = setInterval(() => {
       if (!alive) return;
-      void connection.current?.restart().catch(() => {
+
+      /*
+       * ⚠️ MỖI LÚC CHỈ ĐƯỢC MỘT `restart()` ĐANG CHẠY.
+       *
+       * Không có chốt này thì cứ 5 giây lại bắn thêm một `restart()` nữa, bất kể
+       * lần trước xong chưa. Hai lời gọi chồng nhau là `stop()` của cái sau đè
+       * lên `start()` của cái trước, và SignalR ném đúng câu:
+       *
+       *   "Failed to start the HttpConnection before stop() was called."
+       *
+       * Đo thật 2026-09-09: máy đếm được **390 lỗi** loại này chỉ trong một buổi
+       * test, và tệ hơn nhiều so với chuyện log bẩn - kết nối bị đập đi dựng lại
+       * liên tục nên **GÓI TIN BỊ TRƯỢT**. Máy thật đã mất đúng câu hỏi vòng đua
+       * lúc 09:57:46 vì lỗi này nổ đúng giây đó.
+       */
+      if (restarting.current) return;
+      restarting.current = true;
+
+      void connection.current?.restart().finally(() => {
+        restarting.current = false;
+      }).catch(() => {
         /*
          * ⚠️ PHẢI đưa state về `closed` khi thử hụt, đừng nuốt lặng.
          *
