@@ -29,6 +29,10 @@ import { FlyingReward } from '../src/components/FlyingReward';
 import { QuestionOverlay } from '../src/components/QuestionOverlay';
 import { TurnResultOverlay, type TurnResult } from '../src/components/TurnResultOverlay';
 import { RaceWinnerOverlay } from '../src/components/RaceWinnerOverlay';
+import {
+  TenSecondsChallengeOverlay,
+  type ChallengePhase,
+} from '../src/components/TenSecondsChallengeOverlay';
 import { StageBackground } from '../src/components/StageBackground';
 import { TYPE_ID } from '../src/net/gameConnection';
 import { useGameState } from '../src/net/useGameState';
@@ -120,6 +124,20 @@ const STRIP_HEIGHT = STRIP_BASE_HEIGHT * STRIP_SCALE;
 const ROLL_COOLDOWN_MS = 2000;
 
 /**
+ * Thời lượng nhịp phán quyết của ô 10-SEC CHALLENGE, tính bằng giây.
+ *
+ * Phải khớp `Constants.TenSecondChallenge` bên server - server hẹn giờ theo con
+ * số của nó rồi gửi gói 27 `TenSecondsChallengeFail` khi hết; đồng hồ ở đây chỉ
+ * để người chơi NHÌN. Để lệch thì đồng hồ chạy hết mà nút vẫn bấm được, hoặc
+ * ngược lại.
+ *
+ * ⚠️ **20, KHÔNG phải 10** - dù ô tên là "10-SEC CHALLENGE" và hằng số bên server
+ * tên là `TenSecondChallenge`. Giá trị thật ở `Extensions/Constants.cs:73` là 20.
+ * Đừng "sửa cho đúng tên".
+ */
+const TEN_SECOND_CHALLENGE = 20;
+
+/**
  * Câu hỏi đang hiện, đã gộp về MỘT kiểu.
  *
  * Hai loại tới bằng hai đường khác hẳn nhau - vòng đua qua gói 67 (trường viết
@@ -207,6 +225,20 @@ export default function GameLandscapeScreen() {
    * hoặc gói `TimeoutQuestion` khi có người chốt câu trước mình.
    */
   const [turnResult, setTurnResult] = useState<TurnResult | null>(null);
+
+  /**
+   * Ô 10-SEC CHALLENGE đang mở trên máy NÀY.
+   *
+   * `null` = không dính gì tới mình. Người tới lượt (người BỊ chấm) cũng không có
+   * khung này - họ chỉ ngồi xem, đúng như bản web.
+   */
+  const [challenge, setChallenge] = useState<{
+    phase: ChallengePhase;
+    words: string[];
+    isJudge: boolean;
+    readerNumber: number;
+    totalReaders: number;
+  } | null>(null);
 
   /** Sao / thẻ đang bay từ giữa bàn cờ về chỗ của nó. */
   const [flying, setFlying] = useState<{ id: number; reward: 'star' | CardKey } | null>(null);
@@ -510,6 +542,17 @@ export default function GameLandscapeScreen() {
           return;
         }
 
+        /*
+         * Hết 10 giây mà trọng tài chưa bấm gì - server tự phán là HỎNG và nhờ
+         * máy khách gửi lại giúp. Bản web làm y hệt
+         * (`callFromServerTenSecondsChallengeFail`).
+         */
+        if (fn === 'TenSecondsChallengeFail') {
+          setChallenge(null);
+          void connection.current?.send(TYPE_ID.TenSecondsChallenge, { isPass: false });
+          return;
+        }
+
         if (fn === 'TurnCompleteCustom') {
           void connection.current?.send(TYPE_ID.TurnComplete, {
             TurnId: id,
@@ -529,6 +572,43 @@ export default function GameLandscapeScreen() {
        * mới khép vòng. Bản web làm y hệt (`handleTriggerTimeoutQuestion` gọi
        * `TooLate()` của màn câu hỏi).
        */
+      /*
+       * ============================================================
+       * Ô 10-SEC CHALLENGE
+       * ============================================================
+       *
+       * Gói 42 `TenSecondsChallengeStart` - server chia vai. Chỉ TRỌNG TÀI và
+       * (ở kiểu thử thách "B") những người được chia lời mới nhận gói này;
+       * người tới lượt KHÔNG nhận, họ chỉ ngồi chịu chấm.
+       *
+       * ⚠️ Bấm XONG là gửi LẠI gói 42 với payload RỖNG - xem `onReady` phía
+       * dưới. Không gửi là KẸT VÁN: watchdog `TenSecondsChallengeCountDown`
+       * chỉ được arm bên trong `TenSecondsChallengeStartHandler`.
+       */
+      if (packet.typeID === TYPE_ID.TenSecondsChallengeStart) {
+        setChallenge({
+          phase: 'start',
+          words: Array.isArray(packet.Words) ? (packet.Words as string[]) : [],
+          isJudge: packet.IsJudge === true,
+          readerNumber: typeof packet.ReaderNumber === 'number' ? packet.ReaderNumber : 0,
+          totalReaders: typeof packet.TotalReaders === 'number' ? packet.TotalReaders : 0,
+        });
+        return;
+      }
+
+      /*
+       * Gói 43 `TenSecondsChallengeCountDown` - hết 10 giây, tới lúc phán quyết.
+       * Server chỉ gửi cho ĐÚNG người vừa gửi gói 42 về.
+       */
+      if (packet.typeID === TYPE_ID.TenSecondsChallengeCountDown) {
+        setChallenge((prev) =>
+          prev
+            ? { ...prev, phase: 'judge' }
+            : { phase: 'judge', words: [], isJudge: true, readerNumber: 0, totalReaders: 0 },
+        );
+        return;
+      }
+
       if (packet.typeID === TYPE_ID.TimeoutQuestion) {
         const by = typeof packet.Nickname === 'string' && packet.Nickname ? packet.Nickname : undefined;
         setTurnResult({ kind: 'late', by });
@@ -619,6 +699,10 @@ export default function GameLandscapeScreen() {
   const isMyTurn =
     !!me &&
     currentTurnPlayerId === me.Id;
+
+  /** Tên người TỚI LƯỢT - ô 10-sec cần nó để hỏi "X có làm được không?". */
+  const turnPlayerName =
+    players.find((p) => p.Id === currentTurnPlayerId)?.NickName ?? '';
 
   /*
    * ============================================================
@@ -931,6 +1015,32 @@ export default function GameLandscapeScreen() {
    * ⚠️ Đóng overlay NGAY khi gửi, không đợi server. Hết giờ cũng gửi, với
    * `random` - đúng như bản web. Im lặng là lượt treo.
    */
+  /*
+   * ============================================================
+   * Ô 10-SEC CHALLENGE - hai gói máy này nợ server
+   * ============================================================
+   */
+
+  /**
+   * "Tôi đọc xong rồi" - gửi LẠI gói 42, payload RỖNG.
+   *
+   * ⚠️ Đúng gói 42 chứ không phải gói khác, và payload phải rỗng - bản web gửi
+   * y hệt (`PlayerTenSecondsChallengeStart.Submit`). Chính gói này mới arm
+   * watchdog đếm 10 giây ở server; im lặng là KẸT VÁN.
+   *
+   * Đóng khung NGAY, không đợi server: gói 43 sẽ mở lại khung ở nhịp phán quyết.
+   */
+  const challengeReady = () => {
+    setChallenge(null);
+    void connection.current?.send(TYPE_ID.TenSecondsChallengeStart);
+  };
+
+  /** Phán quyết của trọng tài. Đóng khung ngay khi gửi. */
+  const challengeVerdict = (isPass: boolean) => {
+    setChallenge(null);
+    void connection.current?.send(TYPE_ID.TenSecondsChallenge, { isPass });
+  };
+
   const chooseDirection = (choice: MoveDirection) => {
     setDirection(null);
     void connection.current?.send(TYPE_ID.MoveDirectionSelected, { direction: choice });
@@ -1275,6 +1385,20 @@ export default function GameLandscapeScreen() {
                 durationSeconds={cardStep.duration}
                 onUse={useCard}
                 onSkip={skipCard}
+              />
+            ) : null}
+
+            {challenge ? (
+              <TenSecondsChallengeOverlay
+                phase={challenge.phase}
+                words={challenge.words}
+                isJudge={challenge.isJudge}
+                readerNumber={challenge.readerNumber}
+                totalReaders={challenge.totalReaders}
+                turnPlayerName={turnPlayerName}
+                durationSeconds={TEN_SECOND_CHALLENGE}
+                onReady={challengeReady}
+                onVerdict={challengeVerdict}
               />
             ) : null}
 

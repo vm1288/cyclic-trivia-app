@@ -91,6 +91,31 @@ export const TYPE_ID = {
   TimeoutQuestion: 45,
   /** Xúc xắc của vòng đua "ai đi trước" - KHÁC `RollDice`. */
   RollDiceForTurnClient: 41,
+  /**
+   * ============================================================
+   * Ô 10-SEC CHALLENGE - ba gói, HAI CHIỀU cả ba
+   * ============================================================
+   *
+   * Luật: người tới lượt rơi vào ô `challenge`, server bốc ngẫu nhiên MỘT người
+   * khác làm TRỌNG TÀI (`IsJudge`). Có hai kiểu thử thách:
+   *   - kiểu thường: chỉ trọng tài nhận gói 42, `Words` rỗng
+   *   - kiểu "B":    mỗi người còn lại nhận một phần `Words` để đọc, kèm
+   *                  `ReaderNumber`/`TotalReaders`
+   *
+   * Nhịp đi (chép theo `playerHandlers.js` của bản web):
+   *
+   *   42 về  -> hiện lời/vai trò, người chơi bấm xong thì GỬI LẠI 42 (payload rỗng)
+   *             = "tôi đọc xong rồi, bắt đầu đếm 10 giây"
+   *   43 về  -> hiện hai nút PASS / FAIL cho đúng người vừa gửi 42
+   *   gửi 30 -> `{ isPass }` - phán quyết của trọng tài
+   *
+   * ⚠️ Không gửi lại 42 là **KẸT VÁN**: watchdog
+   * `TenSecondsChallengeCountDown` chỉ được arm BÊN TRONG
+   * `TenSecondsChallengeStartHandler`, tức chỉ sau khi máy khách gửi 42 về.
+   */
+  TenSecondsChallenge: 30,
+  TenSecondsChallengeStart: 42,
+  TenSecondsChallengeCountDown: 43,
   GameStart: 38,
   GameOver: 39,
   /**

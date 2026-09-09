@@ -182,6 +182,23 @@ export const en = {
   'cards.earned': '5 stars! You earned {card}',
   'cards.earnedAny': '5 stars! You earned a card',
 
+  /**
+   * Ô 10-SEC CHALLENGE. `challenge.reader` chỉ hiện ở kiểu thử thách "B", khi
+   * mỗi người được chia một phần lời để đọc.
+   */
+  'challenge.title': '10-SEC CHALLENGE',
+  /** Người đọc thứ mấy - chỉ có ở kiểu thử thách "B". */
+  'challenge.reader': 'You are the {ordinal} person to read.',
+  'challenge.words': 'Your words:',
+  'challenge.readAloud': 'Please read your word out loud!',
+  'challenge.readAloudTurn': 'Please read your word out loud when it is your turn!',
+  'challenge.startWhenReady': 'When ready to start, please tap the button below to start the challenge.',
+  'challenge.startAfterAll': 'Once all players have finished reading their words, tap the button below to start the challenge!',
+  'challenge.start': 'Start',
+  'challenge.verdict': 'Was the attempt at the 10-second Challenge successful?',
+  'challenge.pass': 'Pass',
+  'challenge.fail': 'Fail',
+
   'dice.rolling': 'ROLLING…',
   'dice.rolled': 'YOU ROLLED',
 
@@ -189,15 +206,15 @@ export const en = {
   'result.correct': 'CORRECT!',
   'result.earned': '+{point}',
   'result.wrong': 'WRONG',
-  'result.wrongBody': 'The others can answer now',
-  'result.late': 'Someone was faster',
-  'result.lateBy': '{name} was faster',
+  'result.wrongBody': 'The others are racing to answer correctly',
+  'result.late': 'Too late',
+  'result.lateBy': '{name} got it right first!',
   'result.lateBody': 'This question is closed',
 
   /** Vòng đua xong - câu này hiện giữa bàn cờ, giống bàn cờ của bản web. */
   'race.winner': '{name} is the fastest!',
   'race.winnerYou': 'You are the fastest!',
-  'race.first': 'They take the first turn',
+  'race.first': 'They take the first turn!',
   'race.firstYou': 'You take the first turn',
 
   'direction.title': 'WHICH WAY WILL YOU GO?',
@@ -387,6 +404,18 @@ const vi: Record<TranslationKey, string> = {
   'cards.usedBy': '{name} dùng {card}',
   'cards.earned': 'Đủ 5 sao! Bạn được thưởng {card}',
   'cards.earnedAny': 'Đủ 5 sao! Bạn được thưởng một lá bài',
+
+  'challenge.title': 'THỬ THÁCH 10 GIÂY',
+  'challenge.reader': 'Bạn là người đọc thứ {ordinal}.',
+  'challenge.words': 'Lời của bạn:',
+  'challenge.readAloud': 'Hãy đọc to lời của bạn!',
+  'challenge.readAloudTurn': 'Tới lượt mình thì đọc to lời của bạn nhé!',
+  'challenge.startWhenReady': 'Sẵn sàng thì bấm nút bên dưới để bắt đầu thử thách.',
+  'challenge.startAfterAll': 'Khi mọi người đã đọc xong, bấm nút bên dưới để bắt đầu thử thách!',
+  'challenge.start': 'Bắt đầu',
+  'challenge.verdict': 'Thử thách 10 giây có thành công không?',
+  'challenge.pass': 'Đạt',
+  'challenge.fail': 'Hỏng',
 
   'dice.rolling': 'ĐANG TUNG…',
   'dice.rolled': 'BẠN TUNG ĐƯỢC',
