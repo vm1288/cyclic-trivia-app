@@ -123,19 +123,7 @@ const STRIP_HEIGHT = STRIP_BASE_HEIGHT * STRIP_SCALE;
 /** Chặn bấm xúc xắc dồn - chép theo `canTriggerRollDice` của bản web. */
 const ROLL_COOLDOWN_MS = 2000;
 
-/**
- * Thời lượng nhịp phán quyết của ô 10-SEC CHALLENGE, tính bằng giây.
- *
- * Phải khớp `Constants.TenSecondChallenge` bên server - server hẹn giờ theo con
- * số của nó rồi gửi gói 27 `TenSecondsChallengeFail` khi hết; đồng hồ ở đây chỉ
- * để người chơi NHÌN. Để lệch thì đồng hồ chạy hết mà nút vẫn bấm được, hoặc
- * ngược lại.
- *
- * ⚠️ **20, KHÔNG phải 10** - dù ô tên là "10-SEC CHALLENGE" và hằng số bên server
- * tên là `TenSecondChallenge`. Giá trị thật ở `Extensions/Constants.cs:73` là 20.
- * Đừng "sửa cho đúng tên".
- */
-const TEN_SECOND_CHALLENGE = 20;
+
 
 /**
  * Câu hỏi đang hiện, đã gộp về MỘT kiểu.
@@ -238,6 +226,18 @@ export default function GameLandscapeScreen() {
     isJudge: boolean;
     readerNumber: number;
     totalReaders: number;
+    /** Đề bài - chỉ có ở nhịp `run` (gói 30), và chỉ MÁY CHỦ PHÒNG nhận. */
+    title: string;
+    studyText: string;
+    appendixType: string;
+    challengedName: string;
+    judgeName: string;
+    totalPlayers: number;
+    countdownSeconds: number;
+    /** `PlayerId` của gói 30 - phải gửi lại nguyên vẹn kèm gói 43. */
+    countdownPlayerId: string;
+    /** Máy này có phải TRỌNG TÀI - người được chạy đồng hồ và gửi gói 43 - không. */
+    ownsCountdown: boolean;
   } | null>(null);
 
   /** Sao / thẻ đang bay từ giữa bàn cờ về chỗ của nó. */
@@ -587,11 +587,61 @@ export default function GameLandscapeScreen() {
        */
       if (packet.typeID === TYPE_ID.TenSecondsChallengeStart) {
         setChallenge({
-          phase: 'start',
+          phase: 'assign',
           words: Array.isArray(packet.Words) ? (packet.Words as string[]) : [],
           isJudge: packet.IsJudge === true,
           readerNumber: typeof packet.ReaderNumber === 'number' ? packet.ReaderNumber : 0,
           totalReaders: typeof packet.TotalReaders === 'number' ? packet.TotalReaders : 0,
+          title: '',
+          studyText: '',
+          appendixType: '',
+          challengedName: '',
+          judgeName: '',
+          totalPlayers: 0,
+          countdownSeconds: 10,
+          countdownPlayerId: '',
+          ownsCountdown: false,
+        });
+        return;
+      }
+
+      /*
+       * Gói 30 `TenSecondsChallenge` - ĐỀ BÀI + lệnh chạy đồng hồ.
+       *
+       * ⚠️ Đây là gói của BÀN CỜ: server chỉ gửi cho `game.HostId`, và trong luồng
+       * app thì chủ phòng chính là một cái điện thoại. Bản web xử ở
+       * `handleTenSecondsChallenge` - hiện đề bài rồi chạy `startCountdown(...)`
+       * 10 giây, hết giờ thì gửi gói 43 kèm `PlayerId`.
+       *
+       * ⚠️ Bỏ qua gói này là NGƯỜI CHƠI KHÔNG BIẾT PHẢI LÀM GÌ - toàn bộ đề bài
+       * nằm ở đây, không nằm ở gói 42. Đã dính đúng vậy lần đầu làm ô này.
+       */
+      if (packet.typeID === TYPE_ID.TenSecondsChallenge) {
+        const pid = typeof packet.PlayerId === 'string' ? packet.PlayerId : '';
+        setChallenge({
+          phase: 'run',
+          /*
+           * ⚠️ CHỈ MỘT máy được chạy đồng hồ và gửi gói 43: máy của TRỌNG TÀI,
+           * tức máy có `seat.playerId` trùng `PlayerId` của gói này. Mọi máy khác
+           * cũng nhận gói 30 (để thấy ĐỀ BÀI) nhưng không được đếm - hai máy cùng
+           * gửi 43 là server mở màn phán quyết hai lần.
+           */
+          ownsCountdown: !!seat && pid.toLowerCase() === seat.playerId.toLowerCase(),
+          words: [],
+          isJudge: false,
+          readerNumber: 0,
+          totalReaders: 0,
+          title: typeof packet.Title === 'string' ? packet.Title : '',
+          studyText: typeof packet.StudyText === 'string' ? packet.StudyText : '',
+          appendixType: typeof packet.AppendixType === 'string' ? packet.AppendixType : '',
+          challengedName: typeof packet.Nickname === 'string' ? packet.Nickname : '',
+          judgeName: typeof packet.JudgeNickname === 'string' ? packet.JudgeNickname : '',
+          totalPlayers: typeof packet.TotalPlayers === 'number' ? packet.TotalPlayers : 0,
+          countdownSeconds:
+            typeof packet.CountdownSeconds === 'number' && packet.CountdownSeconds > 0
+              ? packet.CountdownSeconds
+              : 10,
+          countdownPlayerId: pid,
         });
         return;
       }
@@ -604,7 +654,22 @@ export default function GameLandscapeScreen() {
         setChallenge((prev) =>
           prev
             ? { ...prev, phase: 'judge' }
-            : { phase: 'judge', words: [], isJudge: true, readerNumber: 0, totalReaders: 0 },
+            : {
+                phase: 'judge',
+                words: [],
+                isJudge: true,
+                readerNumber: 0,
+                totalReaders: 0,
+                title: '',
+                studyText: '',
+                appendixType: '',
+                challengedName: '',
+                judgeName: '',
+                totalPlayers: 0,
+                countdownSeconds: 10,
+                countdownPlayerId: '',
+                ownsCountdown: false,
+              },
         );
         return;
       }
@@ -1030,9 +1095,25 @@ export default function GameLandscapeScreen() {
    *
    * Đóng khung NGAY, không đợi server: gói 43 sẽ mở lại khung ở nhịp phán quyết.
    */
-  const challengeReady = () => {
+  const challengeStart = () => {
     setChallenge(null);
     void connection.current?.send(TYPE_ID.TenSecondsChallengeStart);
+  };
+
+  /**
+   * Hết 10 giây đếm ngược -> gửi gói 43, y như bàn cờ web làm cuối
+   * `startCountdown()`.
+   *
+   * ⚠️ `PlayerId` phải là cái server gửi kèm gói 30, KHÔNG phải id của máy này:
+   * `TenSecondsChallengeCountDownHandler` dùng nó để biết gửi màn phán quyết cho
+   * ai. Gửi sai id là trọng tài không bao giờ thấy nút Pass/Fail.
+   */
+  const challengeCountdownDone = () => {
+    const owns = challenge?.ownsCountdown ?? false;
+    const pid = challenge?.countdownPlayerId ?? '';
+    setChallenge(null);
+    if (!owns) return;
+    void connection.current?.send(TYPE_ID.TenSecondsChallengeCountDown, { PlayerId: pid });
   };
 
   /** Phán quyết của trọng tài. Đóng khung ngay khi gửi. */
@@ -1395,9 +1476,16 @@ export default function GameLandscapeScreen() {
                 isJudge={challenge.isJudge}
                 readerNumber={challenge.readerNumber}
                 totalReaders={challenge.totalReaders}
-                turnPlayerName={turnPlayerName}
-                durationSeconds={TEN_SECOND_CHALLENGE}
-                onReady={challengeReady}
+                title={challenge.title}
+                studyText={challenge.studyText}
+                appendixType={challenge.appendixType}
+                /* Rỗng ở nhịp `assign` thì lùi về tên người tới lượt. */
+                challengedName={challenge.challengedName || turnPlayerName}
+                judgeName={challenge.judgeName}
+                totalPlayers={challenge.totalPlayers}
+                countdownSeconds={challenge.countdownSeconds}
+                onStart={challengeStart}
+                onCountdownDone={challengeCountdownDone}
                 onVerdict={challengeVerdict}
               />
             ) : null}
