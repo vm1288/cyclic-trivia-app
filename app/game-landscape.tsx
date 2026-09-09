@@ -485,6 +485,27 @@ export default function GameLandscapeScreen() {
         if (packet.IsPendingAction) return;
 
         /*
+         * ⚠️ DỌN SẠCH KHUNG CŨ TRƯỚC KHI MỞ KHUNG MỚI.
+         *
+         * Bản web làm điều này ở tầng khung: `showBottomComponent()` gọi
+         * `removeAllComponents()` rồi mới nạp component kế tiếp
+         * (`wwwroot/js/player.js:373`). App thì mỗi khung là một state riêng, nên
+         * không dọn là chúng CHỒNG LÊN NHAU.
+         *
+         * Tony bắt được đúng lỗi này 2026-09-09: ván đã chạy tới bước câu hỏi hết
+         * giờ rồi mà khung YOUR CHOICE VẪN CÒN trên màn. Xảy ra rõ nhất khi
+         * watchdog chạy bước hộ ở server - server đi tiếp, nhưng máy khách chưa
+         * bao giờ được bảo "đóng cái đang mở".
+         *
+         * Đặt ở đây vì gói 16 là CỬA DUY NHẤT server dùng để giao việc kế tiếp:
+         * dọn một chỗ này là phủ mọi bước.
+         */
+        setChoice(null);
+        setChallenge(null);
+        setDirection(null);
+        setCardStep(null);
+
+        /*
          * ⚠️ TRƯỚC câu hỏi còn một bước nữa: server mời dùng thẻ bài
          * (`ShowCardsBeforeSubCategoryOrQuestion`, Action 5) kèm danh sách bài
          * đang cầm. App chưa có màn dùng bài, nên BỎ QUA bằng đúng gói mà bản
