@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ackFlow, CASE_ACTION, GAME_SETUP } from '../src/api/game';
+import { ackFlow, isGameLive } from '../src/api/game';
 import { TYPE_ID } from '../src/net/gameConnection';
 import { useGameState } from '../src/net/useGameState';
 import { lobbyColors, PlayerRow } from '../src/components/LobbyParts';
@@ -88,19 +88,8 @@ export default function WaitingScreen() {
   const joined = seats.filter((p) => p.IsSetupNickName).length;
   const total = snapshot?.Game.NumberOfPlayers ?? seats.length;
 
-  /*
-   * Ván đã bắt đầu chưa.
-   *
-   * Hai tín hiệu khác nhau, cần cả hai:
-   *   - CurrentAction = QuestionForTurn -> vòng đua "ai đi trước" ĐANG chạy
-   *   - GameSetup = Started             -> vòng đua đã có người thắng, vào lượt
-   *
-   * Chỉ nhìn `GameSetup` thì suốt vòng đua màn hình vẫn nói "đang chờ", trong
-   * khi điện thoại người chơi lẽ ra đang phải hiện câu hỏi.
-   */
-  const racing = snapshot?.Game.CurrentAction === CASE_ACTION.QuestionForTurn;
-  const started = snapshot?.Game.GameSetup === GAME_SETUP.Started;
-  const live = racing || started;
+  /* Phép thử "ván đã vào cuộc chưa" nằm ở `isGameLive` - màn Home dùng chung. */
+  const live = snapshot ? isGameLive(snapshot.Game) : false;
 
   /*
    * Ván đã chạy -> sang màn bàn cờ.

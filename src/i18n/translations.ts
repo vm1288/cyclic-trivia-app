@@ -23,6 +23,8 @@ export const en = {
   'home.register': 'REGISTER GAME',
   'home.resume': 'RESUME GAME',
   /** Dòng phụ dưới nút tiếp tục ván: đã có mấy người vào trên tổng số, và thể thức. */
+  /* Ván đang chơi dở - không có số người/thời lượng vì lúc này không hỏi tới. */
+  'home.resumeInGame': 'Game in progress · tap to rejoin',
   'home.resumeMinutes': '{joined}/{players} joined · {minutes} min',
   'home.resumeLeaderboard': '{joined}/{players} joined · Leaderboard',
   'home.startAnother': 'Start a different game',
@@ -280,6 +282,7 @@ const vi: Record<TranslationKey, string> = {
   'home.newGame': 'TẠO VÁN MỚI',
   'home.register': 'ĐĂNG KÝ MÁY',
   'home.resume': 'TIẾP TỤC VÁN',
+  'home.resumeInGame': 'Ván đang chơi dở · chạm để vào lại',
   'home.resumeMinutes': '{joined}/{players} người · {minutes} phút',
   'home.resumeLeaderboard': '{joined}/{players} người · Leaderboard',
   'home.startAnother': 'Tạo ván khác',

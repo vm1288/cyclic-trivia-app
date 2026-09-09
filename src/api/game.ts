@@ -499,6 +499,25 @@ export function assetUrl(raw: string): string {
  */
 export const GAME_SETUP = { Started: 0, Instruction: 1, SetNickname: 2 } as const;
 
+/**
+ * Ván đã thật sự vào cuộc chưa (khác với "còn đang ở phòng chờ").
+ *
+ * ⚠️ PHẢI xem CẢ HAI tín hiệu, thiếu một cái là sai:
+ *
+ *   - `CurrentAction === QuestionForTurn` -> vòng đua "ai đi trước" ĐANG chạy
+ *   - `GameSetup === Started`             -> vòng đua đã có người thắng, vào lượt
+ *
+ * Chỉ nhìn `GameSetup` thì suốt vòng đua ván vẫn bị coi là "chưa bắt đầu",
+ * trong khi điện thoại lẽ ra đang phải hiện câu hỏi. Còn chỉ nhìn
+ * `CurrentAction` thì hết vòng đua là mất tín hiệu.
+ *
+ * Để ở đây chứ không viết lại tại từng màn: `waiting.tsx` và `index.tsx` đều
+ * cần đúng phép thử này, mà hai bản chép tay thì sớm muộn cũng lệch nhau.
+ */
+export function isGameLive(game: { CurrentAction: number; GameSetup: number }): boolean {
+  return game.CurrentAction === CASE_ACTION.QuestionForTurn || game.GameSetup === GAME_SETUP.Started;
+}
+
 /** `CaseAction` ở server (`Hubs/PacketType.cs`). Chỉ khai báo cái app đang dùng. */
 export const CASE_ACTION = {
   /** Tới lượt, được tung xúc xắc. */

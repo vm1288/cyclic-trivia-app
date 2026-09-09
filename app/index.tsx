@@ -18,7 +18,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { getCurrentGame } from '../src/api/game';
+import { getCurrentGame, getGameState, isGameLive } from '../src/api/game';
 import { useConfirm } from '../src/components/ConfirmDialog';
 import { GlowDivider } from '../src/components/GlowDivider';
 import { NeonButton } from '../src/components/NeonButton';
@@ -33,6 +33,7 @@ import { StageBackground } from '../src/components/StageBackground';
 import { SwitchGameSheet } from '../src/components/SwitchGameSheet';
 import { useT } from '../src/i18n/I18nProvider';
 import { useLicense } from '../src/session/LicenseSession';
+import { usePlayer } from '../src/session/PlayerSession';
 import { neon, tagline, text } from '../src/theme/colors';
 
 /**
@@ -65,6 +66,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { width, height } = useWindowDimensions();
   const license = useLicense();
+  const player = usePlayer();
   const t = useT();
   const confirm = useConfirm();
 
@@ -84,6 +86,20 @@ export default function HomeScreen() {
   type OpenGame = { id: string; players: number; minutes: number; joined: number };
   const [openGame, setOpenGame] = useState<OpenGame | null>(null);
   const [switchOpen, setSwitchOpen] = useState(false);
+
+  /**
+   * Ghế của máy này trong một ván ĐANG CHƠI DỞ, nếu có.
+   *
+   * ⚠️ Đây là đường về DUY NHẤT cho người chơi khách. Đo trên máy thật
+   * 2026-09-09 (TEST_CASES mục K10, ca KL-5): giết app giữa ván rồi mở lại thì
+   * màn này về trắng, còn nút RESUME thì dẫn về phòng mà MÁY NÀY TỪNG LÀM CHỦ -
+   * kể cả một phòng đã start xong và bỏ hoang, thả thẳng vào LOBBY còn nguyên
+   * nút START GAME bấm được (ca K-A4). Người chơi khách phải JOIN + gõ lại mã
+   * phòng mới vào lại được, dù server vẫn giữ đúng ghế cho họ.
+   *
+   * Hai lỗ hổng đó là K-A3 và K-A4. Chỗ hỏng nằm ở màn này, không ở server.
+   */
+  const [liveSeatGameId, setLiveSeatGameId] = useState<string | null>(null);
 
   /**
    * Hỏi SERVER xem có ván nào đang mở không - server là nguồn sự thật, vì id
@@ -139,6 +155,58 @@ export default function HomeScreen() {
     }, [session, license]),
   );
 
+  /**
+   * Ghế đã lưu có còn thuộc một ván đang chạy không.
+   *
+   * Hỏi `/api/game/{id}/state` - endpoint này KHÔNG cần token, nên dùng được cả
+   * cho người chơi khách (họ không có license, `getCurrentGame` phía trên bỏ
+   * qua họ hoàn toàn).
+   *
+   * ⚠️ Ba nhánh, đừng gộp:
+   *   - gọi hỏng vì MẠNG  -> giữ nguyên, KHÔNG xoá ghế. Xoá ghế lúc mạng chập
+   *     là cắt đứt đường về của người đang chơi dở, đúng cái lỗi này định vá.
+   *   - ván không còn / đã kết thúc -> xoá ghế, để lần sau khỏi hỏi lại mãi.
+   *   - ván còn nhưng CHƯA vào cuộc -> không phải việc của nút này; `waiting`
+   *     và `lobby` lo, nên chỉ cần không bật nút.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+
+      (async () => {
+        const seat = player.status === 'ready' ? player.seat : null;
+        if (!seat) {
+          if (alive) setLiveSeatGameId(null);
+          return;
+        }
+
+        const state = await getGameState(seat.gameId);
+        if (!alive) return;
+
+        if (!state.isSuccess) {
+          /* 404 = ván không còn; lỗi mạng thì giữ nguyên và thử lại lần focus sau. */
+          if (state.kind === 'http') {
+            setLiveSeatGameId(null);
+            void player.clearSeat();
+          }
+          return;
+        }
+
+        if (state.Game.IsGameOver) {
+          setLiveSeatGameId(null);
+          void player.clearSeat();
+          return;
+        }
+
+        setLiveSeatGameId(isGameLive(state.Game) ? seat.gameId : null);
+      })();
+
+      return () => {
+        alive = false;
+      };
+    }, [player]),
+  );
+
   async function confirmStartAnother() {
     const ok = await confirm({
       title: t('home.startAnotherTitle'),
@@ -174,16 +242,19 @@ export default function HomeScreen() {
    *   đã đăng ký, không ván → NEW GAME
    *   đang có ván mở        → RESUME GAME (+ dòng phụ, + link "tạo ván khác")
    */
-  const firstButton = !activated
-    ? { key: 'home.register' as const, Icon: LockIcon, href: '/register' as const }
-    : openGame
-      ? { key: 'home.resume' as const, Icon: NewGameIcon, href: '/lobby' as const }
-      : { key: 'home.newGame' as const, Icon: NewGameIcon, href: '/new-game' as const };
+  const firstButton = liveSeatGameId
+    ? { key: 'home.resume' as const, Icon: NewGameIcon, href: '/game-landscape' as const }
+    : !activated
+      ? { key: 'home.register' as const, Icon: LockIcon, href: '/register' as const }
+      : openGame
+        ? { key: 'home.resume' as const, Icon: NewGameIcon, href: '/lobby' as const }
+        : { key: 'home.newGame' as const, Icon: NewGameIcon, href: '/new-game' as const };
 
   // `players === 0` = đang dùng bản dự phòng lúc mất mạng, chưa biết chi tiết
   // ván -> bỏ dòng phụ thay vì hiện "0 người".
-  const resumeDetail =
-    openGame && openGame.players > 0
+  const resumeDetail = liveSeatGameId
+    ? t('home.resumeInGame')
+    : openGame && openGame.players > 0
       ? openGame.minutes > 0
         ? t('home.resumeMinutes', {
             joined: openGame.joined,
@@ -282,9 +353,20 @@ export default function HomeScreen() {
               Icon={firstButton.Icon}
               color={neon.orange}
               onPress={() =>
-                openGame
-                  ? router.push({ pathname: '/lobby', params: { gameId: openGame.id } })
-                  : router.push(firstButton.href)
+                /*
+                 * ⚠️ Ván ĐANG CHƠI DỞ phải được xét TRƯỚC `openGame`.
+                 *
+                 * `openGame` đến từ license, tức "phòng máy này làm chủ" - và nó
+                 * luôn dẫn về `/lobby`. Chủ phòng chết app giữa ván mà xét
+                 * `openGame` trước thì rơi vào lobby của chính ván đang chạy,
+                 * còn nguyên nút START GAME (ca K-A4). Xét ghế trước thì cả chủ
+                 * phòng lẫn khách đều về thẳng bàn cờ.
+                 */
+                liveSeatGameId
+                  ? router.push('/game-landscape')
+                  : openGame
+                    ? router.push({ pathname: '/lobby', params: { gameId: openGame.id } })
+                    : router.push(firstButton.href)
               }
             />
 
