@@ -28,13 +28,25 @@ import { text } from '../theme/colors';
 
 export type TurnResult =
   /** Mình trả lời đúng. */
-  | { kind: 'correct'; point: number; earnedStar: boolean }
+  | { kind: 'correct'; point: number; earnedStar: boolean; rollAgain?: 2 | 3 }
   /** Mình trả lời sai. */
   | { kind: 'wrong' }
+  /** Mình hết giờ, không kịp trả lời. */
+  | { kind: 'timeout' }
   /** Có người chốt câu trước mình. */
   | { kind: 'late'; by?: string };
 
-export function TurnResultOverlay({ result }: { result: TurnResult }) {
+export function TurnResultOverlay({
+  result,
+  /** Tên người vừa trả lời - bản web luôn nêu tên, không nói trống không. */
+  name,
+  /** "runs" / "goals" / "points" tuỳ bàn - xem `MoveDirectionOverlay`. */
+  unit,
+}: {
+  result: TurnResult;
+  name: string;
+  unit: string;
+}) {
   const t = useT();
 
   const enter = useSharedValue(0);
@@ -51,25 +63,41 @@ export function TurnResultOverlay({ result }: { result: TurnResult }) {
   const tone =
     result.kind === 'correct'
       ? { line: boardColors.green, tint: 'rgba(6,54,22,0.96)' }
-      : result.kind === 'wrong'
+      : result.kind === 'wrong' || result.kind === 'timeout'
         ? { line: boardColors.red, tint: 'rgba(58,8,16,0.96)' }
         : { line: boardColors.amber, tint: 'rgba(52,40,4,0.96)' };
 
+  /*
+   * ⚠️ Hai dòng này chép ĐÚNG cấu trúc view của bản web - tên ở dòng trên, chi
+   * tiết ở dòng dưới. Đừng đổi thành khẩu hiệu ngắn kiểu "CORRECT!" / "WRONG":
+   * chữ này team đã thống nhất, người chơi web và app phải đọc cùng một câu.
+   *
+   *   correct -> CorrectAnswer.cshtml       "{name} got it right!" / "{point} runs."
+   *   wrong   -> PlayerWrongAnswer.cshtml   "{name} got it wrong!" / "The others are racing…"
+   *   timeout -> PlayerTimeoutAnswer.cshtml "{name}, you're out of time!" / "The others are racing…"
+   *   late    -> OtherCorrectAnswer.cshtml  "{name}" / "got it right first!"
+   */
   const title =
     result.kind === 'correct'
-      ? t('result.correct')
+      ? t('result.correct', { name })
       : result.kind === 'wrong'
-        ? t('result.wrong')
-        : result.by
-          ? t('result.lateBy', { name: result.by })
-          : t('result.late');
+        ? t('result.wrong', { name })
+        : result.kind === 'timeout'
+          ? t('result.timeout', { name })
+          : t('result.lateBy', { name: result.by ?? '' });
 
   const body =
     result.kind === 'correct'
-      ? t('result.earned', { point: result.point })
-      : result.kind === 'wrong'
+      ? t('result.earned', { point: result.point, unit })
+      : result.kind === 'wrong' || result.kind === 'timeout'
         ? t('result.wrongBody')
-        : t('result.lateBody');
+        : t('result.late');
+
+  /* Bản web hiện thêm dòng này khi người chơi còn lượt tung nữa. */
+  const extra =
+    result.kind === 'correct' && result.rollAgain
+      ? t(result.rollAgain === 3 ? 'result.rollAgainThird' : 'result.rollAgainSecond')
+      : null;
 
   return (
     <View style={styles.root} pointerEvents="none">
@@ -89,6 +117,12 @@ export function TurnResultOverlay({ result }: { result: TurnResult }) {
             <Text style={styles.star}>★</Text>
           ) : null}
         </View>
+
+        {extra ? (
+          <Text style={styles.extra} numberOfLines={1}>
+            {extra}
+          </Text>
+        ) : null}
       </Animated.View>
     </View>
   );
@@ -121,5 +155,6 @@ const styles = StyleSheet.create({
   bodyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   body: { fontSize: 13, fontWeight: '600', color: text.primary, textAlign: 'center' },
   /* Cùng vàng với hàng sao ở ô người chơi, để mắt nối được hai chỗ với nhau. */
+  extra: { fontSize: 13, color: 'rgba(226,232,255,0.85)', textAlign: 'center', marginTop: 2 },
   star: { fontSize: 20, lineHeight: 26, color: '#FFD23F' },
 });

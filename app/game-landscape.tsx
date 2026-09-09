@@ -801,6 +801,24 @@ export default function GameLandscapeScreen() {
   const turnPlayerName =
     players.find((p) => p.Id === currentTurnPlayerId)?.NickName ?? '';
 
+  /**
+   * Đơn vị điểm theo bàn: CricTriv gọi là "runs", FootieTriv là "goals", còn lại
+   * "points". Bản web quyết định trong chính view kết quả (`CorrectAnswer.cshtml`
+   * đọc `boardGameId`), nên khung kết quả của app cũng phải theo.
+   */
+  /*
+   * ⚠️ Đọc từ `board`, KHÔNG phải `snapshot.Board`: `useGameState` tách bàn cờ
+   * ra thành giá trị riêng, `snapshot.Board` để rỗng. Lấy nhầm chỗ thì đơn vị
+   * điểm rơi về "points" trên bàn CricTriv - đã dính đúng vậy 2026-09-09.
+   */
+  const boardGameId = board?.BoardGameId ?? '';
+  const pointUnit =
+    boardGameId === 'crictriv'
+      ? t('unit.runs')
+      : boardGameId === 'footietriv'
+        ? t('unit.goals')
+        : t('unit.points');
+
   /*
    * ============================================================
    * TUNG XÚC XẮC
@@ -1177,6 +1195,9 @@ export default function GameLandscapeScreen() {
 
     answered.current = current.question.Id;
 
+    /* Bản web có màn riêng cho hết giờ (`PlayerTimeoutAnswer.cshtml`). */
+    setTurnResult({ kind: 'timeout' });
+
     const send = current.kind === 'race' ? submitAnswerForTurn : submitAnswer;
     void send(
       { questionId: current.question.Id, answerId: EMPTY_GUID, isTimeout: true },
@@ -1500,7 +1521,14 @@ export default function GameLandscapeScreen() {
               <RaceWinnerOverlay name={raceWinner.name} isMe={raceWinner.isMe} />
             ) : null}
 
-            {turnResult ? <TurnResultOverlay result={turnResult} /> : null}
+            {turnResult ? (
+              <TurnResultOverlay
+                result={turnResult}
+                /* Bản web luôn nêu TÊN người vừa trả lời, không nói trống không. */
+                name={me?.NickName ?? ''}
+                unit={pointUnit}
+              />
+            ) : null}
 
             {cardStep ? (
               <CardChoiceOverlay

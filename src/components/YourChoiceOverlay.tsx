@@ -30,6 +30,13 @@ import { GlowDivider } from './GlowDivider';
 /** GUID rỗng = Pot Luck. Cùng hằng số bản web nhét vào `categoriesWithManual`. */
 const POT_LUCK_ID = '00000000-0000-0000-0000-000000000000';
 
+/** Lưới không được cao quá ngần này hàng - xem ghi chú chỗ tính `cols`. */
+const MAX_ROWS = 3;
+const MIN_COLS = 4;
+const MAX_COLS = 6;
+/** Chừa cho `gap: 8` giữa các cột; trừ thẳng vào bề rộng phần trăm cho gọn. */
+const COL_GAP_PCT = 1.4;
+
 export type ChoiceCategory = {
   QuestionCategoryId: string;
   Title: string;
@@ -53,6 +60,24 @@ export function YourChoiceOverlay({
     ...categories,
     { QuestionCategoryId: POT_LUCK_ID, Title: t('yourChoice.potLuck') },
   ];
+
+  /*
+   * Số cột TÍNH RA từ số ô, để lưới không bao giờ quá `MAX_ROWS` hàng.
+   *
+   * ⚠️ Thứ làm tràn khung KHÔNG phải số hàng mà là CHIỀU CAO Ô CO GIÃN THEO CHỮ:
+   * tên dài ("English County Cricket", "Pot Luck (double points)") xuống 2 dòng
+   * nên ô cao ~85dp thay vì 52dp. Bàn CricTriv có 15 chủ đề + Pot Luck = 16 ô,
+   * xếp 4/hàng thành 4 hàng ~370dp - vượt chỗ trống ~330dp của màn NẰM NGANG.
+   *
+   * Chia 16 ô thành 6 cột là còn 3 hàng, vừa khít mà không phải cắt chữ.
+   * Kẹp trong [MIN_COLS, MAX_COLS] để ván ít chủ đề không ra ô to lố, còn ván
+   * nhiều chủ đề không ra ô hẹp đến mức không đọc được.
+   */
+  const cols = Math.min(
+    MAX_COLS,
+    Math.max(MIN_COLS, Math.ceil(cards.length / MAX_ROWS)),
+  );
+  const cardWidth = `${100 / cols - COL_GAP_PCT}%` as const;
 
   const select = (id: string) => {
     if (locked.current) return;
@@ -96,6 +121,7 @@ export function YourChoiceOverlay({
                 onPress={() => select(c.QuestionCategoryId)}
                 style={({ pressed }) => [
                   styles.card,
+                  { width: cardWidth },
                   isPotLuck && styles.cardPotLuck,
                   isPicked && styles.cardPicked,
                   dimmed && styles.cardDimmed,
@@ -160,12 +186,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 2,
   },
-  /*
-   * Bề ngang tính cho 4 ô một hàng trong khung ~810dp. Bàn CricTriv có 20 ô nhưng
-   * chỉ những ô CÓ category mới vào lưới, cộng thêm ô Pot Luck.
-   */
   card: {
-    width: '23.5%',
+    /* Bề rộng TÍNH RA lúc chạy - xem chỗ tính `cols`. */
     minHeight: 52,
     borderRadius: 10,
     alignItems: 'center',

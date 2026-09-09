@@ -217,13 +217,26 @@ export const en = {
   'dice.rolled': 'YOU ROLLED',
 
   /** Kết quả một câu trả lời, hiện giữa bàn cờ. */
-  'result.correct': 'CORRECT!',
-  'result.earned': '+{point}',
-  'result.wrong': 'WRONG',
+  /*
+   * ⚠️ CHỮ LẤY NGUYÊN VĂN TỪ VIEW CỦA BẢN WEB, đừng tự viết lại:
+   *   Views/Public/Html/CorrectAnswer.cshtml       -> correct / earned
+   *   Views/Public/Html/PlayerWrongAnswer.cshtml   -> wrong / wrongBody
+   *   Views/Public/Html/PlayerTimeoutAnswer.cshtml -> timeout / wrongBody
+   *   Views/Public/Html/OtherCorrectAnswer.cshtml  -> late
+   * Đây là chữ team đã thống nhất - người chơi web và người chơi app phải đọc
+   * cùng một câu.
+   */
+  'result.correct': '{name} got it right!',
+  /** `{unit}` là runs / goals / points tuỳ bàn. Dấu chấm cuối là của bản web. */
+  'result.earned': '{point} {unit}.',
+  /** Hiện thêm khi người chơi còn lượt tung nữa (`MaxTries < TurnMaxTries`). */
+  'result.rollAgainSecond': 'Your second roll please',
+  'result.rollAgainThird': 'Your third roll please',
+  'result.wrong': '{name} got it wrong!',
   'result.wrongBody': 'The others are racing to answer correctly',
-  'result.late': 'Too late',
-  'result.lateBy': '{name} got it right first!',
-  'result.lateBody': 'This question is closed',
+  'result.timeout': "{name}, you're out of time!",
+  'result.late': 'got it right first!',
+  'result.lateBy': '{name}',
 
   /** Vòng đua xong - câu này hiện giữa bàn cờ, giống bàn cờ của bản web. */
   'race.winner': '{name} is the fastest!',
@@ -444,13 +457,15 @@ const vi: Record<TranslationKey, string> = {
   'dice.rolling': 'ĐANG TUNG…',
   'dice.rolled': 'BẠN TUNG ĐƯỢC',
 
-  'result.correct': 'ĐÚNG RỒI!',
-  'result.earned': '+{point}',
-  'result.wrong': 'SAI RỒI',
-  'result.wrongBody': 'Những người khác được trả lời',
-  'result.late': 'Có người nhanh hơn',
-  'result.lateBy': '{name} nhanh hơn bạn',
-  'result.lateBody': 'Câu này khép lại rồi',
+  'result.correct': '{name} trả lời đúng!',
+  'result.earned': '{point} {unit}.',
+  'result.rollAgainSecond': 'Mời bạn tung lần hai',
+  'result.rollAgainThird': 'Mời bạn tung lần ba',
+  'result.wrong': '{name} trả lời sai!',
+  'result.wrongBody': 'Những người khác đang tranh trả lời',
+  'result.timeout': '{name}, bạn hết giờ rồi!',
+  'result.late': 'chốt câu trước rồi!',
+  'result.lateBy': '{name}',
 
   'race.winner': '{name} nhanh nhất!',
   'race.winnerYou': 'Bạn nhanh nhất!',
