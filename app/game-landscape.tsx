@@ -844,11 +844,12 @@ export default function GameLandscapeScreen() {
    * ⚠️ Lượt THƯỜNG phải kiểm THÊM `isMyTurn`. `CurrentAction` là điều kiện CẦN,
    * không phải điều kiện ĐỦ.
    *
-   * Lý do rất cụ thể: **không ai xoá `CurrentAction` của người vừa bị bỏ lượt.**
-   * `TurnCompleteHandler.cs:136` chỉ đặt `game.CurrentAction = DoNothing` (của
-   * VÁN), còn `NextTurnHandler.cs:113` chỉ đặt `nextPlayer.CurrentAction =
-   * Start` (của NGƯỜI KẾ). Người vừa mất lượt giữ nguyên `RollDice` trong
-   * `Players`, nên nạp lại state cũng KHÔNG cứu - nút vẫn sáng.
+   * Lý do: `CurrentAction` là **giá trị lần `PlayerGetNextAction` gần nhất đã
+   * gán cho người này**, không phải "việc được làm bây giờ". Người vừa bị bỏ
+   * lượt không nhận `PlayerGetNextAction` nào nữa, nên nó giữ nguyên `RollDice`
+   * - `TurnCompleteHandler.cs:136` đặt `game.CurrentAction` (của VÁN) và
+   * `NextTurnHandler.cs:113` đặt cho NGƯỜI KẾ, đúng như thiết kế. Nạp lại state
+   * cũng KHÔNG đổi gì, nên máy khách phải tự kèm điều kiện tới lượt.
    *
    * Đo thật 2026-09-09 (TEST_CASES mục K12, ca KA-3): mất mạng 60 giây đúng đầu
    * lượt -> `RollDiceCountDown` bỏ lượt của Tony lúc 17:41:00, lượt sang Bot,
@@ -869,18 +870,33 @@ export default function GameLandscapeScreen() {
   /**
    * ⚠️ Bất kỳ khung nào của MỘT BƯỚC TRONG LƯỢT đang mở thì KHÔNG được tung.
    *
-   * Vì sao không tin mỗi `me.CurrentAction`: server để nguyên
-   * `Players.CurrentAction = RollDice` khi nó đẩy người chơi sang bước khác của
-   * cùng lượt đó. Đo thật 2026-09-09 (TEST_CASES mục K15): rơi vào ô YOUR
-   * CHOICE, màn chọn chủ đề hiện lên mà nút xúc xắc VẪN SÁNG, bấm vào thì server
-   * nhận và **tung thật** - `RolldiceHandler response` kèm `CurrentTotalRoll: 2`,
-   * rồi `HostDoneRollDice`.
+   * ⚠️ ĐỌC KỸ Ý NGHĨA CỦA `CurrentAction`, đừng lặp lại lỗi cũ.
    *
-   * Hậu quả: mất luôn quyền chọn chủ đề, tiêu một lượt tung, và app kẹt lại ở
-   * màn chọn chủ đề đã vô nghĩa vì server đã sang bước chọn hướng.
+   * `Players.CurrentAction` KHÔNG phải "việc người này được làm ngay bây giờ".
+   * Nó là **giá trị mà lần `PlayerGetNextAction` GẦN NHẤT đã gán** - xem
+   * `PlayerGetNextActionHandler.cs:68` (`player.CurrentAction = nextAction`) và
+   * dòng 155, chỗ nó chọn resolver theo chính giá trị đó. Nói cách khác,
+   * `ActionDone` -> `PlayerGetNextAction` -> resolver mới là thứ đẩy trạng thái
+   * đi; `CurrentAction` chỉ là dấu vết của bước cuối được giao.
    *
-   * ⚠️ Chốt `CurrentTurnId != LastTurnId` bên server KHÔNG cứu được ca này - vẫn
-   * đúng lượt đó nên nó cho qua. Chỉ máy khách chặn được.
+   * Nên trong lúc chờ người chơi chọn chủ đề, `CurrentAction` CÒN LÀ `RollDice`
+   * là ĐÚNG THIẾT KẾ, không phải server quên dọn: `YourChoiceSquareResolver` có
+   * `shouldSendActionDone => false` một cách cố ý - luồng đứng lại chờ gói 29
+   * của người chơi, chưa có `PlayerGetNextAction` nào để gán giá trị mới.
+   *
+   * Vậy lỗi nằm ở ĐÂY, phía máy khách: đọc `CurrentAction` như thể nó là quyền
+   * hành động hiện tại. Đo thật 2026-09-09 (TEST_CASES mục K15): màn chọn chủ đề
+   * đang mở mà nút xúc xắc vẫn sáng, bấm vào thì server tung THẬT
+   * (`RolldiceHandler response` kèm `CurrentTotalRoll: 2`) - mất quyền chọn chủ
+   * đề, tiêu một lượt tung, app kẹt lại ở màn đã vô nghĩa.
+   *
+   * ⚠️ Chốt `CurrentTurnId != LastTurnId` bên server KHÔNG cứu được - vẫn đúng
+   * lượt đó nên nó cho qua. Chỉ máy khách chặn được.
+   *
+   * Bản web chặn bằng CẤU TRÚC chứ không bằng cờ: `showBottomComponent()` gọi
+   * `removeAllComponents()` trước (`wwwroot/js/player.js:373`), nên mở khung nào
+   * là nút xúc xắc bị GỠ KHỎI MÀN HÌNH. `stepOverlayOpen` ở đây là bản tương
+   * đương của việc đó.
    */
   const stepOverlayOpen =
     question !== null ||
