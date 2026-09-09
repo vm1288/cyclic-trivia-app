@@ -30,11 +30,22 @@ import { GlowDivider } from './GlowDivider';
 /** GUID rỗng = Pot Luck. Cùng hằng số bản web nhét vào `categoriesWithManual`. */
 const POT_LUCK_ID = '00000000-0000-0000-0000-000000000000';
 
-/** Lưới không được cao quá ngần này hàng - xem ghi chú chỗ tính `cols`. */
-const MAX_ROWS = 3;
-const MIN_COLS = 4;
-const MAX_COLS = 6;
-/** Chừa cho `gap: 8` giữa các cột; trừ thẳng vào bề rộng phần trăm cho gọn. */
+/**
+ * Hai cách xếp lưới chủ đề. Vấn đề phải giải: bàn CricTriv có 15 chủ đề + ô Pot
+ * Luck = 16 ô, mà màn NẰM NGANG chỉ còn ~330dp bề cao cho lưới.
+ *
+ *   'flow'  - ô CO THEO CHỮ rồi tự xuống dòng (kiểu masonry một chiều). "ODI"
+ *             chiếm một mẩu, "English County Cricket" chiếm rộng hơn. Không ô
+ *             nào bị cắt chữ, và xếp khít nên thường gọn hơn lưới đều.
+ *   'grid'  - 4 cột đều nhau, ÉP MỖI Ô MỘT DÒNG, và ô Pot Luck GHIM ngoài vùng
+ *             cuộn nên không bao giờ khuất.
+ *
+ * Đổi hằng số này để so hai kiểu.
+ */
+const LAYOUT: 'flow' | 'grid' = 'flow';
+
+/** Chỉ dùng cho `grid`. */
+const GRID_COLS = 4;
 const COL_GAP_PCT = 1.4;
 
 export type ChoiceCategory = {
@@ -61,23 +72,49 @@ export function YourChoiceOverlay({
     { QuestionCategoryId: POT_LUCK_ID, Title: t('yourChoice.potLuck') },
   ];
 
+  const isFlow = LAYOUT === 'flow';
+
   /*
-   * Số cột TÍNH RA từ số ô, để lưới không bao giờ quá `MAX_ROWS` hàng.
-   *
-   * ⚠️ Thứ làm tràn khung KHÔNG phải số hàng mà là CHIỀU CAO Ô CO GIÃN THEO CHỮ:
-   * tên dài ("English County Cricket", "Pot Luck (double points)") xuống 2 dòng
-   * nên ô cao ~85dp thay vì 52dp. Bàn CricTriv có 15 chủ đề + Pot Luck = 16 ô,
-   * xếp 4/hàng thành 4 hàng ~370dp - vượt chỗ trống ~330dp của màn NẰM NGANG.
-   *
-   * Chia 16 ô thành 6 cột là còn 3 hàng, vừa khít mà không phải cắt chữ.
-   * Kẹp trong [MIN_COLS, MAX_COLS] để ván ít chủ đề không ra ô to lố, còn ván
-   * nhiều chủ đề không ra ô hẹp đến mức không đọc được.
+   * Kiểu `grid`: ô Pot Luck TÁCH RA khỏi danh sách cuộn để ghim dưới đáy.
+   * Kiểu `flow`: để nguyên trong dòng chảy, nó tự nằm cuối.
    */
-  const cols = Math.min(
-    MAX_COLS,
-    Math.max(MIN_COLS, Math.ceil(cards.length / MAX_ROWS)),
-  );
-  const cardWidth = `${100 / cols - COL_GAP_PCT}%` as const;
+  const gridCards = isFlow ? cards : categories;
+  const cardWidth = `${100 / GRID_COLS - COL_GAP_PCT}%` as const;
+
+  const potLuck: ChoiceCategory = {
+    QuestionCategoryId: POT_LUCK_ID,
+    Title: t('yourChoice.potLuck'),
+  };
+
+  const renderCard = (c: ChoiceCategory, pinned = false) => {
+    const isPicked = picked === c.QuestionCategoryId;
+    const dimmed = picked !== null && !isPicked;
+    const isPotLuck = c.QuestionCategoryId === POT_LUCK_ID;
+
+    return (
+      <Pressable
+        key={c.QuestionCategoryId}
+        onPress={() => select(c.QuestionCategoryId)}
+        style={({ pressed }) => [
+          styles.card,
+          isFlow ? styles.cardFlow : { width: cardWidth },
+          pinned && styles.cardPinned,
+          isPotLuck && styles.cardPotLuck,
+          isPicked && styles.cardPicked,
+          dimmed && styles.cardDimmed,
+          pressed && !dimmed && styles.pressed,
+        ]}
+      >
+        <Text
+          style={[styles.cardTitle, isPicked && styles.cardTitlePicked]}
+          /* `grid` ép một dòng để ô không cao lên; `flow` thì ô tự rộng ra. */
+          numberOfLines={1}
+        >
+          {c.Title}
+        </Text>
+      </Pressable>
+    );
+  };
 
   const select = (id: string) => {
     if (locked.current) return;
@@ -107,37 +144,15 @@ export function YourChoiceOverlay({
         <Text style={styles.noCard}>{t('yourChoice.noCard')}</Text>
 
         <ScrollView
-          contentContainerStyle={styles.grid}
+          contentContainerStyle={[styles.grid, isFlow && styles.gridFlow]}
           showsVerticalScrollIndicator={false}
         >
-          {cards.map((c) => {
-            const isPicked = picked === c.QuestionCategoryId;
-            const dimmed = picked !== null && !isPicked;
-            const isPotLuck = c.QuestionCategoryId === POT_LUCK_ID;
-
-            return (
-              <Pressable
-                key={c.QuestionCategoryId}
-                onPress={() => select(c.QuestionCategoryId)}
-                style={({ pressed }) => [
-                  styles.card,
-                  { width: cardWidth },
-                  isPotLuck && styles.cardPotLuck,
-                  isPicked && styles.cardPicked,
-                  dimmed && styles.cardDimmed,
-                  pressed && !dimmed && styles.pressed,
-                ]}
-              >
-                <Text
-                  style={[styles.cardTitle, isPicked && styles.cardTitlePicked]}
-                  numberOfLines={2}
-                >
-                  {c.Title}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {gridCards.map((c) => renderCard(c))}
         </ScrollView>
+
+        {/* Kiểu `grid`: ghim Pot Luck ngoài vùng cuộn - ô ×2 điểm không được khuất. */}
+        {!isFlow ? renderCard(potLuck, true) : null}
+
       </View>
     </View>
   );
@@ -186,9 +201,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 2,
   },
+  /* Xếp khít từ trái sang, đúng tinh thần masonry một chiều. */
+  gridFlow: { justifyContent: 'flex-start' },
   card: {
-    /* Bề rộng TÍNH RA lúc chạy - xem chỗ tính `cols`. */
-    minHeight: 52,
+    minHeight: 44,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
@@ -198,6 +214,10 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(95,230,255,0.45)',
     backgroundColor: 'rgba(8,26,34,0.9)',
   },
+  /* `flow`: không đặt bề rộng - ô tự co theo chữ. */
+  cardFlow: { flexGrow: 0, flexShrink: 0, paddingHorizontal: 12 },
+  /* Ô ghim dưới đáy, trải hết bề ngang cho dễ thấy. */
+  cardPinned: { width: '100%', marginTop: 2 },
   cardPotLuck: {
     borderColor: 'rgba(255,198,30,0.7)',
     backgroundColor: 'rgba(56,36,4,0.9)',
