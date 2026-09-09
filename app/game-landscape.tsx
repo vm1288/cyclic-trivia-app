@@ -866,9 +866,33 @@ export default function GameLandscapeScreen() {
    * người đều phải tung. Gộp chung một điều kiện là khoá chết vòng đua trên bàn
    * dùng xúc xắc.
    */
+  /**
+   * ⚠️ Bất kỳ khung nào của MỘT BƯỚC TRONG LƯỢT đang mở thì KHÔNG được tung.
+   *
+   * Vì sao không tin mỗi `me.CurrentAction`: server để nguyên
+   * `Players.CurrentAction = RollDice` khi nó đẩy người chơi sang bước khác của
+   * cùng lượt đó. Đo thật 2026-09-09 (TEST_CASES mục K15): rơi vào ô YOUR
+   * CHOICE, màn chọn chủ đề hiện lên mà nút xúc xắc VẪN SÁNG, bấm vào thì server
+   * nhận và **tung thật** - `RolldiceHandler response` kèm `CurrentTotalRoll: 2`,
+   * rồi `HostDoneRollDice`.
+   *
+   * Hậu quả: mất luôn quyền chọn chủ đề, tiêu một lượt tung, và app kẹt lại ở
+   * màn chọn chủ đề đã vô nghĩa vì server đã sang bước chọn hướng.
+   *
+   * ⚠️ Chốt `CurrentTurnId != LastTurnId` bên server KHÔNG cứu được ca này - vẫn
+   * đúng lượt đó nên nó cho qua. Chỉ máy khách chặn được.
+   */
+  const stepOverlayOpen =
+    question !== null ||
+    direction !== null ||
+    choice !== null ||
+    challenge !== null ||
+    cardStep !== null;
+
   const canRoll =
     rollAction !== null &&
     connState === 'connected' &&
+    !stepOverlayOpen &&
     (rollAction !== TYPE_ID.RollDice || isMyTurn);
 
   /*
