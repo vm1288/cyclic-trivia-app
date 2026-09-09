@@ -113,6 +113,20 @@ export const TYPE_ID = {
    * `TenSecondsChallengeCountDown` chỉ được arm BÊN TRONG
    * `TenSecondsChallengeStartHandler`, tức chỉ sau khi máy khách gửi 42 về.
    */
+  /**
+   * Ô **YOUR CHOICE** - hai chiều, một vòng duy nhất.
+   *
+   *   server -> `{ Categories: [{ QuestionCategoryId, Title, ... }] }`
+   *   app    -> `{ QuestionCategoryId }`
+   *
+   * ⚠️ `QuestionCategoryId` là **GUID RỖNG** thì server hiểu là **Pot Luck**:
+   * nó tự bốc chủ đề ngẫu nhiên và bật cờ `potluck-` (ĐIỂM ×2). Bản web thêm sẵn
+   * một ô "Pot Luck (double points)" vào cuối lưới đúng bằng cách đó.
+   *
+   * ⚠️ Không gửi lại là **KẸT VÁN**: `YourChoiceSquareResolver` KHÔNG arm
+   * watchdog nào - không có gì gỡ hộ. Đo 2026-09-09.
+   */
+  YourChoice: 29,
   TenSecondsChallenge: 30,
   TenSecondsChallengeStart: 42,
   TenSecondsChallengeCountDown: 43,

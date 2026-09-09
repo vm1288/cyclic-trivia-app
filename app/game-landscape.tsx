@@ -33,6 +33,10 @@ import {
   TenSecondsChallengeOverlay,
   type ChallengePhase,
 } from '../src/components/TenSecondsChallengeOverlay';
+import {
+  YourChoiceOverlay,
+  type ChoiceCategory,
+} from '../src/components/YourChoiceOverlay';
 import { StageBackground } from '../src/components/StageBackground';
 import { TYPE_ID } from '../src/net/gameConnection';
 import { useGameState } from '../src/net/useGameState';
@@ -239,6 +243,14 @@ export default function GameLandscapeScreen() {
     /** Máy này có phải TRỌNG TÀI - người được chạy đồng hồ và gửi gói 43 - không. */
     ownsCountdown: boolean;
   } | null>(null);
+
+  /**
+   * Ô YOUR CHOICE - danh sách chủ đề để tự chọn. `null` = không ở bước này.
+   *
+   * ⚠️ Bước này KHÔNG có watchdog ở server (`YourChoiceSquareResolver` không arm
+   * gì). Không gửi lại gói 29 là ván treo VĨNH VIỄN.
+   */
+  const [choice, setChoice] = useState<ChoiceCategory[] | null>(null);
 
   /** Sao / thẻ đang bay từ giữa bàn cờ về chỗ của nó. */
   const [flying, setFlying] = useState<{ id: number; reward: 'star' | CardKey } | null>(null);
@@ -585,6 +597,26 @@ export default function GameLandscapeScreen() {
        * dưới. Không gửi là KẸT VÁN: watchdog `TenSecondsChallengeCountDown`
        * chỉ được arm bên trong `TenSecondsChallengeStartHandler`.
        */
+      /*
+       * Ô YOUR CHOICE (gói 29) - server gửi THẲNG cho người tới lượt.
+       *
+       * `Categories` là `QuestionCategoryTranslation`: dùng `QuestionCategoryId`
+       * làm khoá gửi về, KHÔNG phải `Id` (Id là id của bản dịch).
+       */
+      if (packet.typeID === TYPE_ID.YourChoice) {
+        const list = Array.isArray(packet.Categories) ? packet.Categories : [];
+        setChoice(
+          list
+            .map((c: Record<string, unknown>) => ({
+              QuestionCategoryId:
+                typeof c?.QuestionCategoryId === 'string' ? c.QuestionCategoryId : '',
+              Title: typeof c?.Title === 'string' ? c.Title : '',
+            }))
+            .filter((c: ChoiceCategory) => c.QuestionCategoryId && c.Title),
+        );
+        return;
+      }
+
       if (packet.typeID === TYPE_ID.TenSecondsChallengeStart) {
         setChallenge({
           phase: 'assign',
@@ -1095,6 +1127,17 @@ export default function GameLandscapeScreen() {
    *
    * Đóng khung NGAY, không đợi server: gói 43 sẽ mở lại khung ở nhịp phán quyết.
    */
+  /**
+   * Chọn xong chủ đề -> gửi gói 29.
+   *
+   * ⚠️ GUID rỗng là **Pot Luck** (server tự bốc chủ đề + điểm ×2), không phải
+   * giá trị hỏng - xem `YourChoiceOverlay`.
+   */
+  const pickCategory = (questionCategoryId: string) => {
+    setChoice(null);
+    void connection.current?.send(TYPE_ID.YourChoice, { QuestionCategoryId: questionCategoryId });
+  };
+
   const challengeStart = () => {
     setChallenge(null);
     void connection.current?.send(TYPE_ID.TenSecondsChallengeStart);
@@ -1467,6 +1510,10 @@ export default function GameLandscapeScreen() {
                 onUse={useCard}
                 onSkip={skipCard}
               />
+            ) : null}
+
+            {choice ? (
+              <YourChoiceOverlay categories={choice} onPick={pickCategory} />
             ) : null}
 
             {challenge ? (

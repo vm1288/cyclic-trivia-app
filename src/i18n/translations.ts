@@ -186,6 +186,12 @@ export const en = {
    * Ô 10-SEC CHALLENGE. `challenge.reader` chỉ hiện ở kiểu thử thách "B", khi
    * mỗi người được chia một phần lời để đọc.
    */
+  /** Ô YOUR CHOICE. Chữ lấy NGUYÊN VĂN từ `QuestionCategoryPartialHtml.cshtml`. */
+  'yourChoice.title': 'What question category would you like?',
+  'yourChoice.noCard': 'No special card can be played',
+  /** Ô cuối lưới, bản web tự chèn thêm. GUID rỗng = server bốc random + điểm ×2. */
+  'yourChoice.potLuck': 'Pot Luck (double points)',
+
   'challenge.title': '10-SEC CHALLENGE',
   /** Người đọc thứ mấy - chỉ có ở kiểu thử thách "B". */
   'challenge.reader': 'You are the {ordinal} person to read.',
@@ -412,6 +418,10 @@ const vi: Record<TranslationKey, string> = {
   'cards.usedBy': '{name} dùng {card}',
   'cards.earned': 'Đủ 5 sao! Bạn được thưởng {card}',
   'cards.earnedAny': 'Đủ 5 sao! Bạn được thưởng một lá bài',
+
+  'yourChoice.title': 'Bạn muốn chủ đề nào?',
+  'yourChoice.noCard': 'Không dùng được thẻ bài nào',
+  'yourChoice.potLuck': 'Pot Luck (điểm nhân đôi)',
 
   'challenge.title': 'THỬ THÁCH 10 GIÂY',
   'challenge.reader': 'Bạn là người đọc thứ {ordinal}.',
