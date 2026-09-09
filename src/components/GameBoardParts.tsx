@@ -580,10 +580,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   // Phủ tối lên thân lá bài, giữ nguyên độ đục. Xem ghi chú ở HandTile.
-  /* Lá dùng được: viền sáng + quầng, đủ nổi mà không cần rung. */
+  /*
+   * Lá dùng được: viền dày + quầng trắng. Bản web cho nó RUNG (`cardshaking`);
+   * Tony chốt không cần rung, nên độ nổi phải đến từ viền và quầng.
+   */
   handCardUsable: {
-    borderWidth: 2,
-    boxShadow: '0 0 12px rgba(255,255,255,0.45)',
+    borderWidth: 2.5,
+    boxShadow: '0 0 16px rgba(255,255,255,0.75)',
   },
   /* Lá đang có tác dụng cho câu hỏi này. */
   handCardActive: {
@@ -591,7 +594,15 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     boxShadow: '0 0 16px rgba(255,198,30,0.75)',
   },
-  handDim: { backgroundColor: 'rgba(6,8,20,0.38)' },
+  /*
+   * ⚠️ 0.38 là KHÔNG ĐỦ. Đo trên máy 2026-09-09: lá bị làm mờ chỉ tối đi 0,8-5
+   * đơn vị độ sáng so với lúc thường - mắt không nhận ra, mà cả điểm của luật
+   * này là để người chơi thấy NGAY còn hai lá nào dùng được.
+   *
+   * Vẫn dùng LỚP PHỦ chứ không phải `opacity` của cả thẻ - xem ghi chú ở chỗ
+   * dùng nó.
+   */
+  handDim: { backgroundColor: 'rgba(6,8,20,0.68)' },
   handIconEmpty: { opacity: 0.5 },
   handName: { fontSize: 9.5, fontWeight: '700', letterSpacing: 0.4 },
   // Xếp ngang nên thấp hơn nữa. Lề quanh icon để HẸP: mỗi dp lề là một dp
