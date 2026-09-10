@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -33,6 +33,7 @@ import { BattleOverlay } from '../src/components/BattleOverlay';
 import { BattleResultOverlay } from '../src/components/BattleResultOverlay';
 import { TurnResultOverlay, type TurnResult } from '../src/components/TurnResultOverlay';
 import { RaceWinnerOverlay } from '../src/components/RaceWinnerOverlay';
+import { GameOverOverlay } from '../src/components/GameOverOverlay';
 import {
   TenSecondsChallengeOverlay,
   type ChallengePhase,
@@ -59,6 +60,7 @@ import {
 } from '../src/components/GameBoardParts';
 import { useConfirm } from '../src/components/ConfirmDialog';
 import { useT } from '../src/i18n/I18nProvider';
+import { useRouter } from 'expo-router';
 import { usePlayer } from '../src/session/PlayerSession';
 import { neon, text } from '../src/theme/colors';
 
@@ -185,6 +187,7 @@ type ActiveQuestion = {
 
 export default function GameLandscapeScreen() {
   const player = usePlayer();
+  const router = useRouter();
   const t = useT();
   const confirm = useConfirm();
   const insets = useSafeAreaInsets();
@@ -352,6 +355,19 @@ export default function GameLandscapeScreen() {
    * (TEST_CASES mục K23, ca KX-3).
    */
   const [replaced, setReplaced] = useState(false);
+
+  /**
+   * Ván đã kết thúc — hiện bảng xếp hạng cuối (ca **UI-7**).
+   *
+   * Hai đường vào, cần cả hai:
+   *   - gói `GameOver` (39): tới ngay lúc ván kết thúc, mang sẵn `GameOverMessage`.
+   *   - `snapshot.Game.IsGameOver`: đường CỨU khi máy không nhận được gói đó —
+   *     đang rớt mạng, hoặc mở lại app vào một ván đã xong.
+   *
+   * ⚠ Thiếu đường thứ hai thì người rớt mạng đúng lúc ván kết thúc sẽ vào lại và
+   * thấy bàn cờ như đang chơi dở.
+   */
+  const [gameOver, setGameOver] = useState<{ message: string | null } | null>(null);
 
   /** Xem `waiting.tsx` - ref chỉ chặn lời gọi ĐANG BAY, không chặn vĩnh viễn. */
   const acking = useRef(false);
@@ -975,6 +991,25 @@ export default function GameLandscapeScreen() {
        * `clientId` đều biết và khác nhau), nên cùng một máy nối lại sau khi rớt mạng
        * KHÔNG rơi vào đây.
        */
+      /*
+       * Ván kết thúc. Server gửi gói này cho MỌI người chơi, kèm `GameOverMessage`
+       * bốc ngẫu nhiên. Dọn sạch mọi khung đang mở rồi hiện bảng xếp hạng.
+       *
+       * ⚠ KHÔNG đọc `players` trong gói này mà dùng `snapshot.Players`: gói 39 nằm
+       * trong `REFRESH_ON` nên trạng thái đã được nạp lại ngay sau đó, và dùng một
+       * nguồn duy nhất thì bảng xếp hạng không thể lệch với bàn cờ phía dưới.
+       */
+      if (packet.typeID === TYPE_ID.GameOver) {
+        setGameOver({ message: (packet as { GameOverMessage?: string }).GameOverMessage ?? null });
+        setQuestion(null);
+        setBattle(null);
+        setChallenge(null);
+        setChoice(null);
+        setDirection(null);
+        setCardStep(null);
+        return;
+      }
+
       if (packet.typeID === TYPE_ID.ConnectionReplaced) {
         setReplaced(true);
         setQuestion(null);
@@ -1166,6 +1201,31 @@ export default function GameLandscapeScreen() {
     if (connState !== 'connected') return;
     void connection.current?.send(TYPE_ID.HostResume);
   }, [connState, connection]);
+
+  /*
+   * Đường CỨU: máy không nhận được gói 39 (rớt mạng đúng lúc, hoặc mở lại app vào
+   * một ván đã xong) thì `IsGameOver` trong trạng thái vẫn nói đúng sự thật.
+   *
+   * ⚠ Không có `message` ở đây - gói 39 mới mang `GameOverMessage`. Khung tự dùng
+   * câu mặc định, thà thiếu một câu vui còn hơn không biết ván đã xong.
+   */
+  useEffect(() => {
+    if (snapshot?.Game?.IsGameOver && !gameOver) setGameOver({ message: null });
+  }, [snapshot?.Game?.IsGameOver, gameOver]);
+
+  /**
+   * Rời ván đã kết thúc: bỏ ghế rồi về màn chính.
+   *
+   * ⚠ PHẢI `clearSeat`. Giữ lại ghế của một ván đã xong thì màn chính hiện
+   * RESUME GAME dẫn vào một ván chết - đúng cái bẫy đã ghi ở `src/api/game.ts`
+   * ("con trỏ ở máy không hay biết ván đã kết thúc ở nơi khác").
+   *
+   * Ngắt kết nối trước để server khỏi giữ một socket không còn việc gì.
+   */
+  const leaveToHome = useCallback(() => {
+    void connection.current?.stop();
+    void player.clearSeat().finally(() => router.replace('/'));
+  }, [connection, player, router]);
 
   const players = snapshot?.Players ?? [];
 
@@ -2497,6 +2557,25 @@ export default function GameLandscapeScreen() {
         trái, đặt trong đó thì con xúc xắc lệch hẳn sang một bên.
       */}
       {dice ? <DiceRollOverlay value={dice.value} /> : null}
+
+      {/*
+        ⚠️ Ván đã kết thúc: bảng xếp hạng cuối, ở GỐC MÀN HÌNH như con xúc xắc.
+        Đặt trong khung bàn cờ là SAI và đã thấy tận mắt lúc kiểm 2026-09-10: khung
+        chỉ che nửa trái, cột phải vẫn hiện và **ROLL DICE vẫn bấm được** trên một
+        ván đã xong.
+
+        Khung này CHẶN hết tương tác, có chủ đích — ván xong thì mọi nút đều vô
+        nghĩa. Đặt SAU con xúc xắc để nếu lỡ cả hai cùng hiện thì bảng xếp hạng nằm
+        trên; `zIndex` của nó cũng cao hơn.
+      */}
+      {gameOver ? (
+        <GameOverOverlay
+          players={players}
+          meId={seat?.playerId ?? null}
+          message={gameOver.message}
+          onLeave={leaveToHome}
+        />
+      ) : null}
 
       {/*
         Vật bay cũng ở GỐC màn hình như xúc xắc: nó đi từ khung bàn cờ (cột

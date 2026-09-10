@@ -285,6 +285,11 @@ export const en = {
    * Ghế bị mở ở máy khác (gói 88). Đừng hứa "thử lại" — máy này không giành lại
    * được ghế, và cố nối lại thì hai máy đá nhau vô tận.
    */
+  'gameOver.title': 'GAME OVER',
+  'gameOver.leave': 'BACK TO HOME',
+  'gameOver.youSuffix': ' (you)',
+  'gameOver.defaultMessage': 'That is the final score.',
+
   'conn.replacedTitle': 'This seat was opened on another device',
   'conn.replacedBody':
     'Only one device can play a seat at a time. Carry on there, or take a seat again from the home screen.',
@@ -541,6 +546,11 @@ const vi: Record<TranslationKey, string> = {
   'battle.wonBody': 'Bạn ở lại ô này.',
   'battle.lostBody': 'Bạn lùi về ô trống gần nhất.',
   'battle.notice': 'Đấu: {a} gặp {b}',
+
+  'gameOver.title': 'HẾT VÁN',
+  'gameOver.leave': 'VỀ MÀN CHÍNH',
+  'gameOver.youSuffix': ' (bạn)',
+  'gameOver.defaultMessage': 'Điểm cuối cùng là đây.',
 
   'conn.replacedTitle': 'Ghế này vừa được mở ở máy khác',
   'conn.replacedBody':
