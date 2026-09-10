@@ -44,17 +44,17 @@ import { text } from '../theme/colors';
  * vài phần trăm là chữ leo lên viền neon, mà nhìn mã thì không thấy gì sai.
  */
 const SLOTS = [
-  { medal: { left: '39.3%', top: '24.6%', width: '10.5%', height: '14.7%' },
+  { medal: { left: '40.1%', top: '22.5%', width: '8.9%', height: '19.0%' },
     plate: { left: '39.0%', top: '54.6%', width: '11.3%', height: '8.3%' } },
-  { medal: { left: '21.2%', top: '35.6%', width: '9.2%', height: '15.3%' },
+  { medal: { left: '22.1%', top: '33.4%', width: '7.8%', height: '19.8%' },
     plate: { left: '20.6%', top: '66.2%', width: '10.7%', height: '5.8%' } },
-  { medal: { left: '56.2%', top: '37.2%', width: '8.7%', height: '15.0%' },
+  { medal: { left: '56.9%', top: '35.0%', width: '7.4%', height: '19.4%' },
     plate: { left: '56.1%', top: '65.4%', width: '10.0%', height: '7.8%' } },
-  { medal: { left: '5.2%', top: '46.3%', width: '8.0%', height: '12.5%' },
+  { medal: { left: '6.0%', top: '44.5%', width: '6.8%', height: '16.2%' },
     plate: { left: '4.5%', top: '71.8%', width: '9.5%', height: '5.6%' } },
-  { medal: { left: '71.4%', top: '44.4%', width: '8.3%', height: '15.1%' },
+  { medal: { left: '72.0%', top: '42.2%', width: '7.1%', height: '19.4%' },
     plate: { left: '71.6%', top: '70.7%', width: '9.5%', height: '7.5%' } },
-  { medal: { left: '86.8%', top: '52.3%', width: '7.7%', height: '13.0%' },
+  { medal: { left: '87.4%', top: '50.4%', width: '6.5%', height: '16.8%' },
     plate: { left: '86.9%', top: '75.7%', width: '9.0%', height: '6.3%' } },
 ] as const;
 
@@ -81,7 +81,6 @@ export function LeaderboardStage({
   global: globalRows,
   current,
   meId,
-  message,
   onLeave,
 }: {
   /** Top 6 toàn giải. Thiếu người thì bục đó để trống, đúng như bảng vàng thật. */
@@ -89,7 +88,6 @@ export function LeaderboardStage({
   /** Người trong ván này — mang **hạng và điểm TOÀN CỤC**, xem `LeaderboardRow`. */
   current: LeaderboardRow[];
   meId: string | null;
-  message?: string | null;
   onLeave: () => void;
 }) {
   const t = useT();
@@ -124,7 +122,7 @@ export function LeaderboardStage({
         style={[
           styles.header,
           {
-            paddingTop: Math.max(10, insets.top + 4),
+            paddingTop: Math.max(4, insets.top),
             paddingLeft: 12 + insets.left,
             paddingRight: 12 + insets.right,
           },
@@ -173,38 +171,36 @@ export function LeaderboardStage({
                * thường nên nhìn như "chưa có dữ liệu". Đã dính 2026-09-10.
                */
               <Fragment key={i}>
-                {/* Huy chương tròn: ĐIỂM, số to nhất trên màn. */}
+                {/*
+                  Vòng tròn giữ DANH TÍNH: số hạng ở trên, tên ngay dưới. Hai thứ
+                  này đi liền nhau nên phải nằm chung một chỗ - tách ra hai đầu
+                  cúp thì mắt phải nhảy qua lại mới ghép được ai đứng thứ mấy.
+                */}
                 <View style={[styles.zone, slot.medal]}>
                   <Text
-                    style={[styles.medalScore, { color }]}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                  >
-                    {row.Score.toLocaleString()}
-                  </Text>
-                </View>
-
-                {/*
-                  Biển tên: số hạng + tên trên MỘT dòng.
-
-                  ⚠️ Số hạng phải viết ra. Sáu cúp xếp 4-2-1-3-5-6 nên thứ tự
-                  trái-phải nói sai sự thật; chiều cao cúp thì chỉ người tinh mắt
-                  mới đọc được.
-                */}
-                <View style={[styles.zone, styles.plate, slot.plate]}>
-                  <Text
-                    style={[styles.plateRank, { color }]}
+                    style={[styles.medalRank, { color }]}
                     numberOfLines={1}
                     adjustsFontSizeToFit
                   >
                     {i + 1}
                   </Text>
                   <Text
-                    style={[styles.plateName, isMe && styles.slotMine]}
+                    style={[styles.medalName, isMe && styles.slotMine]}
                     numberOfLines={1}
                     adjustsFontSizeToFit
                   >
                     {row.PlayerName}
+                  </Text>
+                </View>
+
+                {/* Biển chữ nhật: ĐIỂM, số to nhất trên cúp. */}
+                <View style={[styles.zone, slot.plate]}>
+                  <Text
+                    style={[styles.plateScore, { color }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                  >
+                    {row.Score.toLocaleString()}
                   </Text>
                 </View>
               </Fragment>
@@ -255,11 +251,6 @@ export function LeaderboardStage({
           })}
         </View>
 
-        {message ? (
-          <Text style={styles.message} numberOfLines={1}>
-            {message}
-          </Text>
-        ) : null}
       </View>
     </ImageBackground>
   );
@@ -274,26 +265,26 @@ const styles = StyleSheet.create({
   backImg: { width: 92, height: 46 },
   pressed: { opacity: 0.7 },
   titleWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  titleImg: { width: '86%', height: 62 },
+  titleImg: { width: '86%', height: 56 },
   titleText: {
     position: 'absolute',
-    width: '58%',
+    width: '46%',
     textAlign: 'center',
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '900',
-    letterSpacing: 1.5,
+    letterSpacing: 1.2,
     color: '#FDE68A',
   },
 
-  podiumArea: { flex: 1, marginTop: 2, alignItems: 'center', justifyContent: 'center' },
+  /* `flex-start`: cúp bám lên trên, chỗ trống dồn xuống dưới bảng kết quả. */
+  podiumArea: { flex: 1, marginTop: -6, alignItems: 'center', justifyContent: 'flex-start' },
   /* Đúng tỉ lệ ảnh -> phần trăm của khung KHỚP phần trăm của tranh. */
   podiumBox: { height: '100%', aspectRatio: PODIUM_RATIO, maxWidth: '100%' },
   podiumImg: { width: '100%', height: '100%' },
   zone: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-  medalScore: { fontSize: 34, fontWeight: '900' },
-  plate: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
-  plateRank: { fontSize: 14, fontWeight: '900' },
-  plateName: { fontSize: 15, fontWeight: '800', color: '#fff', flexShrink: 1 },
+  medalRank: { fontSize: 26, fontWeight: '900', lineHeight: 29 },
+  medalName: { fontSize: 14, fontWeight: '800', lineHeight: 17, color: '#fff' },
+  plateScore: { fontSize: 30, fontWeight: '900' },
   slotMine: { color: '#FDE68A' },
 
   footer: {},
@@ -308,9 +299,16 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     color: '#E9D5FF',
   },
-  cards: { flexDirection: 'row', gap: 10, marginTop: 6 },
+  /*
+   * ⚠️ Thể thức này trần 4 người (`PlayerCountRule.CapFor`: `Time == 0` -> 4),
+   * nên bình thường một hàng là đủ. `wrap` + `minWidth` để nếu luật có đổi thì
+   * hàng thứ năm xuống dòng chứ không bóp nhau đến mức không đọc được.
+   */
+  cards: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
   card: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '22%',
+    minWidth: '22%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -328,10 +326,4 @@ const styles = StyleSheet.create({
   cardNameMine: { color: '#FDE68A' },
   cardScore: { fontSize: 17, fontWeight: '900', color: '#fff' },
 
-  message: {
-    marginTop: 4,
-    textAlign: 'center',
-    fontSize: 11,
-    color: 'rgba(226,232,255,0.6)',
-  },
 });

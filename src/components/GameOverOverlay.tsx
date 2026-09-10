@@ -153,7 +153,6 @@ export function GameOverOverlay({
         global={board.global}
         current={board.current}
         meId={meId}
-        message={message}
         onLeave={onLeave}
       />
     );
