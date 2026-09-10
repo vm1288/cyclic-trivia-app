@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Image, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -41,9 +42,9 @@ const SLOTS = [
   { left: '38.5%', top: '17%', width: '23%', height: '33%', tall: true },
   { left: '13.5%', top: '26%', width: '19%', height: '24%', tall: true },
   { left: '67.5%', top: '27%', width: '19.5%', height: '23%', tall: true },
-  { left: '14.5%', top: '76.5%', width: '15.5%', height: '10.5%', tall: false },
-  { left: '40.5%', top: '76.5%', width: '18%', height: '10.5%', tall: false },
-  { left: '68.5%', top: '76.5%', width: '17%', height: '10.5%', tall: false },
+  { left: '14.5%', top: '76%', width: '15.5%', height: '11%', tall: false },
+  { left: '40.5%', top: '76%', width: '18%', height: '11%', tall: false },
+  { left: '68.5%', top: '76%', width: '17%', height: '11%', tall: false },
 ] as const;
 
 /**
@@ -83,6 +84,13 @@ export function LeaderboardStage({
   const t = useT();
 
   /*
+   * ⚠️ Khung này nằm ở GỐC màn hình nên KHÔNG thừa hưởng lề an toàn của màn ván
+   * chơi. Bỏ qua là thanh trạng thái đè lên nút back và thanh điều hướng cắt mất
+   * cột cuối của bảng kết quả - đã thấy tận mắt trên SM-A175F.
+   */
+  const insets = useSafeAreaInsets();
+
+  /*
    * Bục dựng lên theo thứ tự NGƯỢC: 6 trước, 1 sau cùng. Cùng nhịp với mọi lễ
    * trao giải - đọc từ dưới lên thì cái cuối cùng mới là cái đáng chờ.
    */
@@ -101,7 +109,16 @@ export function LeaderboardStage({
       {/* Phủ thêm một lớp tối: tranh nền sáng, chữ trắng đặt thẳng lên sẽ chìm. */}
       <View style={styles.dim} />
 
-      <View style={styles.header}>
+      <View
+        style={[
+          styles.header,
+          {
+            paddingTop: Math.max(10, insets.top + 4),
+            paddingLeft: 12 + insets.left,
+            paddingRight: 12 + insets.right,
+          },
+        ]}
+      >
         <Pressable
           onPress={onLeave}
           accessibilityRole="button"
@@ -137,16 +154,42 @@ export function LeaderboardStage({
             const isMe = row.PlayerId === meId;
             return (
               <View key={i} style={[styles.slot, slot]}>
-                <Text
-                  style={[
-                    slot.tall ? styles.slotName : styles.slotNameSmall,
-                    isMe && styles.slotMine,
-                  ]}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                >
-                  {row.PlayerName}
-                </Text>
+                {/*
+                  Số hạng phải VIẾT RA: tranh để mặt bục trắng trơn, mà thế đứng
+                  cao thấp chỉ nói được ai nhất - ba bục hàng dưới bằng nhau thì
+                  không ai đoán nổi đâu là 4, đâu là 6.
+
+                  ⚠️ Hàng dưới ghép số vào CÙNG DÒNG với tên. Tách thành ba dòng
+                  thì dòng đầu rơi đúng lên đỉnh neon sáng của bục và số biến mất
+                  hẳn - đã thấy trên ảnh chụp máy thật.
+                */}
+                {slot.tall ? (
+                  <Text
+                    style={[styles.slotRank, { color: SLOT_COLOR[i] }]}
+                    numberOfLines={1}
+                  >
+                    {i + 1}
+                  </Text>
+                ) : null}
+
+                <View style={styles.slotNameRow}>
+                  {!slot.tall ? (
+                    <Text style={[styles.slotRankSmall, { color: SLOT_COLOR[i] }]}>
+                      {i + 1}
+                    </Text>
+                  ) : null}
+                  <Text
+                    style={[
+                      slot.tall ? styles.slotName : styles.slotNameSmall,
+                      isMe && styles.slotMine,
+                    ]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                  >
+                    {row.PlayerName}
+                  </Text>
+                </View>
+
                 <Text
                   style={[
                     slot.tall ? styles.slotScore : styles.slotScoreSmall,
@@ -162,7 +205,16 @@ export function LeaderboardStage({
         </Animated.View>
       </View>
 
-      <View style={styles.footer}>
+      <View
+        style={[
+          styles.footer,
+          {
+            paddingLeft: 14 + insets.left,
+            paddingRight: 14 + insets.right,
+            paddingBottom: 10 + insets.bottom,
+          },
+        ]}
+      >
         <View style={styles.bandWrap}>
           <Image source={TITLE_PLAIN} style={styles.bandImg} resizeMode="contain" />
           <Text style={styles.bandText} numberOfLines={1} adjustsFontSizeToFit>
@@ -209,7 +261,7 @@ const styles = StyleSheet.create({
   root: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 60 },
   dim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(6,3,20,0.35)' },
 
-  header: { flexDirection: 'row', alignItems: 'center', paddingTop: 12, paddingHorizontal: 12 },
+  header: { flexDirection: 'row', alignItems: 'center' },
   backBtn: { justifyContent: 'center' },
   backImg: { width: 92, height: 46 },
   pressed: { opacity: 0.7 },
@@ -230,13 +282,16 @@ const styles = StyleSheet.create({
   podiumBox: { height: '100%', aspectRatio: PODIUM_RATIO, maxWidth: '96%' },
   podiumImg: { width: '100%', height: '100%' },
   slot: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-  slotName: { fontSize: 15, fontWeight: '800', color: '#fff' },
-  slotNameSmall: { fontSize: 11.5, fontWeight: '800', color: '#fff' },
-  slotScore: { fontSize: 25, fontWeight: '900', marginTop: 1 },
-  slotScoreSmall: { fontSize: 16, fontWeight: '900' },
+  slotRank: { fontSize: 17, fontWeight: '900', lineHeight: 19 },
+  slotRankSmall: { fontSize: 12, fontWeight: '900', lineHeight: 14 },
+  slotNameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  slotName: { fontSize: 14.5, fontWeight: '800', lineHeight: 18, color: '#fff' },
+  slotNameSmall: { fontSize: 11, fontWeight: '800', lineHeight: 13, color: '#fff' },
+  slotScore: { fontSize: 24, fontWeight: '900', lineHeight: 28 },
+  slotScoreSmall: { fontSize: 15, fontWeight: '900', lineHeight: 17 },
   slotMine: { color: '#FDE68A' },
 
-  footer: { paddingHorizontal: 14, paddingBottom: 14 },
+  footer: {},
   bandWrap: { alignItems: 'center', justifyContent: 'center' },
   bandImg: { width: '54%', height: 34 },
   bandText: {
