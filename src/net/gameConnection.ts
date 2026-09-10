@@ -183,8 +183,38 @@ export const TYPE_ID = {
    * Máy người chơi không cần xử lý, khai ở đây để khỏi tưởng là gói lạ.
    */
   UsingCardInQuestion: 48,
+  /**
+   * "Có battle" - server phát cho CẢ PHÒNG (bản web chỉ gửi cho bàn cờ).
+   *
+   * Gói đầu tiên của một trận. Mang `ChallengerPlayerId`, `IncumbentPlayerId`,
+   * `WagerPercent`. Xem GAME_RULES mục 7b.
+   */
   PlayerBattle: 54,
+  /**
+   * Lời dẫn trước trận. **incumbent** là người có nút START; challenger nhận
+   * cùng gói này nhưng chỉ để ngồi đợi (phân vai bằng `IncumbentId`/`ChallengerId`).
+   */
   PlayerBattleInstruction: 55,
+  /**
+   * MỘT câu hỏi battle, gửi cho cả hai đấu thủ cùng lúc.
+   *
+   * ⚠ CŨNG là gói máy khách GỬI LÊN để bắt đầu trận (payload RỖNG) - một số
+   * hai chiều, giống gói 42 của ô 10 giây. Trường viết HOA (`Question`, `Category`)
+   * như gói 67, khác `Payload` của gói 16 viết thường.
+   */
+  PlayerBattleStart: 56,
+  /**
+   * Hết trận: ai thắng, ai lui ô. `characterId` là của người THUA, `WinnerId` mới
+   * là người thắng - đừng nhầm.
+   */
+  PlayerBattleWinner: 58,
+  /**
+   * Bảng tổng kết 3 câu. Chỗ DUY NHẤT nói ai đúng câu nào:
+   * `Questions` / `CorrectAnswers` / `ChallengeAnswers` / `IncumbentAnswers` là bốn
+   * danh sách song song theo thứ tự câu. `submitAnswerBattle` KHÔNG trả về
+   * đúng/sai, nên không có gói này thì máy không biết gì cả.
+   */
+  PlayerBattleSummary: 84,
   GameState: 62,
   QuestionForTurn: 66,
   /** Cau hoi vong dua, MANG SAN ca cau hoi lan cac dap an. */

@@ -250,6 +250,37 @@ export const en = {
   'race.first': 'They take the first turn!',
   'race.firstYou': 'You take the first turn',
 
+  /*
+   * BATTLE. Chữ chép từ `PlayerBattleInstruction.cshtml` và
+   * `PlayerBattleStartPartialHtml.cshtml` của bản web - xem GAME_RULES mục 7b.
+   *
+   * ⚠ `battle.win`/`battle.lose` chỉ dùng ở ván KHÔNG tính leaderboard. Ván có
+   * tính thì không ai mất điểm, phải dùng cặp `leader*`.
+   */
+  'battle.title': 'BATTLE',
+  'battle.challengedYou': '{name} has challenged you!',
+  'battle.youChallenge': "You're challenging {name}",
+  'battle.rules': "3 questions each, answered at the same time. Most right wins - sudden death if it's a tie.",
+  'battle.win': 'Win this battle to earn {points} {unit}.',
+  'battle.lose': 'If you lose, you hand over {points} {unit}.',
+  'battle.leaderWin': 'Win to stay on this square and take the next turn.',
+  'battle.leaderLose': 'Lose and you move back to the nearest free square.',
+  'battle.start': 'START',
+  'battle.starting': 'STARTING...',
+  'battle.waiting': 'Waiting for {name} to start the battle...',
+  /** Nhãn góc trên khung câu hỏi battle - "BATTLE 2/3". */
+  'battle.question': 'BATTLE {index}/3',
+  /** Câu sudden death: hết 3 câu mà vẫn hoà. */
+  'battle.suddenDeath': 'SUDDEN DEATH',
+  /** Tổng kết - gói 84 là chỗ duy nhất biết ai đúng mấy câu. */
+  'battle.score': 'You {mine} - {theirs} {name}',
+  'battle.wonYou': 'You won the battle!',
+  'battle.won': '{name} won the battle',
+  'battle.wonBody': 'You stay on this square.',
+  'battle.lostBody': 'You move back to the nearest free square.',
+  /** Người NGOÀI cuộc chỉ thấy một dòng thoáng qua. */
+  'battle.notice': 'Battle: {a} vs {b}',
+
   'direction.title': 'WHICH WAY WILL YOU GO?',
   'direction.clockwise': 'CLOCKWISE',
   'direction.anticlockwise': 'ANTI-CLOCKWISE',
@@ -481,6 +512,27 @@ const vi: Record<TranslationKey, string> = {
   'race.winnerYou': 'Bạn nhanh nhất!',
   'race.first': 'Người đó đi trước',
   'race.firstYou': 'Bạn đi trước',
+
+  'battle.title': 'ĐẤU',
+  'battle.challengedYou': '{name} thách đấu bạn!',
+  'battle.youChallenge': 'Bạn đang thách đấu {name}',
+  'battle.rules':
+    'Mỗi người 3 câu, trả lời cùng lúc. Ai đúng nhiều hơn thì thắng - hoà thì đấu tiếp từng câu.',
+  'battle.win': 'Thắng được {points} {unit}.',
+  'battle.lose': 'Thua thì mất {points} {unit}.',
+  'battle.leaderWin': 'Thắng thì ở lại ô này và được đi lượt kế.',
+  'battle.leaderLose': 'Thua thì lùi về ô trống gần nhất.',
+  'battle.start': 'BẮT ĐẦU',
+  'battle.starting': 'ĐANG BẮT ĐẦU...',
+  'battle.waiting': 'Đang đợi {name} bắt đầu trận đấu...',
+  'battle.question': 'ĐẤU {index}/3',
+  'battle.suddenDeath': 'ĐẤU TIẾP',
+  'battle.score': 'Bạn {mine} - {theirs} {name}',
+  'battle.wonYou': 'Bạn thắng trận đấu!',
+  'battle.won': '{name} thắng trận đấu',
+  'battle.wonBody': 'Bạn ở lại ô này.',
+  'battle.lostBody': 'Bạn lùi về ô trống gần nhất.',
+  'battle.notice': 'Đấu: {a} gặp {b}',
 
   'direction.title': 'BẠN ĐI HƯỚNG NÀO?',
   'direction.clockwise': 'THUẬN CHIỀU',

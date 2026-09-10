@@ -10,6 +10,7 @@ import {
   characterImageUrl,
   EMPTY_GUID,
   submitAnswer,
+  submitAnswerBattle,
   submitAnswerForTurn,
   type AnswerResult,
   type CardStepPayload,
@@ -28,6 +29,8 @@ import { DiceRollOverlay } from '../src/components/DiceRollOverlay';
 import { MoveDirectionOverlay } from '../src/components/MoveDirectionOverlay';
 import { FlyingReward } from '../src/components/FlyingReward';
 import { QuestionOverlay } from '../src/components/QuestionOverlay';
+import { BattleOverlay } from '../src/components/BattleOverlay';
+import { BattleResultOverlay } from '../src/components/BattleResultOverlay';
 import { TurnResultOverlay, type TurnResult } from '../src/components/TurnResultOverlay';
 import { RaceWinnerOverlay } from '../src/components/RaceWinnerOverlay';
 import {
@@ -139,8 +142,21 @@ const ROLL_COOLDOWN_MS = 2000;
  * màn hình thì y hệt. Gộp ở đây để chỉ có MỘT overlay và một chỗ quyết định gửi
  * câu trả lời đi đâu; `kind` là thứ duy nhất phân biệt.
  */
+/**
+ * So hai GUID không phân biệt hoa thường.
+ *
+ * ⚠ Cần thật: id từ SignalR và id từ `/api/game/{id}/state` KHÔNG luôn cùng
+ * kiểu chữ - `Guid` của .NET serialize thường, còn vài chỗ của app giữ nguyên
+ * chuỗi đã lưu. So bằng `===` trần là trượt im lặng.
+ */
+const same = (a: string, b: string) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
+
 type ActiveQuestion = {
-  kind: 'race' | 'turn';
+  /**
+   * `battle` là loại THỨ BA, thêm 2026-09-10. Cùng khung hiển thị, nhưng đi
+   * `/public/game/submitAnswerBattle` - endpoint riêng, xem GAME_RULES mục 7b.
+   */
+  kind: 'race' | 'turn' | 'battle';
   question: GameQuestion;
   categories: string[];
   duration: number;
@@ -160,6 +176,11 @@ type ActiveQuestion = {
    * tự reset theo.
    */
   usedEliminator: boolean;
+  /**
+   * Số thứ tự câu trong trận battle (0,1,2 là ba câu chính; từ 3 trở đi là
+   * sudden death). Chỉ để vẽ nhãn; `undefined` với hai loại câu kia.
+   */
+  battleIndex?: number;
 };
 
 export default function GameLandscapeScreen() {
@@ -291,6 +312,35 @@ export default function GameLandscapeScreen() {
    */
   const [raceWinner, setRaceWinner] = useState<{ name: string; isMe: boolean } | null>(null);
 
+  /**
+   * BATTLE đang diễn ra trên máy NÀY - lời dẫn trước trận (gói 55).
+   *
+   * `null` = không dính gì tới mình, hoặc đã qua bước lời dẫn. Người ngoài cuộc
+   * không có khung này - họ chỉ nhận gói 54 và thấy một dòng thông báo.
+   *
+   * ⚠ `amIncumbent` quyết định có nút START hay không, và đọc từ `IncumbentId`
+   * của gói chứ không tự suy: người đi thách là người TỚI LƯỢT, nhưng đến khi
+   * incumbent thắng thì thứ tự lượt bị xếp lại - suy từ `CurrentTurnPlayerId` là
+   * sai ngay sau đó.
+   */
+  const [battle, setBattle] = useState<{
+    challengerId: string;
+    incumbentId: string;
+    challengerName: string;
+    incumbentName: string;
+    challengerPoint: number;
+    incumbentPoint: number;
+    isLeaderBoard: boolean;
+    amIncumbent: boolean;
+  } | null>(null);
+
+  /**
+   * Kết quả trận battle - hiện giữa bàn cờ vài giây rồi tắt.
+   *
+   * Gồm cả điểm chuyển tay khi có (ván KHÔNG tính leaderboard). Dữ liệu từ gói 58.
+   */
+  const [battleResult, setBattleResult] = useState<{ name: string; isMe: boolean } | null>(null);
+
   /** Xem `waiting.tsx` - ref chỉ chặn lời gọi ĐANG BAY, không chặn vĩnh viễn. */
   const acking = useRef(false);
 
@@ -322,6 +372,15 @@ export default function GameLandscapeScreen() {
    * server đã tính họ "đã thử" rồi.
    */
   const answered = useRef<string>('');
+
+  /**
+   * Câu thứ mấy trong trận battle đang diễn - CHỈ để vẽ nhãn.
+   *
+   * Gói 56 gửi cho người chơi không mang số thứ tự (`currentQuestionIndex` chỉ có
+   * trong bản đầy đủ gửi cho bàn cờ), nên app tự đếm. Đặt lại 0 ở gói 54/55
+   * và khi trận kết thúc.
+   */
+  const battleQuestionNo = useRef(0);
 
   /*
    * Toạ độ MÀN HÌNH của ba mốc mà hiệu ứng phần thưởng cần: bay TỪ giữa bàn cờ,
@@ -501,11 +560,21 @@ export default function GameLandscapeScreen() {
           fromStepIndex: moverNow?.CurrentStepIndex ?? -1,
         });
 
+        /*
+         * ⚠ `IsSendDone === false` thì DIỄN XONG LÀ THÔI, không báo ngược.
+         *
+         * Chỉ có MỘT chỗ gửi cờ này: nước lùi của người THUA battle
+         * (`PlayerBattleWinnerHandler`). Nước đó nằm GIỮA lúc trận đấu đang khép, và
+         * cái đẩy ván đi tiếp là `BattleNext` chứ không phải `HostActionDone` - gửi
+         * thêm là chạy lại `HostActionDoneHandler` giữa chừng. Bàn cờ web đọc đúng
+         * cờ này ở `jumpCharacterThroughPath`. Xem GAME_RULES mục 7b.
+         */
+        const owesDone = packet.IsSendDone !== false;
         const isMine = !!seat && moverId.toLowerCase() === seat.playerId.toLowerCase();
         /* Dư 400ms cho máy yếu; `HOP_MS` là thời gian đi MỘT ô. */
         const walkMs = HOP_MS * steps + 400;
         setTimeout(() => {
-          if (isMine) {
+          if (isMine && owesDone) {
             void connection.current?.send(TYPE_ID.HostActionDone, {
               TurnId: turnId.current || snapshot?.Game.CurrentTurnId || '',
             });
@@ -705,6 +774,24 @@ export default function GameLandscapeScreen() {
           return;
         }
 
+        /*
+         * ⚠ MẮT XÍCH TREO VÁN - đừng bỏ.
+         *
+         * `WaitStartBattle` hết 20 giây mà incumbent chưa bấm START thì server nhắc
+         * bằng chính gói này - và nhánh "người chơi CÒN kết nối" KHÔNG tự chạy
+         * bước, nó chỉ nhắc. Bản web đáp bằng `Pub 56`
+         * (`callFromServerPlayerBattleStart`); không đáp là ván treo. Xem GAME_RULES
+         * mục 7b.
+         *
+         * Đóng luôn khung lời dẫn: bản web cũng `removeAllComponents()` ở đây.
+         */
+        if (fn === 'PlayerBattleStart') {
+          setBattle(null);
+          /* Payload RỖNG, đúng như bản web gửi (`payload: ''`). */
+          void connection.current?.send(TYPE_ID.PlayerBattleStart);
+          return;
+        }
+
         return;
       }
 
@@ -868,6 +955,142 @@ export default function GameLandscapeScreen() {
       }
 
       /*
+       * ============================================================
+       * BATTLE - bốn gói, xem GAME_RULES mục 7b
+       * ============================================================
+       *
+       * ⚠ Cả bốn gói này bản web chỉ gửi cho BÀN CỜ. Server đã được sửa
+       * (2026-09-10) để phát thêm cho ghế người chơi, vì app không có bàn cờ chung.
+       */
+
+      /*
+       * "Có battle" - gói đầu tiên, CẢ PHÒNG nhận.
+       *
+       * Người ngoài cuộc chỉ cần một dòng báo; hai đấu thủ sẽ nhận tiếp gói 55.
+       * Đặt lại bộ đếm câu ở đây - mỗi trận đếm lại từ đầu.
+       */
+      if (packet.typeID === TYPE_ID.PlayerBattle) {
+        battleQuestionNo.current = 0;
+
+        const challengerId = typeof packet.ChallengerPlayerId === 'string' ? packet.ChallengerPlayerId : '';
+        const incumbentId = typeof packet.IncumbentPlayerId === 'string' ? packet.IncumbentPlayerId : '';
+        const mine = seat?.playerId ?? '';
+        const inIt = same(mine, challengerId) || same(mine, incumbentId);
+        if (inIt) return;
+
+        const a = snapshot?.Players?.find((pl) => same(pl.Id, challengerId))?.NickName ?? '';
+        const b = snapshot?.Players?.find((pl) => same(pl.Id, incumbentId))?.NickName ?? '';
+        if (a && b) setNotice(t('battle.notice', { a, b }));
+        return;
+      }
+
+      /*
+       * Lời dẫn trước trận. Đi cả hai bên, phân vai bằng `IncumbentId`.
+       *
+       * ⚠ CHỈ incumbent có nút START, và đó là gói mà `WaitStartBattle` đang đợi.
+       */
+      if (packet.typeID === TYPE_ID.PlayerBattleInstruction) {
+        const challengerId = typeof packet.ChallengerId === 'string' ? packet.ChallengerId : '';
+        const incumbentId = typeof packet.IncumbentId === 'string' ? packet.IncumbentId : '';
+        const mine = seat?.playerId ?? '';
+        if (!same(mine, challengerId) && !same(mine, incumbentId)) return;
+
+        battleQuestionNo.current = 0;
+        setQuestion(null);
+        setBattle({
+          challengerId,
+          incumbentId,
+          challengerName: typeof packet.ChallengerNickname === 'string' ? packet.ChallengerNickname : '',
+          incumbentName: typeof packet.IncumbentNickname === 'string' ? packet.IncumbentNickname : '',
+          challengerPoint: typeof packet.ChallengerPoint === 'number' ? packet.ChallengerPoint : 0,
+          incumbentPoint: typeof packet.IncumbentPoint === 'number' ? packet.IncumbentPoint : 0,
+          isLeaderBoard: packet.isLeaderBoard === true,
+          amIncumbent: same(mine, incumbentId),
+        });
+        return;
+      }
+
+      /*
+       * Một câu hỏi battle. Trường viết HOA (`Question`, `Category`) như gói 67.
+       *
+       * ⚠ Gói này KHÔNG mang số thứ tự câu - bản đủ có `currentQuestionIndex` chỉ
+       * gửi cho bàn cờ. App tự đếm, chỉ để vẽ nhãn nên lệch cũng không hại.
+       */
+      if (packet.typeID === TYPE_ID.PlayerBattleStart) {
+        const data = packet as unknown as QuestionPacket;
+        if (!data.Question?.Id) return;
+        if (answered.current === data.Question.Id) return;
+
+        setBattle(null);
+        setQuestion({
+          kind: 'battle',
+          question: data.Question,
+          categories: categoryChain(data.Category),
+          duration: data.DurationInSeconds || 30,
+          /* Không dùng thẻ được trong battle - bản web cũng không có đường nào. */
+          isQuestionOwner: false,
+          usedEliminator: false,
+          battleIndex: battleQuestionNo.current,
+        });
+        battleQuestionNo.current += 1;
+        return;
+      }
+
+      /*
+       * Tổng kết 3 câu - chỗ DUY NHẤT biết ai đúng mấy câu.
+       *
+       * Bốn danh sách song song theo thứ tự câu: `Questions`, `CorrectAnswers`,
+       * `ChallengeAnswers`, `IncumbentAnswers`. Đếm bằng cách so từng ô - độ dài có
+       * thể lệch nhau khi trận kết thúc sớm ở câu 2.
+       */
+      if (packet.typeID === TYPE_ID.PlayerBattleSummary) {
+        const correct = Array.isArray(packet.CorrectAnswers) ? (packet.CorrectAnswers as string[]) : [];
+        const challengeAnswers = Array.isArray(packet.ChallengeAnswers) ? (packet.ChallengeAnswers as string[]) : [];
+        const incumbentAnswers = Array.isArray(packet.IncumbentAnswers) ? (packet.IncumbentAnswers as string[]) : [];
+        const challengeId = typeof packet.ChallengeId === 'string' ? packet.ChallengeId : '';
+        const mine = seat?.playerId ?? '';
+        if (!mine) return;
+
+        const iAmChallenger = same(mine, challengeId);
+        const myAnswers = iAmChallenger ? challengeAnswers : incumbentAnswers;
+        const theirAnswers = iAmChallenger ? incumbentAnswers : challengeAnswers;
+
+        const count = (list: string[]) =>
+          list.reduce((n, id, i) => (correct[i] && same(id, correct[i]) ? n + 1 : n), 0);
+
+        const theirId = iAmChallenger
+          ? (typeof packet.IncumbentId === 'string' ? packet.IncumbentId : '')
+          : challengeId;
+        const theirName = snapshot?.Players?.find((pl) => same(pl.Id, theirId))?.NickName ?? '';
+
+        setNotice(
+          t('battle.score', {
+            mine: String(count(myAnswers)),
+            theirs: String(count(theirAnswers)),
+            name: theirName,
+          }),
+        );
+        return;
+      }
+
+      /*
+       * Hết trận.
+       *
+       * ⚠ `characterId` là của người THUA (handler dùng nó để biết ai phải lùi ô).
+       * Người thắng nằm ở `WinnerId`.
+       */
+      if (packet.typeID === TYPE_ID.PlayerBattleWinner) {
+        battleQuestionNo.current = 0;
+        setBattle(null);
+
+        const winnerId = typeof packet.WinnerId === 'string' ? packet.WinnerId : '';
+        if (!winnerId) return;
+        const name = snapshot?.Players?.find((pl) => same(pl.Id, winnerId))?.NickName ?? '';
+        setBattleResult({ name, isMe: same(seat?.playerId ?? '', winnerId) });
+        return;
+      }
+
+      /*
        * Người chơi KHÁC vừa dùng thẻ. Gói riêng của app - xem ghi chú ở
        * `TYPE_ID.PlayerUsedCard`.
        */
@@ -952,6 +1175,26 @@ export default function GameLandscapeScreen() {
       : boardGameId === 'footietriv'
         ? t('unit.goals')
         : t('unit.points');
+
+  /* Dạng số ít - bản web đổi chữ khi điểm cược ở battle bằng 1 ("1 run"). */
+  const onePointUnit =
+    boardGameId === 'crictriv'
+      ? t('unit.run')
+      : boardGameId === 'footietriv'
+        ? t('unit.goal')
+        : t('unit.point');
+
+  /**
+   * "Tôi bắt đầu trận đấu" - gửi gói 56, payload RỖNG.
+   *
+   * ⚠ CHỈ incumbent bấm được nút này (khung tự chặn), và đây chính là gói mà
+   * `WaitStartBattle` đang đợi. Đóng khung NGAY, không đợi server: câu hỏi đầu tiên
+   * sẽ tới bằng chính gói 56 ở chiều ngược lại.
+   */
+  const startBattle = () => {
+    setBattle(null);
+    void connection.current?.send(TYPE_ID.PlayerBattleStart);
+  };
 
   /*
    * ============================================================
@@ -1189,6 +1432,18 @@ export default function GameLandscapeScreen() {
     return () => clearTimeout(hide);
   }, [turnResult]);
 
+  /*
+   * Kết quả battle tự tắt sau 4 giây - cùng nhịp với thông báo thắng vòng đua.
+   *
+   * Ngay sau khung này là nước lùi của người thua (gói 53) rồi `BattleNext`, nên
+   * đừng để lâu hơn: khung không chặn chạm nhưng vẫn che quân cờ đang đi.
+   */
+  useEffect(() => {
+    if (!battleResult) return;
+    const hide = setTimeout(() => setBattleResult(null), 4000);
+    return () => clearTimeout(hide);
+  }, [battleResult]);
+
   /* Thông báo "ai vừa dùng thẻ" tự tắt sau 2.5 giây. */
   useEffect(() => {
     if (!notice) return;
@@ -1355,6 +1610,13 @@ export default function GameLandscapeScreen() {
     setFlying({ id: Date.now(), reward });
   };
 
+  /**
+   * BA loại câu hỏi, BA endpoint. Gửi nhầm đường thì server tìm không ra lượt và
+   * câu trả lời rơi vào hư không - không báo lỗi gì cả. Xem GAME_RULES mục 7b.
+   */
+  const sendFor = (kind: ActiveQuestion['kind']) =>
+    kind === 'race' ? submitAnswerForTurn : kind === 'battle' ? submitAnswerBattle : submitAnswer;
+
   const answerQuestion = (answerId: string, answerContent: string) => {
     const current = question;
     setQuestion(null);
@@ -1366,12 +1628,11 @@ export default function GameLandscapeScreen() {
      */
     answered.current = current.question.Id;
 
-    const send = current.kind === 'race' ? submitAnswerForTurn : submitAnswer;
-    void send(
+    void sendFor(current.kind)(
       { questionId: current.question.Id, answerId, questionTitle: answerContent },
       seat.token,
     ).then((res) => {
-      // Vòng đua có thông báo riêng - xem ghi chú trong `showAnswerResult`.
+      // Vòng đua và battle có thông báo riêng - xem ghi chú trong `showAnswerResult`.
       if (current.kind === 'turn') showAnswerResult(res);
     });
   };
@@ -1511,8 +1772,7 @@ export default function GameLandscapeScreen() {
     /* Bản web có màn riêng cho hết giờ (`PlayerTimeoutAnswer.cshtml`). */
     setTurnResult({ kind: 'timeout' });
 
-    const send = current.kind === 'race' ? submitAnswerForTurn : submitAnswer;
-    void send(
+    void sendFor(current.kind)(
       { questionId: current.question.Id, answerId: EMPTY_GUID, isTimeout: true },
       seat.token,
     );
@@ -1531,8 +1791,7 @@ export default function GameLandscapeScreen() {
     setQuestion(null);
     answered.current = current.question.Id;
 
-    const send = current.kind === 'race' ? submitAnswerForTurn : submitAnswer;
-    void send(
+    void sendFor(current.kind)(
       { questionId: current.question.Id, answerId: EMPTY_GUID, isTooLate: true },
       seat.token,
     );
@@ -1889,10 +2148,41 @@ export default function GameLandscapeScreen() {
                  * bậc. Lượt thường BỎ TRỐNG `banner`: ô lớn chính là chủ đề gốc,
                  * ô nhỏ là chủ đề con.
                  */
-                banner={question.kind === 'race' ? t('question.race') : null}
+                /*
+                 * Battle cũng cần nhãn: ba câu liên tiếp cùng chủ đề, không đếm thì
+                 * người chơi không biết đang ở đâu. Từ câu thứ 4 trở đi là sudden
+                 * death - luật đổi hẳn thành "ai đúng TRƯỚC", phải nói ra.
+                 */
+                banner={
+                  question.kind === 'race'
+                    ? t('question.race')
+                    : question.kind === 'battle'
+                      ? (question.battleIndex ?? 0) >= 3
+                        ? t('battle.suddenDeath')
+                        : t('battle.question', { index: String((question.battleIndex ?? 0) + 1) })
+                      : null
+                }
                 onAnswer={answerQuestion}
                 onTimeout={timeoutQuestion}
               />
+            ) : null}
+
+            {battle ? (
+              <BattleOverlay
+                challengerName={battle.challengerName}
+                incumbentName={battle.incumbentName}
+                challengerPoint={battle.challengerPoint}
+                incumbentPoint={battle.incumbentPoint}
+                isLeaderBoard={battle.isLeaderBoard}
+                amIncumbent={battle.amIncumbent}
+                unit={pointUnit}
+                oneUnit={onePointUnit}
+                onStart={startBattle}
+              />
+            ) : null}
+
+            {battleResult ? (
+              <BattleResultOverlay name={battleResult.name} isMe={battleResult.isMe} />
             ) : null}
 
             {notice ? (

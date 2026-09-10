@@ -865,7 +865,7 @@ export type AnswerResult = {
  * ⚠️ Khác đường với vòng đua. Ba loại câu hỏi, ba endpoint:
  *   vòng đua "ai đi trước" -> `/public/game/submitAnswerForTurn`
  *   lượt chơi thường       -> `/public/game/submitAnswer`   (đây)
- *   battle                 -> đường khác nữa, chưa tra
+ *   battle                 -> `/public/game/submitAnswerBattle`
  * Gửi nhầm đường thì server tìm không ra lượt và câu trả lời rơi vào hư không.
  *
  * Hình dạng payload thì giống hệt vòng đua - chép theo
@@ -877,6 +877,36 @@ export function submitAnswer(
 ): Promise<ApiResult<AnswerResult>> {
   return postJson(
     '/public/game/submitAnswer',
+    {
+      answerId: params.answerId,
+      questionId: params.questionId,
+      questionTitle: params.questionTitle ?? '',
+      IsTimeout: params.isTimeout ?? false,
+      IsTooLate: params.isTooLate ?? false,
+    },
+    token,
+  );
+}
+
+/**
+ * Trả lời câu hỏi BATTLE.
+ *
+ * Đường thứ BA, khác cả hai đường trên. Hình dạng payload giống hệt nhưng
+ * endpoint khác - gửi nhầm đường thì server tìm không ra trận và câu trả lời rơi
+ * vào hư không.
+ *
+ * ⚠ KHÔNG có `isCorrect` trong response - server trả đúng `{ isSuccess: true }`.
+ * Đừng vẽ khung đúng/sai sau khi gửi; bản web cũng chỉ hiện chữ "Submitted".
+ * Biết kết quả là ở gói 84 `PlayerBattleSummary`. Xem GAME_RULES mục 7b.
+ *
+ * ⚠ Hết giờ PHẢI gửi: server đợi ĐỦ CẢ HAI đấu thủ mới khép câu.
+ */
+export function submitAnswerBattle(
+  params: { questionId: string; answerId: string; questionTitle?: string; isTimeout?: boolean; isTooLate?: boolean },
+  token: string,
+): Promise<ApiResult<AnswerResult>> {
+  return postJson(
+    '/public/game/submitAnswerBattle',
     {
       answerId: params.answerId,
       questionId: params.questionId,
