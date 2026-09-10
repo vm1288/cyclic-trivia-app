@@ -10,6 +10,7 @@ import Animated, {
 
 import { useT } from '../i18n/I18nProvider';
 import { getLeaderboard, type LeaderboardRow } from '../api/game';
+import { LeaderboardStage } from './LeaderboardStage';
 import { text } from '../theme/colors';
 
 /**
@@ -141,6 +142,23 @@ export function GameOverOverlay({
     );
   };
 
+  /*
+   * Thể thức Leaderboard Challenge có MÀN RIÊNG, dựng trên bộ tranh sân khấu -
+   * xem `LeaderboardStage`. Khung chữ dưới đây chỉ còn dành cho ván tính giờ,
+   * đúng như bản web: "Game Over" + câu ngẫu nhiên, không bảng nào.
+   */
+  if (isLeaderboard && board && hasBoard) {
+    return (
+      <LeaderboardStage
+        global={board.global}
+        current={board.current}
+        meId={meId}
+        message={message}
+        onLeave={onLeave}
+      />
+    );
+  }
+
   return (
     <View style={styles.wrap}>
       <Animated.View style={[styles.card, isLeaderboard && styles.cardWide, card]}>
@@ -155,35 +173,12 @@ export function GameOverOverlay({
         <Text style={styles.message}>{message || t('gameOver.defaultMessage')}</Text>
 
         {/*
-          Ván tính giờ dừng ở đây - đúng bằng bản web. Không có bảng nào cả.
-
-          ⚠️ HAI BẢNG XẾP CẠNH NHAU, không chồng lên nhau. Bản đầu xếp dọc và trên
-          máy thật (SM-A175F nằm ngang) phần thứ hai bị đẩy hẳn xuống dưới mép -
-          người chơi thấy mỗi bảng chung, tưởng app quên mất kết quả ván mình vừa
-          chơi. Màn hình ngang thì chiều cao mới là thứ hiếm.
+          Tới được đây thì hoặc là ván tính giờ (không có bảng nào, đúng bản
+          web), hoặc là ván Leaderboard Challenge mà bảng chưa tải xong / tải
+          hỏng - lúc đó vẫn phải nói cho người chơi biết VÁN ĐÃ XONG.
         */}
         {isLeaderboard ? (
-          hasBoard ? (
-            <View style={styles.columns}>
-              <View style={styles.column}>
-                <Text style={styles.section}>{t('gameOver.global')}</Text>
-                <ScrollView contentContainerStyle={styles.listInner} showsVerticalScrollIndicator={false}>
-                  {board!.global.map((item, i) => row(item, i, false))}
-                </ScrollView>
-              </View>
-
-              <View style={styles.column}>
-                <Text style={styles.section}>{t('gameOver.currentMatch')}</Text>
-                {/*
-                  Cột đầu ở đây là **hạng toàn cục** dạng "251/443", không phải số
-                  thứ tự trong ván - xem `LeaderboardRow.Rank`.
-                */}
-                <ScrollView contentContainerStyle={styles.listInner} showsVerticalScrollIndicator={false}>
-                  {board!.current.map((item, i) => row(item, i, true))}
-                </ScrollView>
-              </View>
-            </View>
-          ) : failed ? (
+          failed ? (
             <Text style={styles.note}>{t('gameOver.boardFailed')}</Text>
           ) : (
             <ActivityIndicator color="#C7D2FE" style={styles.spinner} />
