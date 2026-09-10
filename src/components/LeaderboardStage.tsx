@@ -1,4 +1,4 @@
-import { Fragment, useEffect } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Image, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -39,23 +39,32 @@ import { text } from '../theme/colors';
  * **4 – 2 – 1 – 3 – 5 – 6**, nhận ra bằng chiều cao (cúp cao hơn = hạng cao
  * hơn). Mảng này xếp theo HẠNG, phần trăm bên trong đã trỏ đúng cột.
  *
- * ⚠️ Đo bằng mã, không ướm mắt: `scripts/dev-podium-zones.py` ở repo server quét
- * kênh alpha rồi in ra bộ số này kèm ảnh có lưới. Đổi tranh thì chạy lại. Lệch
- * vài phần trăm là chữ leo lên viền neon, mà nhìn mã thì không thấy gì sai.
+ * ⚠️ Mỗi ô là **hộp canh theo TÂM của vùng**, không phải theo mép.
+ * `scripts/dev-podium-zones.py` gom các hàng tối liền nhau trong mỗi cột thành
+ * hai miền (vòng tròn, biển tên), lấy tâm rồi dựng hộp quanh tâm đó. Phải làm
+ * vậy vì **tên người chơi dài ngắn khác nhau**: canh theo mép thì tên ngắn nằm
+ * lệch, tên dài tràn ra. Bản trước đo theo mép và Tony nhìn ra ngay.
+ *
+ * ⚠️ Đổi tranh thì chạy lại công cụ đó, đừng ướm mắt. Nó tự tìm sáu cột và tự
+ * sắp hạng theo chiều cao cúp.
+ *
+ * ⚠️ Hạng 4 và 5 trong tranh này **cao gần bằng nhau** (lệch 0,6%), nên thứ tự
+ * giữa chúng là quy ước chứ không phải đo được: giữ thế sóng 4-2-1-3-5-6 đọc từ
+ * trái sang phải, tức cúp tím = 4, cúp xanh lá = 5.
  */
 const SLOTS = [
-  { medal: { left: '40.1%', top: '22.5%', width: '8.9%', height: '19.0%' },
-    plate: { left: '39.0%', top: '54.6%', width: '11.3%', height: '8.3%' } },
-  { medal: { left: '22.1%', top: '33.4%', width: '7.8%', height: '19.8%' },
-    plate: { left: '20.6%', top: '66.2%', width: '10.7%', height: '5.8%' } },
-  { medal: { left: '56.9%', top: '35.0%', width: '7.4%', height: '19.4%' },
-    plate: { left: '56.1%', top: '65.4%', width: '10.0%', height: '7.8%' } },
-  { medal: { left: '6.0%', top: '44.5%', width: '6.8%', height: '16.2%' },
-    plate: { left: '4.5%', top: '71.8%', width: '9.5%', height: '5.6%' } },
-  { medal: { left: '72.0%', top: '42.2%', width: '7.1%', height: '19.4%' },
-    plate: { left: '71.6%', top: '70.7%', width: '9.5%', height: '7.5%' } },
-  { medal: { left: '87.4%', top: '50.4%', width: '6.5%', height: '16.8%' },
-    plate: { left: '86.9%', top: '75.7%', width: '9.0%', height: '6.3%' } },
+  { medal: { left: '40.18%', top: '20.66%', width: '8.85%', height: '19.05%' },
+    plate: { left: '39.30%', top: '54.90%', width: '10.55%', height: '7.83%' } },
+  { medal: { left: '22.08%', top: '34.93%', width: '7.96%', height: '17.07%' },
+    plate: { left: '21.11%', top: '65.43%', width: '9.71%', height: '6.49%' } },
+  { medal: { left: '57.45%', top: '36.52%', width: '7.49%', height: '16.79%' },
+    plate: { left: '56.61%', top: '65.66%', width: '9.09%', height: '7.06%' } },
+  { medal: { left: '5.95%', top: '45.78%', width: '6.86%', height: '13.83%' },
+    plate: { left: '4.73%', top: '72.01%', width: '8.81%', height: '5.15%' } },
+  { medal: { left: '72.80%', top: '43.75%', width: '6.97%', height: '16.65%' },
+    plate: { left: '72.05%', top: '70.85%', width: '8.58%', height: '7.06%' } },
+  { medal: { left: '88.14%', top: '51.73%', width: '6.44%', height: '14.39%' },
+    plate: { left: '87.36%', top: '75.98%', width: '8.14%', height: '5.73%' } },
 ] as const;
 
 /**
@@ -98,6 +107,15 @@ export function LeaderboardStage({
    * cột cuối của bảng kết quả - đã thấy tận mắt trên SM-A175F.
    */
   const insets = useSafeAreaInsets();
+
+  /*
+   * Chiều cao thật của khung tranh, đo một lần khi bố cục xong.
+   *
+   * ⚠️ Cỡ chữ phải tính TỪ Ô, không đặt cứng. Sáu cúp to nhỏ khác nhau: ô của
+   * hạng 1 cao 17,4% còn hạng 4 chỉ 12,6% - một cỡ chữ dùng chung thì ô nhỏ bị
+   * bóp, số hạng teo lại còn tên thì đè lên nó. Đã thấy tận mắt.
+   */
+  const [podiumHeight, setPodiumHeight] = useState(0);
 
   /*
    * Bục dựng lên theo thứ tự NGƯỢC: 6 trước, 1 sau cùng. Cùng nhịp với mọi lễ
@@ -154,7 +172,10 @@ export function LeaderboardStage({
       </View>
 
       <View style={styles.podiumArea}>
-        <Animated.View style={[styles.podiumBox, stage]}>
+        <Animated.View
+          style={[styles.podiumBox, stage]}
+          onLayout={(e) => setPodiumHeight(e.nativeEvent.layout.height)}
+        >
           <Image source={PODIUM} style={styles.podiumImg} resizeMode="stretch" />
 
           {SLOTS.map((slot, i) => {
@@ -162,6 +183,18 @@ export function LeaderboardStage({
             if (!row) return null;
             const isMe = row.PlayerId === meId;
             const color = SLOT_COLOR[i];
+
+            /* Chiều cao ô = phần trăm của khung tranh -> cỡ chữ theo tỉ lệ ô. */
+            const medalH = (podiumHeight * parseFloat(slot.medal.height)) / 100;
+            const plateH = (podiumHeight * parseFloat(slot.plate.height)) / 100;
+            const rankSize = Math.max(10, medalH * 0.42);
+            const nameSize = Math.max(9, medalH * 0.26);
+            /*
+             * ⚠️ `lineHeight` KHÔNG được vượt chiều cao biển: vượt là
+             * `adjustsFontSizeToFit` co chữ lại cho vừa, và điểm teo đi một
+             * nửa dù cỡ chữ tính ra đã đúng. Nên để đúng bằng cỡ chữ.
+             */
+            const scoreSize = Math.max(11, plateH * 0.82);
 
             return (
               /*
@@ -178,14 +211,21 @@ export function LeaderboardStage({
                 */}
                 <View style={[styles.zone, slot.medal]}>
                   <Text
-                    style={[styles.medalRank, { color }]}
+                    style={[
+                      styles.medalRank,
+                      { color, fontSize: rankSize, lineHeight: rankSize * 1.1 },
+                    ]}
                     numberOfLines={1}
-                    adjustsFontSizeToFit
                   >
                     {i + 1}
                   </Text>
+                  {/* Tên dài ngắn tuỳ người nên vẫn cho co lại, nhưng co từ cỡ đã hợp ô. */}
                   <Text
-                    style={[styles.medalName, isMe && styles.slotMine]}
+                    style={[
+                      styles.medalName,
+                      { fontSize: nameSize, lineHeight: nameSize * 1.2 },
+                      isMe && styles.slotMine,
+                    ]}
                     numberOfLines={1}
                     adjustsFontSizeToFit
                   >
@@ -196,7 +236,10 @@ export function LeaderboardStage({
                 {/* Biển chữ nhật: ĐIỂM, số to nhất trên cúp. */}
                 <View style={[styles.zone, slot.plate]}>
                   <Text
-                    style={[styles.plateScore, { color }]}
+                    style={[
+                      styles.plateScore,
+                      { color, fontSize: scoreSize, lineHeight: scoreSize },
+                    ]}
                     numberOfLines={1}
                     adjustsFontSizeToFit
                   >
@@ -279,12 +322,18 @@ const styles = StyleSheet.create({
   /* `flex-start`: cúp bám lên trên, chỗ trống dồn xuống dưới bảng kết quả. */
   podiumArea: { flex: 1, marginTop: -6, alignItems: 'center', justifyContent: 'flex-start' },
   /* Đúng tỉ lệ ảnh -> phần trăm của khung KHỚP phần trăm của tranh. */
-  podiumBox: { height: '100%', aspectRatio: PODIUM_RATIO, maxWidth: '100%' },
+  /* Chừa khoảng thở giữa cúp và dải KẾT QUẢ VÁN NÀY - 100% thì hai thứ dính nhau. */
+  podiumBox: { height: '86%', aspectRatio: PODIUM_RATIO, maxWidth: '100%' },
   podiumImg: { width: '100%', height: '100%' },
   zone: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-  medalRank: { fontSize: 26, fontWeight: '900', lineHeight: 29 },
-  medalName: { fontSize: 14, fontWeight: '800', lineHeight: 17, color: '#fff' },
-  plateScore: { fontSize: 30, fontWeight: '900' },
+  /*
+   * ⚠️ `includeFontPadding: false`: Android tự thêm đệm trên/dưới NGOÀI
+   * `lineHeight`. Đệm đó làm chữ không vừa ô, `adjustsFontSizeToFit` bèn co lại
+   * - điểm teo còn một nửa dù cỡ chữ tính ra đã đúng ô.
+   */
+  medalRank: { fontWeight: '900', textAlign: 'center', includeFontPadding: false },
+  medalName: { fontWeight: '800', color: '#fff', textAlign: 'center', includeFontPadding: false },
+  plateScore: { fontWeight: '900', textAlign: 'center', includeFontPadding: false },
   slotMine: { color: '#FDE68A' },
 
   footer: {},
