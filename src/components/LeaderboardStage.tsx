@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { Fragment, useEffect } from 'react';
 import { Image, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -29,36 +29,47 @@ import { text } from '../theme/colors';
  */
 
 /**
- * Sáu mặt bục, tính theo PHẦN TRĂM khung ảnh `podium.png`.
+ * Sáu chỗ trên `podium.png`, tính theo PHẦN TRĂM khung ảnh.
  *
- * ⚠️ Đo bằng mã (quét kênh alpha của chính tấm ảnh), không ướm bằng mắt: lệch
- * vài phần trăm là chữ leo lên viền neon và tấm ảnh trông như bị lỗi. Đổi tranh
- * thì phải đo lại — quy trình ghi ở TEST_CASES **K46**.
+ * Bộ tranh thứ hai (2026-09-10 tối) là **sáu chiếc cúp**, mỗi cúp có hai ô để
+ * trống: **huy chương tròn** ở trên và **biển tên** ở dưới. Nên mỗi hạng cần
+ * HAI vùng chứ không phải một.
  *
- * Thứ tự mảng = thứ hạng 1..6, KHÔNG phải thứ tự trái sang phải: hạng nhất là
- * bục vàng ở giữa.
+ * ⚠️ Sáu cúp KHÔNG xếp theo hạng từ trái sang phải. Thứ tự trong tranh là
+ * **4 – 2 – 1 – 3 – 5 – 6**, nhận ra bằng chiều cao (cúp cao hơn = hạng cao
+ * hơn). Mảng này xếp theo HẠNG, phần trăm bên trong đã trỏ đúng cột.
+ *
+ * ⚠️ Đo bằng mã, không ướm mắt: `scripts/dev-podium-zones.py` ở repo server quét
+ * kênh alpha rồi in ra bộ số này kèm ảnh có lưới. Đổi tranh thì chạy lại. Lệch
+ * vài phần trăm là chữ leo lên viền neon, mà nhìn mã thì không thấy gì sai.
  */
 const SLOTS = [
-  { left: '38.5%', top: '17%', width: '23%', height: '33%', tall: true },
-  { left: '13.5%', top: '26%', width: '19%', height: '24%', tall: true },
-  { left: '67.5%', top: '27%', width: '19.5%', height: '23%', tall: true },
-  { left: '14.5%', top: '76%', width: '15.5%', height: '11%', tall: false },
-  { left: '40.5%', top: '76%', width: '18%', height: '11%', tall: false },
-  { left: '68.5%', top: '76%', width: '17%', height: '11%', tall: false },
+  { medal: { left: '39.3%', top: '24.6%', width: '10.5%', height: '14.7%' },
+    plate: { left: '39.0%', top: '54.6%', width: '11.3%', height: '8.3%' } },
+  { medal: { left: '21.2%', top: '35.6%', width: '9.2%', height: '15.3%' },
+    plate: { left: '20.6%', top: '66.2%', width: '10.7%', height: '5.8%' } },
+  { medal: { left: '56.2%', top: '37.2%', width: '8.7%', height: '15.0%' },
+    plate: { left: '56.1%', top: '65.4%', width: '10.0%', height: '7.8%' } },
+  { medal: { left: '5.2%', top: '46.3%', width: '8.0%', height: '12.5%' },
+    plate: { left: '4.5%', top: '71.8%', width: '9.5%', height: '5.6%' } },
+  { medal: { left: '71.4%', top: '44.4%', width: '8.3%', height: '15.1%' },
+    plate: { left: '71.6%', top: '70.7%', width: '9.5%', height: '7.5%' } },
+  { medal: { left: '86.8%', top: '52.3%', width: '7.7%', height: '13.0%' },
+    plate: { left: '86.9%', top: '75.7%', width: '9.0%', height: '6.3%' } },
 ] as const;
 
 /**
- * Tỉ lệ thật của `podium.png` (1578×692).
+ * Tỉ lệ thật của `podium.png` (1604×482).
  *
  * ⚠️ Khung bọc PHẢI đúng tỉ lệ này. Bản đầu để khung `flex: 1` rồi vẽ ảnh bằng
  * `contain`: ảnh co lại nằm giữa khung, còn sáu ô chữ vẫn tính theo phần trăm
  * của KHUNG - thành ra tên và điểm trôi hẳn ra ngoài mặt bục. Nhìn ảnh chụp là
  * thấy ngay, nhưng đọc mã thì không.
  */
-const PODIUM_RATIO = 1578 / 692;
+const PODIUM_RATIO = 1604 / 482;
 
 /** Màu điểm của từng bục, lấy theo đúng màu neon trong tranh. */
-const SLOT_COLOR = ['#FFD46A', '#A9CCFF', '#FF9E80', '#FF6BA8', '#C79BFF', '#5FE39C'];
+const SLOT_COLOR = ['#FFC93C', '#7FB6FF', '#FF8A50', '#C07BFF', '#4FE38A', '#FF5C6A'];
 
 const ARENA = require('../../assets/leaderboard/arena.png');
 const PODIUM = require('../../assets/leaderboard/podium.png');
@@ -152,54 +163,51 @@ export function LeaderboardStage({
             const row = globalRows[i];
             if (!row) return null;
             const isMe = row.PlayerId === meId;
-            return (
-              <View key={i} style={[styles.slot, slot]}>
-                {/*
-                  Số hạng phải VIẾT RA: tranh để mặt bục trắng trơn, mà thế đứng
-                  cao thấp chỉ nói được ai nhất - ba bục hàng dưới bằng nhau thì
-                  không ai đoán nổi đâu là 4, đâu là 6.
+            const color = SLOT_COLOR[i];
 
-                  ⚠️ Hàng dưới ghép số vào CÙNG DÒNG với tên. Tách thành ba dòng
-                  thì dòng đầu rơi đúng lên đỉnh neon sáng của bục và số biến mất
-                  hẳn - đã thấy trên ảnh chụp máy thật.
-                */}
-                {slot.tall ? (
+            return (
+              /*
+               * ⚠️ `Fragment`, KHÔNG phải `View`. Bọc trong một `View` không kích
+               * thước thì hai vùng con tính phần trăm theo CÁI BỌC RỖNG đó chứ
+               * không phải khung tranh - chữ biến mất sạch, tranh vẫn lên bình
+               * thường nên nhìn như "chưa có dữ liệu". Đã dính 2026-09-10.
+               */
+              <Fragment key={i}>
+                {/* Huy chương tròn: ĐIỂM, số to nhất trên màn. */}
+                <View style={[styles.zone, slot.medal]}>
                   <Text
-                    style={[styles.slotRank, { color: SLOT_COLOR[i] }]}
+                    style={[styles.medalScore, { color }]}
                     numberOfLines={1}
+                    adjustsFontSizeToFit
+                  >
+                    {row.Score.toLocaleString()}
+                  </Text>
+                </View>
+
+                {/*
+                  Biển tên: số hạng + tên trên MỘT dòng.
+
+                  ⚠️ Số hạng phải viết ra. Sáu cúp xếp 4-2-1-3-5-6 nên thứ tự
+                  trái-phải nói sai sự thật; chiều cao cúp thì chỉ người tinh mắt
+                  mới đọc được.
+                */}
+                <View style={[styles.zone, styles.plate, slot.plate]}>
+                  <Text
+                    style={[styles.plateRank, { color }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
                   >
                     {i + 1}
                   </Text>
-                ) : null}
-
-                <View style={styles.slotNameRow}>
-                  {!slot.tall ? (
-                    <Text style={[styles.slotRankSmall, { color: SLOT_COLOR[i] }]}>
-                      {i + 1}
-                    </Text>
-                  ) : null}
                   <Text
-                    style={[
-                      slot.tall ? styles.slotName : styles.slotNameSmall,
-                      isMe && styles.slotMine,
-                    ]}
+                    style={[styles.plateName, isMe && styles.slotMine]}
                     numberOfLines={1}
                     adjustsFontSizeToFit
                   >
                     {row.PlayerName}
                   </Text>
                 </View>
-
-                <Text
-                  style={[
-                    slot.tall ? styles.slotScore : styles.slotScoreSmall,
-                    { color: SLOT_COLOR[i] },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {row.Score.toLocaleString()}
-                </Text>
-              </View>
+              </Fragment>
             );
           })}
         </Animated.View>
@@ -279,16 +287,13 @@ const styles = StyleSheet.create({
 
   podiumArea: { flex: 1, marginTop: 2, alignItems: 'center', justifyContent: 'center' },
   /* Đúng tỉ lệ ảnh -> phần trăm của khung KHỚP phần trăm của tranh. */
-  podiumBox: { height: '100%', aspectRatio: PODIUM_RATIO, maxWidth: '96%' },
+  podiumBox: { height: '100%', aspectRatio: PODIUM_RATIO, maxWidth: '100%' },
   podiumImg: { width: '100%', height: '100%' },
-  slot: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-  slotRank: { fontSize: 17, fontWeight: '900', lineHeight: 19 },
-  slotRankSmall: { fontSize: 12, fontWeight: '900', lineHeight: 14 },
-  slotNameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  slotName: { fontSize: 14.5, fontWeight: '800', lineHeight: 18, color: '#fff' },
-  slotNameSmall: { fontSize: 11, fontWeight: '800', lineHeight: 13, color: '#fff' },
-  slotScore: { fontSize: 24, fontWeight: '900', lineHeight: 28 },
-  slotScoreSmall: { fontSize: 15, fontWeight: '900', lineHeight: 17 },
+  zone: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
+  medalScore: { fontSize: 34, fontWeight: '900' },
+  plate: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
+  plateRank: { fontSize: 14, fontWeight: '900' },
+  plateName: { fontSize: 15, fontWeight: '800', color: '#fff', flexShrink: 1 },
   slotMine: { color: '#FDE68A' },
 
   footer: {},
