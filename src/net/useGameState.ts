@@ -89,6 +89,8 @@ export function useGameState(options: {
   includeBoard?: boolean;
   /** Xem ghi chú `asBoard` trong `gameConnection.ts`. */
   asBoard?: boolean;
+  /** Xem ghi chú `clientId` trong `gameConnection.ts`. */
+  clientId?: string;
   /**
    * Xem thêm gói tin thô, sau khi hook đã tự lo phần nạp lại state.
    *
@@ -99,7 +101,7 @@ export function useGameState(options: {
    */
   onPacket?: (packet: Packet) => void;
 }) {
-  const { gameId, token, includeBoard, asBoard, onPacket } = options;
+  const { gameId, token, includeBoard, asBoard, clientId, onPacket } = options;
 
   const [snapshot, setSnapshot] = useState<GameSnapshot | null>(null);
   const [board, setBoard] = useState<GameBoard | null>(null);
@@ -153,6 +155,7 @@ export function useGameState(options: {
   const { state: connState, connection } = useGameConnection({
     token,
     asBoard,
+    clientId,
     onPacket: (packet) => {
       if (REFRESH_ON.has(packet.typeID)) schedule();
       extra.current?.(packet);

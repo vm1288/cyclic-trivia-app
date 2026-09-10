@@ -112,6 +112,7 @@ export default function LobbyScreen() {
   const license = useLicense();
   const player = usePlayer();
   const seat = player.status === 'ready' ? player.seat : null;
+  const clientId = player.status === 'ready' ? player.deviceId : undefined;
   const t = useT();
 
   const session = license.status === 'active' ? license.session : null;
@@ -171,6 +172,7 @@ export default function LobbyScreen() {
   const { snapshot } = useGameState({
     gameId,
     token: seat?.token ?? null,
+    clientId,
     /*
      * ⚠️ ACK NGAY TẠI MÀN LOBBY, đừng để dành cho `waiting.tsx`.
      *

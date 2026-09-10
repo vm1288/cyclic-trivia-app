@@ -240,6 +240,18 @@ export const TYPE_ID = {
    * không nhận gì cả. Gói này chỉ mang dữ liệu (ai thắng), mỗi máy tự vẽ.
    */
   RaceWinner: 87,
+  /**
+   * "Ghế này vừa được mở ở một MÁY KHÁC" — gửi cho máy vừa BỊ ĐÁ khỏi slot.
+   *
+   * Mỗi người chơi chỉ có MỘT ô `ConnectionId` ở server và mọi gói tin đều đi qua
+   * đó. Máy nối sau ghi đè ô ấy, nên máy cũ **không nhận được gói nào nữa** — mà
+   * WebSocket của nó vẫn mở nên nó không hề biết. Đo được 2026-09-10: máy vào
+   * trước nhận đúng **0 gói** (TEST_CASES mục K23, ca KX-3).
+   *
+   * ⚠ Nhận gói này thì **ĐừNG NỐI LẠI**. Nối lại là hai máy đá qua đá lại nhau
+   * vô tận, và cả hai cùng hỏng.
+   */
+  ConnectionReplaced: 88,
 } as const;
 
 /** Gói tin server đẩy xuống. Luôn có `typeID`; phần còn lại tuỳ loại. */
@@ -250,6 +262,15 @@ export type ConnectionState = 'idle' | 'connecting' | 'connected' | 'reconnectin
 type Options = {
   /** Token NGƯỜI CHƠI (`seat.token`), KHÔNG phải token license. */
   token: string;
+  /**
+   * Máy này là máy nào (`PlayerSession.deviceId`).
+   *
+   * Gắn vào URL hub thành `?clientId=`. Server dùng nó để phân biệt **cùng một máy
+   * nối lại** (chuyện thường, im lặng) với **một máy KHÁC cướp ghế** (báo về cho
+   * máy cũ bằng gói 88). Không gửi thì server không báo gì cả — xem
+   * `TYPE_ID.ConnectionReplaced`.
+   */
+  clientId?: string;
   /**
    * Nối với vai BÀN CỜ.
    *
@@ -300,7 +321,7 @@ export type GameConnection = {
   state: () => ConnectionState;
 };
 
-export function createGameConnection({ token, asBoard, onPacket, onState }: Options): GameConnection {
+export function createGameConnection({ token, asBoard, clientId, onPacket, onState }: Options): GameConnection {
   /*
    * Token đi qua QUERY STRING, không phải header.
    *
@@ -309,7 +330,11 @@ export function createGameConnection({ token, asBoard, onPacket, onState }: Opti
    * `Authorization` cho đường `/gamehub`. WebSocket không gửi header tuỳ ý được
    * nên đây là cách duy nhất.
    */
-  const url = `${API_BASE_URL}${HUB_PATH}${asBoard ? '?connKind=board' : ''}`;
+  const params = new URLSearchParams();
+  if (asBoard) params.set('connKind', 'board');
+  if (clientId) params.set('clientId', clientId);
+  const query = params.toString();
+  const url = `${API_BASE_URL}${HUB_PATH}${query ? `?${query}` : ''}`;
 
   const connection: HubConnection = new HubConnectionBuilder()
     .withUrl(url, { accessTokenFactory: () => token })

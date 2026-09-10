@@ -281,6 +281,14 @@ export const en = {
   /** Người NGOÀI cuộc chỉ thấy một dòng thoáng qua. */
   'battle.notice': 'Battle: {a} vs {b}',
 
+  /*
+   * Ghế bị mở ở máy khác (gói 88). Đừng hứa "thử lại" — máy này không giành lại
+   * được ghế, và cố nối lại thì hai máy đá nhau vô tận.
+   */
+  'conn.replacedTitle': 'This seat was opened on another device',
+  'conn.replacedBody':
+    'Only one device can play a seat at a time. Carry on there, or take a seat again from the home screen.',
+
   'direction.title': 'WHICH WAY WILL YOU GO?',
   'direction.clockwise': 'CLOCKWISE',
   'direction.anticlockwise': 'ANTI-CLOCKWISE',
@@ -533,6 +541,10 @@ const vi: Record<TranslationKey, string> = {
   'battle.wonBody': 'Bạn ở lại ô này.',
   'battle.lostBody': 'Bạn lùi về ô trống gần nhất.',
   'battle.notice': 'Đấu: {a} gặp {b}',
+
+  'conn.replacedTitle': 'Ghế này vừa được mở ở máy khác',
+  'conn.replacedBody':
+    'Mỗi ghế chỉ chơi được trên một máy. Chơi tiếp ở máy đó, hoặc quay về màn chính để nhận ghế lại.',
 
   'direction.title': 'BẠN ĐI HƯỚNG NÀO?',
   'direction.clockwise': 'THUẬN CHIỀU',

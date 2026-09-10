@@ -26,9 +26,11 @@ export function useGameConnection(options: {
   token: string | null;
   /** Xem ghi chú `asBoard` trong `gameConnection.ts`. */
   asBoard?: boolean;
+  /** Xem ghi chú `clientId` trong `gameConnection.ts`. */
+  clientId?: string;
   onPacket: (packet: Packet) => void;
 }) {
-  const { token, asBoard, onPacket } = options;
+  const { token, asBoard, clientId, onPacket } = options;
 
   const [state, setState] = useState<ConnectionState>('idle');
   const connection = useRef<GameConnection | null>(null);
@@ -64,6 +66,7 @@ export function useGameConnection(options: {
     let alive = true;
 
     const conn = createGameConnection({
+      clientId,
       token,
       asBoard,
       onPacket: (packet) => handler.current(packet),
@@ -89,7 +92,7 @@ export function useGameConnection(options: {
       void conn.stop();
     };
     // `onPacket` CỐ Ý không nằm ở đây - xem ghi chú đầu hàm.
-  }, [token, asBoard]);
+  }, [token, asBoard, clientId]);
 
   /*
    * Nối lại KHÔNG GIỚI HẠN khi kết nối đã đóng hẳn.

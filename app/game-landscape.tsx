@@ -190,6 +190,8 @@ export default function GameLandscapeScreen() {
   const insets = useSafeAreaInsets();
 
   const seat = player.status === 'ready' ? player.seat : null;
+  /* Xem ghi chú `clientId` trong `gameConnection.ts` — dùng để biết ai cướp ghế. */
+  const clientId = player.status === 'ready' ? player.deviceId : undefined;
 
   /*
    * ⚠️ KHÔNG khoá hướng ở đây nữa (2026-09-03).
@@ -341,6 +343,16 @@ export default function GameLandscapeScreen() {
    */
   const [battleResult, setBattleResult] = useState<{ name: string; isMe: boolean } | null>(null);
 
+  /**
+   * Ghế này vừa được mở ở một MÁY KHÁC (gói 88).
+   *
+   * ⚠ Từ lúc này máy này **không nhận được gói nào nữa** — server chỉ có MỘT ô
+   * `ConnectionId` cho mỗi người chơi, máy nối sau đã ghi đè lên. Trước đây app không
+   * hề hay biết: WebSocket vẫn mở, chấm vẫn xanh, nhìn y hệt "ván đứng"
+   * (TEST_CASES mục K23, ca KX-3).
+   */
+  const [replaced, setReplaced] = useState(false);
+
   /** Xem `waiting.tsx` - ref chỉ chặn lời gọi ĐANG BAY, không chặn vĩnh viễn. */
   const acking = useRef(false);
 
@@ -430,6 +442,7 @@ export default function GameLandscapeScreen() {
     token: seat?.token ?? null,
     includeBoard: true,
     asBoard: true,
+    clientId,
     onPacket: (packet) => {
       /*
        * Ack `PlayerStart` - LƯỚI AN TOÀN ở màn này. Chỗ ack thật là
@@ -951,6 +964,24 @@ export default function GameLandscapeScreen() {
         const name = typeof packet.NickName === 'string' ? packet.NickName : '';
         if (!name) return;
         setRaceWinner({ name, isMe: packet.PlayerId === seat?.playerId });
+        return;
+      }
+
+      /*
+       * Ghế này vừa được mở ở máy khác — xem `TYPE_ID.ConnectionReplaced`.
+       *
+       * ⚠ DỪNG HẤN, đừng nối lại. Nối lại là hai máy đá qua đá lại nhau vô tận và
+       * cả hai cùng hỏng. Server chỉ gửi gói này khi chắc chắn là MÁY KHÁC (hai
+       * `clientId` đều biết và khác nhau), nên cùng một máy nối lại sau khi rớt mạng
+       * KHÔNG rơi vào đây.
+       */
+      if (packet.typeID === TYPE_ID.ConnectionReplaced) {
+        setReplaced(true);
+        setQuestion(null);
+        setBattle(null);
+        setChallenge(null);
+        setChoice(null);
+        void connection.current?.stop();
         return;
       }
 
@@ -2192,6 +2223,19 @@ export default function GameLandscapeScreen() {
                 </Text>
               </View>
             ) : null}
+
+            {/*
+              * Ghế bị mở ở máy khác: che kín và CHẶN chạm.
+              *
+              * Đây là khung DUY NHẤT cố ý chặn tương tác hoàn toàn — mọi nút bên dưới giờ
+              * đều vô nghiĩa, bấm chỉ tổ tưởng máy treo. Thà nói thật.
+              */}
+            {replaced ? (
+              <View style={styles.replaced}>
+                <Text style={styles.replacedTitle}>{t('conn.replacedTitle')}</Text>
+                <Text style={styles.replacedBody}>{t('conn.replacedBody')}</Text>
+              </View>
+            ) : null}
           </View>
 
           {/* ===================================================
@@ -2850,6 +2894,36 @@ const styles = StyleSheet.create({
      * như không đọc được.
      */
     backgroundColor: '#0A0D22',
+  },
+
+  replaced: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 40,
+    borderRadius: 14,
+    backgroundColor: 'rgba(4,4,14,0.96)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+    gap: 10,
+    borderWidth: 1.4,
+    borderColor: 'rgba(251,113,133,0.5)',
+  },
+  replacedTitle: {
+    fontSize: 19,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+    color: '#FB7185',
+    textAlign: 'center',
+  },
+  replacedBody: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: 'rgba(226,232,255,0.82)',
+    textAlign: 'center',
   },
 
   notice: {

@@ -28,6 +28,7 @@ export default function WaitingScreen() {
   const t = useT();
 
   const seat = player.status === 'ready' ? player.seat : null;
+  const clientId = player.status === 'ready' ? player.deviceId : undefined;
 
   /*
    * Trạng thái ván do SignalR đẩy nhịp thay cho poll 3 giây - xem `useGameState`.
@@ -60,6 +61,7 @@ export default function WaitingScreen() {
   const { snapshot, connState, connection } = useGameState({
     gameId: seat?.gameId ?? null,
     token: seat?.token ?? null,
+    clientId,
     onPacket: (packet) => {
       if (packet.typeID !== TYPE_ID.PlayerStart) return;
       if (acking.current || !seat) return;
