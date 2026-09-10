@@ -1223,12 +1223,17 @@ export default function GameLandscapeScreen() {
    * Đường CỨU: máy không nhận được gói 39 (rớt mạng đúng lúc, hoặc mở lại app vào
    * một ván đã xong) thì `IsGameOver` trong trạng thái vẫn nói đúng sự thật.
    *
-   * ⚠ Không có `message` ở đây - gói 39 mới mang `GameOverMessage`. Khung tự dùng
-   * câu mặc định, thà thiếu một câu vui còn hơn không biết ván đã xong.
+   * ⚠️ Lấy `GameOverMessage` TỪ STATE, đừng để trống. Bản đầu tôi ghi chú "gói 39
+   * mới mang câu đó" rồi truyền `null` - sai, state cũng mang
+   * (`GameStateApiController.cs`). Và đường cứu này KHÔNG hiếm như tưởng: hai ván
+   * kết thúc thật đo ngày 2026-09-10 đều đi lối này, nên câu ngẫu nhiên của server
+   * chưa bao giờ hiện lên - người chơi chỉ thấy câu mặc định của app.
    */
   useEffect(() => {
-    if (snapshot?.Game?.IsGameOver && !gameOver) setGameOver({ message: null });
-  }, [snapshot?.Game?.IsGameOver, gameOver]);
+    if (snapshot?.Game?.IsGameOver && !gameOver) {
+      setGameOver({ message: snapshot.Game.GameOverMessage ?? null });
+    }
+  }, [snapshot?.Game?.IsGameOver, snapshot?.Game?.GameOverMessage, gameOver]);
 
   /**
    * Rời ván đã kết thúc: bỏ ghế rồi về màn chính.
@@ -2658,20 +2663,27 @@ export default function GameLandscapeScreen() {
       {dice ? <DiceRollOverlay value={dice.value} /> : null}
 
       {/*
-        ⚠️ Ván đã kết thúc: bảng xếp hạng cuối, ở GỐC MÀN HÌNH như con xúc xắc.
-        Đặt trong khung bàn cờ là SAI và đã thấy tận mắt lúc kiểm 2026-09-10: khung
-        chỉ che nửa trái, cột phải vẫn hiện và **ROLL DICE vẫn bấm được** trên một
-        ván đã xong.
+        ⚠️ Ván đã kết thúc: ở GỐC MÀN HÌNH như con xúc xắc. Đặt trong khung bàn cờ
+        là SAI và đã thấy tận mắt lúc kiểm 2026-09-10: khung chỉ che nửa trái, cột
+        phải vẫn hiện và **ROLL DICE vẫn bấm được** trên một ván đã xong.
 
         Khung này CHẶN hết tương tác, có chủ đích — ván xong thì mọi nút đều vô
-        nghĩa. Đặt SAU con xúc xắc để nếu lỡ cả hai cùng hiện thì bảng xếp hạng nằm
-        trên; `zIndex` của nó cũng cao hơn.
+        nghĩa. Đặt SAU con xúc xắc để nếu lỡ cả hai cùng hiện thì nó nằm trên;
+        `zIndex` của nó cũng cao hơn.
       */}
       {gameOver ? (
         <GameOverOverlay
-          players={players}
+          gameId={seat?.gameId ?? null}
           meId={seat?.playerId ?? null}
           message={gameOver.message}
+          /*
+           * ⚠️ Bảng xếp hạng CHỈ thuộc thể thức Leaderboard Challenge, và cờ nhận
+           * ra nó là `TotalRollDice > 0` — đúng thứ server đọc khi quyết định có
+           * ghi `RecordScores` không, và đúng thứ bàn cờ web đọc khi quyết định có
+           * hiện nút Leaderboard không. Ván tính giờ không ghi bản ghi nào nên
+           * chẳng có gì để xếp hạng.
+           */
+          isLeaderboard={(snapshot?.Game?.TotalRollDice ?? 0) > 0}
           onLeave={leaveToHome}
         />
       ) : null}

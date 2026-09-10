@@ -298,6 +298,13 @@ export const en = {
   'gameOver.leave': 'BACK TO HOME',
   'gameOver.youSuffix': ' (you)',
   'gameOver.defaultMessage': 'That is the final score.',
+  /*
+   * Hai phần của màn xếp hạng, CHỈ hiện với thể thức Leaderboard Challenge -
+   * xem `GameOverOverlay`. Chữ chép theo bản web (`MainBoard.cshtml`).
+   */
+  'gameOver.global': 'GLOBAL LEADERBOARD',
+  'gameOver.currentMatch': 'CURRENT MATCH RESULT',
+  'gameOver.boardFailed': "Couldn't load the leaderboard.",
 
   'conn.replacedTitle': 'This seat was opened on another device',
   'conn.replacedBody':
@@ -565,6 +572,9 @@ const vi: Record<TranslationKey, string> = {
   'gameOver.leave': 'VỀ MÀN CHÍNH',
   'gameOver.youSuffix': ' (bạn)',
   'gameOver.defaultMessage': 'Điểm cuối cùng là đây.',
+  'gameOver.global': 'BẢNG XẾP HẠNG CHUNG',
+  'gameOver.currentMatch': 'KẾT QUẢ VÁN NÀY',
+  'gameOver.boardFailed': 'Không tải được bảng xếp hạng.',
 
   'conn.replacedTitle': 'Ghế này vừa được mở ở máy khác',
   'conn.replacedBody':

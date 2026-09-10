@@ -326,6 +326,16 @@ export type GameSnapshot = {
     /** 0 = thể thức Leaderboard Challenge, tính theo lượt tung xúc xắc. */
     DurationMinutes: number;
     IsGameOver: boolean;
+    /**
+     * Câu kết ván server bốc ngẫu nhiên (`Helper.GetGameOverMessage`).
+     *
+     * ⚠️ Có trong state, KHÔNG chỉ có trong gói 39 - và đây mới là đường hay
+     * dùng: nhiều lối kết thúc ván không phát gói 39 tới máy này (`/public/
+     * GameOver/{id}` gọi thẳng thì phần broadcast đã bị comment; `GameOverHandler`
+     * thì bỏ qua nếu `GameTurnState != Processing`). Đo 2026-09-10: hai ván kết
+     * thúc thật đều hiện câu MẶC ĐỊNH vì app chỉ đọc từ gói 39.
+     */
+    GameOverMessage: string | null;
     IsGamePause: boolean;
     /**
      * Ai đang tới lượt. `Guid.Empty` khi chưa xác định xong (vòng đua "ai đi
@@ -570,6 +580,83 @@ export const CASE_ACTION = {
  */
 export const characterImageUrl = (characterId: string, frame: 0 | 1 = 0) =>
   `${API_BASE_URL}/images/character/${characterId}-${frame}.png`;
+
+/**
+ * Một dòng của bảng xếp hạng, đúng `RecordScoresViewModel` của server.
+ *
+ * ⚠️ `Score` KHÔNG phải điểm của ván này mà là **điểm bản ghi toàn cục gần nhất**
+ * của người đó (`RecordScores`), và `Rank` là **thứ hạng toàn cục** dạng
+ * `"3/128"` chứ không phải hạng trong ván. Vừa chơi xong thì hai con số đó trùng
+ * nhau vì bản ghi vừa được viết bằng chính điểm ván này - đừng vì thế mà tưởng
+ * chúng là một.
+ */
+export type LeaderboardRow = {
+  PlayerId: string;
+  PlayerName: string;
+  Score: number;
+  Avatar: string;
+  /** `"hạng/tổng"`. `"0/128"` = người này chưa có bản ghi nào. */
+  Rank: string;
+  PlayerColor: string;
+  /** Nằm trong top 6 toàn cục. Bản web tô sáng dòng này. */
+  IsTopGlobal: boolean;
+};
+
+/**
+ * Bảng xếp hạng cuối ván — **CHỈ có nghĩa với thể thức Leaderboard Challenge**.
+ *
+ * ⚠️ Thể thức đó là ván có `TotalRollDice > 0` (thời lượng `0` phút, tính theo
+ * số lượt tung). Chỉ những ván đó mới **ghi** `RecordScores`
+ * (`PublicController.Game.cs`, chỗ `if (gameData.TotalRollDice > 0)`), và bản
+ * web cũng chỉ hiện nút Leaderboard cho chúng - ván tính giờ bị CSS
+ * `.noleaderboard .btnGameOverLeaderboard { display:none }` giấu nút đi.
+ *
+ * Gọi cho ván tính giờ thì endpoint vẫn trả 200 nhưng dữ liệu vô nghĩa: người
+ * trong ván chưa từng có bản ghi nên `Score` = 0 và `Rank` = `"0/n"`.
+ *
+ * ⚠️ Đường này KHÔNG nằm dưới `/public` nên không có claims, và cũng không cần:
+ * action đọc `gameId` từ route. `[ActivationCodeAuthorize]` trên controller chỉ
+ * là thẻ đánh dấu, không có filter nào chặn.
+ */
+export async function getLeaderboard(gameId: string): Promise<
+  ApiResult<{ data: LeaderboardRow[]; global: LeaderboardRow[]; totalPlayersGlobal: number }>
+> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${API_BASE_URL}/game/leaderboard/${gameId}`, {
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      return {
+        isSuccess: false,
+        kind: 'http',
+        messageKey: 'error.http',
+        messageVars: { status: response.status },
+      };
+    }
+    const body = (await response.json()) as {
+      data?: LeaderboardRow[];
+      global?: LeaderboardRow[];
+      totalPlayersGlobal?: number;
+    };
+    return {
+      isSuccess: true,
+      data: body.data ?? [],
+      global: body.global ?? [],
+      totalPlayersGlobal: body.totalPlayersGlobal ?? 0,
+    };
+  } catch (error) {
+    const aborted = error instanceof Error && error.name === 'AbortError';
+    return {
+      isSuccess: false,
+      kind: aborted ? 'timeout' : 'network',
+      messageKey: aborted ? 'error.timeout' : 'error.network',
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export async function getGameState(
   gameId: string,

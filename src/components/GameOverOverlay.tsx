@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   Easing,
@@ -9,37 +9,67 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { useT } from '../i18n/I18nProvider';
-import { characterImageUrl, type GamePlayer } from '../api/game';
+import { getLeaderboard, type LeaderboardRow } from '../api/game';
 import { text } from '../theme/colors';
 
 /**
- * MÀN KẾT THÚC VÁN — bảng xếp hạng cuối cùng.
+ * MÀN KẾT THÚC VÁN.
  *
  * ⚠️ Trước bản này app KHÔNG HIỆN GÌ khi ván kết thúc. Server gửi gói `GameOver`
  * (39) cho **mọi** người chơi, `useGameState` nhận và nạp lại trạng thái... rồi
  * thôi: màn hình đứng nguyên ở bàn cờ, người chơi không biết ván đã xong. Đây là
  * chỗ hở duy nhất người chơi thật gặp **mỗi ván** (TEST_CASES ca **UI-7**).
  *
- * Phía server đã xong phần của nó từ lâu — đo được `van ket thuc dung han` ở
- * TEST_CASES mục **K42**.
+ * ⚠️⚠️ **BẢNG XẾP HẠNG CHỈ THUỘC VỀ THỂ THỨC LEADERBOARD CHALLENGE.** Bản đầu
+ * tôi dựng một bảng "điểm ván này" và hiện nó ở MỌI ván - tự nghĩ ra, bản web
+ * không có thứ đó ở đâu cả. Đúng luật là:
  *
- * ⚠️ **Xếp theo `Point`, không theo `Rank`.** Server chỉ tính `Rank` ở một vài
- * đường (nhánh `TotalRollDice == 0` trong battle chẳng hạn), nên tin vào nó là
- * có ván hiện sai thứ tự. `Point` thì luôn đúng.
+ * | Ván | Bàn cờ web hiện | Máy người chơi web hiện |
+ * |---|---|---|
+ * | tính giờ (15/60 phút) | "Game Over" + câu ngẫu nhiên + *"Waiting for host…"* | đúng câu ngẫu nhiên đó, **không bảng** |
+ * | Leaderboard Challenge | thêm nút **Leaderboard** mở màn xếp hạng | như trên |
  *
- * ⚠️ Khung này CHẶN hết tương tác bên dưới, có chủ đích: ván đã xong thì mọi nút
- * trên bàn cờ đều vô nghĩa. Cùng lý do với khung "ghế bị mở ở máy khác".
+ * Chỗ chốt trong mã:
+ *   - `PublicController.Game.cs` — `if (gameData.TotalRollDice > 0)` mới **ghi**
+ *     `RecordScores`. Ván tính giờ không ghi gì, nên chẳng có gì để xếp hạng.
+ *   - `mainControl.js` — `classGameOver = 'noleaderboard'` trừ khi
+ *     `TotalRollDice > 0`, và CSS `.noleaderboard .btnGameOverLeaderboard
+ *     { display:none }` giấu nút đi.
+ *   - `MainBoard.cshtml` — `<div id="fullscreen-leaderboard" v-if="IsGameOver &&
+ *     IsLeaderBoard">`.
+ *
+ * Màn xếp hạng gồm **HAI phần**, đúng như bản web dựng:
+ *   1. **Global leaderboard** — top 6 toàn giải (`global` từ endpoint).
+ *   2. **Current match result** — người trong ván này, nhưng mang **thứ hạng và
+ *      điểm TOÀN CỤC** (`data`), không phải hạng trong ván.
+ *
+ * ⚠️ App vẽ hai phần này thành danh sách; bản web vẽ top 6 lên một tấm hình sân
+ * vận động (`leaderboard-img-map4.png` + image map). Khác cách vẽ, cùng dữ liệu.
+ *
+ * ⚠️ Chưa có **End game / Play again** của chủ phòng (bản web hiện hai nút đó
+ * cho `data.isHost`) — đó là ca **UI-9**, chưa làm. Nút VỀ MÀN CHÍNH ở đây chỉ
+ * là đường ra cho máy này, không thay hai nút kia.
  */
 export function GameOverOverlay({
-  players,
+  gameId,
   meId,
   message,
+  isLeaderboard,
   onLeave,
 }: {
-  players: GamePlayer[];
+  gameId: string | null;
   meId: string | null;
   /** `GameOverMessage` server bốc ngẫu nhiên. Rỗng thì dùng câu mặc định. */
   message?: string | null;
+  /**
+   * Ván này có phải **Leaderboard Challenge** không — đọc từ
+   * `Game.TotalRollDice > 0`, đúng cờ mà server và bản web dùng.
+   *
+   * ⚠️ Đừng suy từ `DurationMinutes === 0`: hai trường đi cùng nhau lúc tạo ván
+   * (`TotalRollDice = NumberOfPlayers * 15` khi thời lượng là loại đếm lượt
+   * tung), nhưng `TotalRollDice` mới là thứ cả server lẫn bàn cờ đọc.
+   */
+  isLeaderboard: boolean;
   onLeave: () => void;
 }) {
   const t = useT();
@@ -54,21 +84,66 @@ export function GameOverOverlay({
     transform: [{ scale: 0.9 + enter.value * 0.1 }],
   }));
 
+  const [board, setBoard] = useState<{
+    global: LeaderboardRow[];
+    current: LeaderboardRow[];
+  } | null>(null);
+  const [failed, setFailed] = useState(false);
+
   /*
-   * Hoà điểm thì xếp theo `Ordering` cho ổn định - không có tiêu chí nào tốt hơn,
-   * và quan trọng là MỌI MÁY phải ra cùng một thứ tự. Sắp xếp không ổn định thì
-   * hai điện thoại cạnh nhau hiện hai bảng khác nhau, trông như lỗi.
+   * Chỉ gọi cho thể thức Leaderboard Challenge. Ván tính giờ mà gọi thì endpoint
+   * vẫn trả 200 nhưng toàn số 0 - hiện lên là nói dối người chơi.
    */
-  const ranked = useMemo(
-    () => [...players].sort((a, b) => b.Point - a.Point || a.Ordering - b.Ordering),
-    [players],
+  useEffect(() => {
+    if (!isLeaderboard || !gameId) return;
+    let alive = true;
+
+    (async () => {
+      const result = await getLeaderboard(gameId);
+      if (!alive) return;
+      if (!result.isSuccess) {
+        setFailed(true);
+        return;
+      }
+      /* Bản web sắp cả hai danh sách theo điểm giảm dần (`mainControl.js`). */
+      const byScore = (rows: LeaderboardRow[]) => [...rows].sort((a, b) => b.Score - a.Score);
+      setBoard({ global: byScore(result.global), current: byScore(result.data) });
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [isLeaderboard, gameId]);
+
+  const hasBoard = useMemo(
+    () => !!board && (board.global.length > 0 || board.current.length > 0),
+    [board],
   );
 
-  const topPoint = ranked.length > 0 ? ranked[0].Point : 0;
+  const row = (item: LeaderboardRow, index: number, showRank: boolean) => {
+    const isMe = item.PlayerId === meId;
+    return (
+      <View
+        key={item.PlayerId + '-' + index}
+        style={[styles.row, isMe && styles.rowMe, item.IsTopGlobal && styles.rowTop]}
+      >
+        <Text style={[styles.place, item.IsTopGlobal && styles.placeTop]} numberOfLines={1}>
+          {showRank ? item.Rank : String(index + 1)}
+        </Text>
+
+        <Text style={[styles.name, isMe && styles.nameMe]} numberOfLines={1}>
+          {item.PlayerName}
+          {isMe ? t('gameOver.youSuffix') : ''}
+        </Text>
+
+        <Text style={styles.point}>{item.Score.toLocaleString()}</Text>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.wrap}>
-      <Animated.View style={[styles.card, card]}>
+      <Animated.View style={[styles.card, isLeaderboard && styles.cardWide, card]}>
         <LinearGradient
           colors={['rgba(24,20,60,0.98)', 'rgba(8,8,24,0.99)']}
           start={{ x: 0, y: 0 }}
@@ -79,45 +154,41 @@ export function GameOverOverlay({
         <Text style={styles.title}>{t('gameOver.title')}</Text>
         <Text style={styles.message}>{message || t('gameOver.defaultMessage')}</Text>
 
-        <ScrollView
-          style={styles.list}
-          contentContainerStyle={styles.listInner}
-          showsVerticalScrollIndicator={false}
-        >
-          {ranked.map((p, i) => {
-            const isMe = p.Id === meId;
-            /*
-             * Cùng điểm với người đứng đầu thì cùng là người thắng - kể cả khi
-             * bảng phải xếp một người xuống dưới. Hoà mà chỉ vinh danh một người
-             * là sai luật.
-             */
-            const isWinner = ranked.length > 0 && p.Point === topPoint;
+        {/*
+          Ván tính giờ dừng ở đây - đúng bằng bản web. Không có bảng nào cả.
 
-            return (
-              <View
-                key={p.Id}
-                style={[styles.row, isMe && styles.rowMe, isWinner && styles.rowWinner]}
-              >
-                <Text style={[styles.place, isWinner && styles.placeWinner]}>
-                  {isWinner ? '★' : String(i + 1)}
-                </Text>
-
-                <Image
-                  source={{ uri: characterImageUrl(p.CharacterId) }}
-                  style={[styles.avatar, { borderColor: p.PlayerColor || 'rgba(255,255,255,0.25)' }]}
-                  resizeMode="contain"
-                />
-
-                <Text style={[styles.name, isMe && styles.nameMe]} numberOfLines={1}>
-                  {p.NickName}
-                  {isMe ? t('gameOver.youSuffix') : ''}
-                </Text>
-
-                <Text style={[styles.point, isWinner && styles.pointWinner]}>{p.Point}</Text>
+          ⚠️ HAI BẢNG XẾP CẠNH NHAU, không chồng lên nhau. Bản đầu xếp dọc và trên
+          máy thật (SM-A175F nằm ngang) phần thứ hai bị đẩy hẳn xuống dưới mép -
+          người chơi thấy mỗi bảng chung, tưởng app quên mất kết quả ván mình vừa
+          chơi. Màn hình ngang thì chiều cao mới là thứ hiếm.
+        */}
+        {isLeaderboard ? (
+          hasBoard ? (
+            <View style={styles.columns}>
+              <View style={styles.column}>
+                <Text style={styles.section}>{t('gameOver.global')}</Text>
+                <ScrollView contentContainerStyle={styles.listInner} showsVerticalScrollIndicator={false}>
+                  {board!.global.map((item, i) => row(item, i, false))}
+                </ScrollView>
               </View>
-            );
-          })}
-        </ScrollView>
+
+              <View style={styles.column}>
+                <Text style={styles.section}>{t('gameOver.currentMatch')}</Text>
+                {/*
+                  Cột đầu ở đây là **hạng toàn cục** dạng "251/443", không phải số
+                  thứ tự trong ván - xem `LeaderboardRow.Rank`.
+                */}
+                <ScrollView contentContainerStyle={styles.listInner} showsVerticalScrollIndicator={false}>
+                  {board!.current.map((item, i) => row(item, i, true))}
+                </ScrollView>
+              </View>
+            </View>
+          ) : failed ? (
+            <Text style={styles.note}>{t('gameOver.boardFailed')}</Text>
+          ) : (
+            <ActivityIndicator color="#C7D2FE" style={styles.spinner} />
+          )
+        ) : null}
 
         <Pressable
           onPress={onLeave}
@@ -159,6 +230,10 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     gap: 8,
   },
+  /* Hai bảng cạnh nhau thì cần rộng; ván tính giờ chỉ có hai dòng chữ. */
+  cardWide: { maxWidth: 720, flex: 1 },
+  columns: { flex: 1, flexDirection: 'row', gap: 14, minHeight: 0 },
+  column: { flex: 1, minHeight: 0 },
   title: {
     fontSize: 21,
     fontWeight: '900',
@@ -172,13 +247,27 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: 'rgba(226,232,255,0.78)',
   },
-  list: { flexGrow: 0 },
-  listInner: { gap: 6, paddingVertical: 4 },
+  note: {
+    fontSize: 12,
+    textAlign: 'center',
+    color: 'rgba(226,232,255,0.5)',
+    paddingVertical: 8,
+  },
+  spinner: { paddingVertical: 14 },
+  listInner: { gap: 4, paddingVertical: 2, paddingBottom: 6 },
+  section: {
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+    color: 'rgba(148,163,255,0.9)',
+    marginBottom: 4,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingVertical: 6,
+    /* Đủ khít để SÁU dòng top 6 vào trọn một màn ngang, không phải cuộn. */
+    paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 10,
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -186,20 +275,18 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   rowMe: { borderColor: 'rgba(148,163,255,0.55)' },
-  rowWinner: { backgroundColor: 'rgba(253,230,138,0.12)' },
+  /* Bản web tô sáng người nằm trong top 6 toàn cục (`class inGlobalTop`). */
+  rowTop: { backgroundColor: 'rgba(253,230,138,0.12)' },
   place: {
-    width: 22,
-    textAlign: 'center',
-    fontSize: 14,
+    minWidth: 46,
+    fontSize: 13,
     fontWeight: '800',
     color: 'rgba(226,232,255,0.6)',
   },
-  placeWinner: { color: '#FDE68A', fontSize: 17 },
-  avatar: { width: 34, height: 34, borderRadius: 17, borderWidth: 1.6 },
-  name: { flex: 1, fontSize: 14.5, fontWeight: '700', color: text.primary },
+  placeTop: { color: '#FDE68A' },
+  name: { flex: 1, fontSize: 13.5, fontWeight: '700', color: text.primary },
   nameMe: { color: '#C7D2FE' },
-  point: { fontSize: 17, fontWeight: '900', color: text.primary, minWidth: 40, textAlign: 'right' },
-  pointWinner: { color: '#FDE68A' },
+  point: { fontSize: 15, fontWeight: '900', color: text.primary, minWidth: 52, textAlign: 'right' },
   button: {
     marginTop: 2,
     alignSelf: 'center',
