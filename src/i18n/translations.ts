@@ -232,6 +232,15 @@ export const en = {
    * Đây là chữ team đã thống nhất - người chơi web và người chơi app phải đọc
    * cùng một câu.
    */
+  /*
+   * ẨN BÀN CỜ (ca UI-1). Chỉ là chuyện hiển thị của riêng một máy - không có
+   * chữ tương ứng ở bản web, vì bản web có bàn cờ riêng trên TV.
+   */
+  'board.hide': 'Hide the board',
+  'board.show': 'SHOW BOARD',
+  'board.hiddenTitle': 'BOARD HIDDEN',
+  'board.hiddenBody': 'Questions and answers get the whole space. Tap to bring the board back.',
+
   'result.correct': '{name} got it right!',
   /** `{unit}` là runs / goals / points tuỳ bàn. Dấu chấm cuối là của bản web. */
   'result.earned': '{point} {unit}.',
@@ -510,6 +519,11 @@ const vi: Record<TranslationKey, string> = {
 
   'dice.rolling': 'ĐANG TUNG…',
   'dice.rolled': 'BẠN TUNG ĐƯỢC',
+
+  'board.hide': 'Ẩn bàn cờ',
+  'board.show': 'HIỆN BÀN CỜ',
+  'board.hiddenTitle': 'ĐÃ ẨN BÀN CỜ',
+  'board.hiddenBody': 'Câu hỏi và kết quả được cả chỗ này. Chạm để hiện lại bàn cờ.',
 
   'result.correct': '{name} trả lời đúng!',
   'result.earned': '{point} {unit}.',

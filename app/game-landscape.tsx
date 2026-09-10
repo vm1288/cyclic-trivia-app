@@ -273,6 +273,23 @@ export default function GameLandscapeScreen() {
   const [turnResult, setTurnResult] = useState<TurnResult | null>(null);
 
   /**
+   * ẨN BÀN CỜ (ca **UI-1**).
+   *
+   * Bàn cờ chiếm nguyên cột trái, và mọi khung trong lượt - câu hỏi, kết quả,
+   * thẻ bài - đều phải nép vào giữa nó. Ẩn đi thì các khung đó được cả cột, và
+   * `TurnResultOverlay` chuyển sang khổ ĐẦY ĐỦ (ca **UI-2**).
+   *
+   * ⚠️ Chỉ là chuyện HIỂN THỊ của riêng máy này: không gửi gói nào, không đụng
+   * tới server, không ảnh hưởng người khác. Quân vẫn đi, điểm vẫn chạy - bấm
+   * hiện lại là thấy bàn cờ ở đúng chỗ nó phải tới.
+   *
+   * ⚠️ KHÔNG lưu xuống máy. Ẩn bàn cờ là lựa chọn cho MỘT lúc đang cần đọc kỹ,
+   * không phải cài đặt lâu dài; mở app lần sau mà bàn cờ biến mất thì người chơi
+   * tưởng app hỏng.
+   */
+  const [boardHidden, setBoardHidden] = useState(false);
+
+  /**
    * Ô 10-SEC CHALLENGE đang mở trên máy NÀY.
    *
    * `null` = không dính gì tới mình. Người tới lượt (người BỊ chấm) cũng không có
@@ -1649,7 +1666,15 @@ export default function GameLandscapeScreen() {
    * (server `[JsonIgnore]` cả `IsCorrect` lẫn `AnswerExplain`), nên chỉ có
    * response này mới biết.
    */
-  const showAnswerResult = (res: Awaited<ReturnType<typeof submitAnswer>>) => {
+  const showAnswerResult = (
+    res: Awaited<ReturnType<typeof submitAnswer>>,
+    /**
+     * Chuỗi đáp án vừa bấm. Đúng thì nó CHÍNH LÀ đáp án đúng, và khổ đầy đủ của
+     * `TurnResultOverlay` in nó ra - y như bàn cờ web in `Model.questionTitle`.
+     * Hết giờ / muộn thì không có gì để in nên bỏ trống.
+     */
+    answerText = '',
+  ) => {
     if (!res.isSuccess) {
       /*
        * Bị từ chối vì có người chốt câu trước. Tên người đó nằm trong thân JSON
@@ -1682,7 +1707,14 @@ export default function GameLandscapeScreen() {
      * thẳng: mình có phải người tới lượt không.
      */
     const earnedStar = isMyTurn;
-    setTurnResult({ kind: 'correct', point: result.point, earnedStar });
+    setTurnResult({
+      kind: 'correct',
+      point: result.point,
+      earnedStar,
+      answerText,
+      /* Rỗng khi câu chưa có giải thích - khổ đầy đủ tự bỏ dòng đó đi. */
+      explain: result.answerExplain ?? '',
+    });
 
     /*
      * Thứ tự bay: SAO trước, THẺ sau. Đủ ngưỡng sao thì server vừa reset sao vừa
@@ -1724,7 +1756,7 @@ export default function GameLandscapeScreen() {
       seat.token,
     ).then((res) => {
       // Vòng đua và battle có thông báo riêng - xem ghi chú trong `showAnswerResult`.
-      if (current.kind === 'turn') showAnswerResult(res);
+      if (current.kind === 'turn') showAnswerResult(res, answerContent);
     });
   };
 
@@ -2140,7 +2172,30 @@ export default function GameLandscapeScreen() {
             ref={boardBox}
             onLayout={() => measureSpot('board', boardBox.current)}
           >
-            {board ? (
+            {/*
+              Ba trạng thái, đúng thứ tự này:
+
+                1. người chơi ĐÃ ẨN  -> tấm nền trống + lối quay lại
+                2. có dữ liệu bàn cờ -> vẽ bàn cờ
+                3. còn lại           -> đang tải
+
+              ⚠️ "Đã ẩn" phải đứng TRƯỚC "đang tải": bấm ẩn lúc mạng chậm mà vẫn
+              thấy vòng xoay thì người chơi tưởng nút không ăn.
+            */}
+            {boardHidden ? (
+              <Pressable
+                onPress={() => setBoardHidden(false)}
+                accessibilityRole="button"
+                accessibilityLabel={t('board.show')}
+                style={styles.boardHidden}
+              >
+                <Text style={styles.boardHiddenTitle}>{t('board.hiddenTitle')}</Text>
+                <Text style={styles.boardHiddenBody}>{t('board.hiddenBody')}</Text>
+                <View style={styles.boardHiddenBtn}>
+                  <Text style={styles.boardHiddenBtnText}>{t('board.show')}</Text>
+                </View>
+              </Pressable>
+            ) : board ? (
               <BoardCanvas
                 board={board}
                 players={players}
@@ -2191,6 +2246,12 @@ export default function GameLandscapeScreen() {
                 /* Bản web luôn nêu TÊN người vừa trả lời, không nói trống không. */
                 name={me?.NickName ?? ''}
                 unit={pointUnit}
+                /*
+                 * Bàn cờ còn hiện thì khung phải gọn - nó đang nằm ĐÈ lên bàn cờ.
+                 * Ẩn bàn cờ rồi thì cả cột trái trống, khung lấy khổ của bàn cờ
+                 * web: đáp án đúng + giải thích. Xem `TurnResultOverlay`.
+                 */
+                compact={!boardHidden}
               />
             ) : null}
 
@@ -2333,6 +2394,44 @@ export default function GameLandscapeScreen() {
                       : styles.netDead,
                 ]}
               />
+
+              {/*
+                ẨN / HIỆN BÀN CỜ (ca **UI-1**).
+
+                ⚠️ Đây là nút THẬT DUY NHẤT trong hàng này - hai cái bên phải
+                (tạm dừng, menu) mới chỉ là chỗ trống chưa có mã, cố ý để nguyên
+                `View`. Đừng chép kiểu dáng của chúng: nút này phải nhìn ra là
+                bấm được, nên viền xanh thay vì đỏ, và ĐỔI MÀU khi đang ẩn để
+                người chơi biết bàn cờ biến mất là do mình bấm, không phải lỗi.
+              */}
+              <Pressable
+                onPress={() => setBoardHidden((hidden) => !hidden)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: boardHidden }}
+                accessibilityLabel={boardHidden ? t('board.show') : t('board.hide')}
+                /* Vùng chạm nới ra ngoài viền: nút chỉ 30×28. */
+                hitSlop={8}
+                style={({ pressed }) => [
+                  styles.iconBtn,
+                  boardHidden ? styles.boardBtnOff : styles.boardBtn,
+                  pressed && styles.iconBtnPressed,
+                ]}
+              >
+                <View style={styles.boardGlyph}>
+                  {[0, 1, 2, 3].map((cell) => (
+                    <View
+                      key={cell}
+                      style={[
+                        styles.boardGlyphCell,
+                        boardHidden && styles.boardGlyphCellOff,
+                      ]}
+                    />
+                  ))}
+                </View>
+
+                {/* Gạch chéo khi đang ẩn - cùng quy ước với biểu tượng "tắt". */}
+                {boardHidden ? <View style={styles.boardGlyphSlash} /> : null}
+              </Pressable>
 
               <View
                 style={styles.iconBtn}
@@ -2706,6 +2805,122 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+  /* ── ẨN BÀN CỜ (UI-1) ─────────────────────────────────────────────────── */
+  iconBtnPressed: { opacity: 0.6 },
+  boardBtn: {
+    borderColor: 'rgba(96,165,250,0.6)',
+
+    backgroundColor: 'rgba(8,22,48,0.75)',
+  },
+  boardBtnOff: {
+    borderColor: 'rgba(251,191,36,0.75)',
+
+    backgroundColor: 'rgba(46,32,4,0.8)',
+  },
+  boardGlyph: {
+    width: 14,
+
+    height: 14,
+
+    flexDirection: 'row',
+
+    flexWrap: 'wrap',
+
+    gap: 2,
+  },
+  boardGlyphCell: {
+    width: 6,
+
+    height: 6,
+
+    borderRadius: 1.5,
+
+    backgroundColor: 'rgba(191,219,254,0.95)',
+  },
+  boardGlyphCellOff: {
+    backgroundColor: 'rgba(253,230,138,0.45)',
+  },
+  boardGlyphSlash: {
+    position: 'absolute',
+
+    width: 20,
+
+    height: 1.6,
+
+    borderRadius: 1,
+
+    backgroundColor: '#FDE68A',
+
+    transform: [{ rotate: '-45deg' }],
+  },
+  /*
+   * Tấm nền thay chỗ bàn cờ. `aspectRatio: 2` chép của `boardLoading` để cột
+   * trái không nhảy chiều cao khi ẩn/hiện - nhảy một cái là dải người chơi phía
+   * trên và cột phải cùng giật theo.
+   */
+  boardHidden: {
+    width: '100%',
+
+    aspectRatio: 2,
+
+    borderRadius: 16,
+
+    borderWidth: 1.2,
+
+    borderColor: 'rgba(148,163,255,0.28)',
+
+    backgroundColor: 'rgba(6,8,22,0.55)',
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    gap: 8,
+
+    paddingHorizontal: 18,
+  },
+  boardHiddenTitle: {
+    fontSize: 15,
+
+    fontWeight: '900',
+
+    letterSpacing: 1,
+
+    color: 'rgba(226,232,255,0.75)',
+  },
+  boardHiddenBody: {
+    fontSize: 12,
+
+    lineHeight: 17,
+
+    textAlign: 'center',
+
+    color: 'rgba(226,232,255,0.45)',
+  },
+  boardHiddenBtn: {
+    marginTop: 2,
+
+    paddingHorizontal: 16,
+
+    paddingVertical: 7,
+
+    borderRadius: 999,
+
+    borderWidth: 1.2,
+
+    borderColor: 'rgba(96,165,250,0.55)',
+
+    backgroundColor: 'rgba(30,58,138,0.35)',
+  },
+  boardHiddenBtnText: {
+    fontSize: 12,
+
+    fontWeight: '800',
+
+    letterSpacing: 0.8,
+
+    color: '#BFDBFE',
+  },
   boardLoading: {
     width: '100%',
 

@@ -857,6 +857,18 @@ export type AnswerResult = {
   stars: number;
   /** Tên lá bài vừa được thưởng, rỗng nếu chưa tới ngưỡng sao. */
   card: string;
+  /**
+   * Giải thích đáp án - CHỈ có khi `isCorrect`, ngoài ra là chuỗi rỗng.
+   *
+   * ⚠️ Đây là chỗ DUY NHẤT chuỗi này ra khỏi server: `AnswerExplain` bị
+   * `[JsonIgnore]` ở `LocalizedQuestionDto` nên nó không đi kèm câu hỏi lúc gửi
+   * đề. Trả lời sai cũng không có - lúc đó những người khác còn đang tranh trả
+   * lời chính câu đó, xem ghi chú trong `PublicController.Player.SubmitAnswer`.
+   *
+   * Rỗng là chuyện thường: câu chưa nhập giải thích, hoặc bàn không phải
+   * crictriv/footietriv (bản web cũng chỉ in nó cho hai bàn đó).
+   */
+  answerExplain?: string;
 };
 
 /**
