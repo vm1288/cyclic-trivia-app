@@ -35,6 +35,7 @@ import { BattleResultOverlay } from '../src/components/BattleResultOverlay';
 import { TurnResultOverlay, type TurnResult } from '../src/components/TurnResultOverlay';
 import { RaceWinnerOverlay } from '../src/components/RaceWinnerOverlay';
 import { GameOverOverlay } from '../src/components/GameOverOverlay';
+import type { PlayAgainAction } from '../src/components/PlayAgainWizard';
 import {
   TenSecondsChallengeOverlay,
   type ChallengePhase,
@@ -291,6 +292,15 @@ export default function GameLandscapeScreen() {
    * tưởng app hỏng.
    */
   const [boardHidden, setBoardHidden] = useState(false);
+
+  /**
+   * Hai trạng thái của lượt CHƠI LẠI liên quan tới đổi chủ phòng (gói 76):
+   *   - `becameHost`: máy này vừa được chủ phòng cũ giao ghế - hiện "YOU ARE THE
+   *     NEW HOST!" và mở cây hỏi từ câu thời lượng (`handleChangePlayerAsHost`).
+   *   - `handedOverTo`: máy này là chủ phòng cũ, đã giao ghế - chỉ còn chờ.
+   */
+  const [becameHost, setBecameHost] = useState(false);
+  const [handedOverTo, setHandedOverTo] = useState<string | null>(null);
 
   /**
    * Ô 10-SEC CHALLENGE đang mở trên máy NÀY.
@@ -1040,6 +1050,17 @@ export default function GameLandscapeScreen() {
        * ⚠ Gói này tới CẢ máy chủ phòng lẫn máy khách, qua kết nối của ghế cũ.
        * Đừng đóng kết nối trước khi nhận được nó.
        */
+      /*
+       * Chủ phòng cũ giao ghế cho MÌNH (gói 76 `ChangePlayerAsHost`). Server đã
+       * đổi cờ `isHost` trong ván cũ; nạp lại state để `me.IsHost` đúng, và mở
+       * cây hỏi từ câu thời lượng như `handleChangePlayerAsHost` của bản web.
+       */
+      if (packet.typeID === TYPE_ID.ChangePlayerAsHost) {
+        setBecameHost(true);
+        void refresh();
+        return;
+      }
+
       if (packet.typeID === TYPE_ID.PlayerStartAgain) {
         const newId = typeof packet.PlayerId === 'string' ? packet.PlayerId : '';
         if (!newId || !seat) return;
@@ -1054,7 +1075,21 @@ export default function GameLandscapeScreen() {
             nickname: res.NickName,
             characterId: res.CharacterId,
           });
-          if (res.IsHost) license.setCurrentGame(res.GameId);
+          /*
+           * ⚠️ "Chủ phòng" có HAI nghĩa, và lobby chỉ mở được với nghĩa thứ hai:
+           *   - ghế mang cờ `isHost` (đổi được bằng gói 76);
+           *   - THIẾT BỊ giữ license, tức `Game.HostId` - mã phòng và nút START
+           *     đều đi bằng token license (`ensureRoomCode`, `/start`).
+           * Người được giao ghế chủ phòng bằng gói 76 không giữ license, đưa họ
+           * vào lobby là dính "This game belongs to another host". Họ vào phòng
+           * chờ như mọi người; máy giữ license thấy ván mới ở RESUME GAME và bấm
+           * START - đúng vai Main Device của bản web.
+           */
+          const ownsLicense =
+            license.status === 'active' &&
+            license.session.hostId.toLowerCase() === (snapshot?.Game?.HostId ?? '').toLowerCase();
+          const toLobby = res.IsHost && ownsLicense;
+          if (ownsLicense) license.setCurrentGame(res.GameId);
           /*
            * KHÔNG gọi `connection.stop()` ở đây: màn này unmount là hook tự ngắt,
            * còn gọi tay thì đua với vòng nối lại 5 giây của `useGameConnection`
@@ -1070,7 +1105,7 @@ export default function GameLandscapeScreen() {
            */
           setGameOver(null);
           setTimeout(() => {
-            if (res.IsHost) {
+            if (toLobby) {
               router.replace({ pathname: '/lobby', params: { gameId: res.GameId } });
             } else {
               router.replace('/waiting');
@@ -1307,30 +1342,44 @@ export default function GameLandscapeScreen() {
   }, [connection]);
 
   /**
-   * Chủ phòng bấm PLAY AGAIN.
-   *
-   * Cây hỏi của bản web có ba tầng ("còn muốn làm chủ phòng?" → "giữ thể thức?"
-   * → "giữ người chơi?") nhưng chỉ nhánh YES-YES-YES là hoàn chỉnh; ba nhánh NO
-   * hoặc dở dang (`onConfirm: console.log`) hoặc dẫn sang màn dựng ván đầy đủ.
-   * App gom nhánh hoàn chỉnh thành MỘT câu hỏi. Xem GAME_RULES mục 15c.
-   *
-   * Thứ tự gói y như web: 72 (`SettingPlayAgain`, để bàn cờ hiện "Host is
-   * setting up") rồi 73 (`KeepDurationAndPlayers`) mang thời lượng ván cũ -
-   * server đọc nó để quyết `TotalRollDice` cho ván mới.
+   * Chủ phòng bấm PLAY AGAIN: gửi 72 (`SettingPlayAgain`) NGAY - bản web gửi nó
+   * trước khi hỏi gì (`PlayAgain()`), để bàn cờ hiện "Host is setting up a new
+   * match". Cây hỏi mở sau; kết quả đi qua `playAgainAction`.
    */
-  const playAgain = useCallback(async () => {
-    const ok = await confirm({
-      title: t('gameOver.againTitle'),
-      confirmLabel: t('gameOver.againYes'),
-      cancelLabel: t('gameOver.againNo'),
-    });
-    if (!ok) return false;
+  const openPlayAgain = useCallback(() => {
     void connection.current?.send(TYPE_ID.SettingPlayAgain, {});
-    void connection.current?.send(TYPE_ID.KeepDurationAndPlayers, {
-      GameDuration: snapshot?.Game?.DurationMinutes ?? 0,
-    });
-    return true;
-  }, [confirm, connection, snapshot?.Game?.DurationMinutes, t]);
+  }, [connection]);
+
+  /**
+   * Ba đích của cây hỏi, đúng ba gói bản web gửi:
+   *   keep       -> 73 `KeepDurationAndPlayers { GameDuration }`  (`KeepPlayers()`)
+   *   setup      -> 75 `SetupNewGame { hostId, selectedPlayerIds, GameDuration,
+   *                 NumberOfPlayers }`                              (`submitSetup()`)
+   *   assignHost -> 76 `ChangePlayerAsHost { hostId }`             (`changeHost()`)
+   *
+   * Sau 73/75 server gửi 74 cho từng người - xử lý ở `onPacket`. Sau 76 thì máy
+   * của chủ phòng MỚI nhận 76 và tiếp tục cây; máy này chỉ còn chờ.
+   */
+  const playAgainAction = useCallback(
+    (action: PlayAgainAction) => {
+      if (action.kind === 'keep') {
+        void connection.current?.send(TYPE_ID.KeepDurationAndPlayers, { GameDuration: action.duration });
+      } else if (action.kind === 'setup') {
+        void connection.current?.send(TYPE_ID.SetupNewGame, {
+          hostId: action.hostId,
+          selectedPlayerIds: action.selectedPlayerIds,
+          GameDuration: action.duration,
+          NumberOfPlayers: action.numberOfPlayers,
+        });
+      } else {
+        void connection.current?.send(TYPE_ID.ChangePlayerAsHost, { hostId: action.hostId });
+        // `players` khai báo phía dưới - đọc thẳng từ snapshot để khỏi kéo lên.
+        const target = (snapshot?.Players ?? []).find((p) => p.Id === action.hostId);
+        setHandedOverTo(target?.NickName ?? '');
+      }
+    },
+    [connection, snapshot?.Players],
+  );
 
   const leaveToHome = useCallback(() => {
     void connection.current?.stop();
@@ -2776,7 +2825,13 @@ export default function GameLandscapeScreen() {
           hostName={players.find((p) => p.IsHost)?.NickName ?? ''}
           onLeave={leaveToHome}
           onEndGame={endGame}
-          onPlayAgain={playAgain}
+          onOpenPlayAgain={openPlayAgain}
+          onPlayAgainAction={playAgainAction}
+          players={players}
+          currentDuration={snapshot?.Game?.DurationMinutes ?? 0}
+          currentPlayers={snapshot?.Game?.NumberOfPlayers ?? players.length}
+          becameHost={becameHost}
+          handedOverTo={handedOverTo}
         />
       ) : null}
 

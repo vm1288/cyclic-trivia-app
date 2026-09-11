@@ -141,6 +141,8 @@ export const TYPE_ID = {
   SettingPlayAgain: 72,
   KeepDurationAndPlayers: 73,
   PlayerStartAgain: 74,
+  SetupNewGame: 75,
+  ChangePlayerAsHost: 76,
   /**
    * "Tôi vừa nối xong, còn flow nào đang treo thì phát lại đi."
    *

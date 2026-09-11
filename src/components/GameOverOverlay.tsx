@@ -11,6 +11,8 @@ import Animated, {
 import { useT } from '../i18n/I18nProvider';
 import { getLeaderboard, type LeaderboardRow } from '../api/game';
 import { LeaderboardStage } from './LeaderboardStage';
+import { PlayAgainWizard, type PlayAgainAction } from './PlayAgainWizard';
+import type { GamePlayer } from '../api/game';
 import { text } from '../theme/colors';
 
 /**
@@ -60,7 +62,13 @@ export function GameOverOverlay({
   hostName,
   onLeave,
   onEndGame,
-  onPlayAgain,
+  onOpenPlayAgain,
+  onPlayAgainAction,
+  players,
+  currentDuration,
+  currentPlayers,
+  becameHost,
+  handedOverTo,
 }: {
   gameId: string | null;
   meId: string | null;
@@ -86,11 +94,17 @@ export function GameOverOverlay({
   onLeave: () => void;
   /** Chủ phòng bấm END GAME. Gửi gói 71. */
   onEndGame: () => void;
-  /**
-   * Chủ phòng bấm PLAY AGAIN. Trả `true` nếu đã xác nhận và gói đã đi - khung
-   * chuyển sang "đang dựng ván mới"; `false` nếu người chơi bấm huỷ.
-   */
-  onPlayAgain: () => Promise<boolean>;
+  /** Chủ phòng bấm PLAY AGAIN - gửi 72 rồi mở cây hỏi. */
+  onOpenPlayAgain: () => void;
+  /** Kết quả của cây hỏi: gửi 73 / 75 / 76 tuỳ nhánh. */
+  onPlayAgainAction: (action: PlayAgainAction) => void;
+  players: GamePlayer[];
+  currentDuration: number;
+  currentPlayers: number;
+  /** Máy này vừa nhận gói 76: được giao làm chủ phòng mới. */
+  becameHost: boolean;
+  /** Chủ phòng cũ đã giao ghế cho người này (đã gửi 76). */
+  handedOverTo: string | null;
 }) {
   const t = useT();
 
@@ -127,7 +141,15 @@ export function GameOverOverlay({
    * `PlayAgain()` trong `playerHandlers.js`) và thay bằng một dòng chữ - không
    * cho bấm lần hai, vì cả hai gói đều tạo tác dụng phía server.
    */
-  const [choice, setChoice] = useState<'none' | 'ended' | 'again'>('none');
+  const [choice, setChoice] = useState<'none' | 'ended' | 'wizard' | 'sent' | 'handed'>('none');
+
+  /* Gói 76 tới: máy này thành chủ phòng, vào thẳng cây hỏi từ câu thời lượng. */
+  useEffect(() => {
+    if (becameHost) setChoice('wizard');
+  }, [becameHost]);
+  useEffect(() => {
+    if (handedOverTo) setChoice('handed');
+  }, [handedOverTo]);
 
   /*
    * Chỉ gọi cho thể thức Leaderboard Challenge. Ván tính giờ mà gọi thì endpoint
@@ -176,7 +198,7 @@ export function GameOverOverlay({
 
   return (
     <View style={styles.wrap}>
-      <Animated.View style={[styles.card, card]}>
+      <Animated.View style={[styles.card, choice === 'wizard' && styles.cardWide, card]}>
         <LinearGradient
           colors={['rgba(24,20,60,0.98)', 'rgba(8,8,24,0.99)']}
           start={{ x: 0, y: 0 }}
@@ -192,11 +214,33 @@ export function GameOverOverlay({
           choose" + End game / Play again; người khác chỉ thấy câu kết ván - và
           vì app cũng là bàn cờ, thêm dòng bàn cờ web ghi: "Waiting for host…".
         */}
-        {isHost ? (
+        {becameHost && choice === 'wizard' ? (
+          <>
+            <Text style={styles.choose}>{t('gameOver.newHostTitle')}</Text>
+            <Text style={styles.waiting}>{t('gameOver.newHostBody')}</Text>
+          </>
+        ) : null}
+
+        {isHost || becameHost ? (
           choice === 'ended' ? (
             <Text style={styles.choose}>{t('gameOver.thanks')}</Text>
-          ) : choice === 'again' ? (
+          ) : choice === 'sent' ? (
             <Text style={styles.choose}>{t('gameOver.settingUp')}</Text>
+          ) : choice === 'handed' ? (
+            <Text style={styles.waiting}>{t('gameOver.handedOver', { name: handedOverTo ?? '' })}</Text>
+          ) : choice === 'wizard' ? (
+            <PlayAgainWizard
+              players={players}
+              meId={meId}
+              currentDuration={currentDuration}
+              currentPlayers={currentPlayers}
+              startAt={becameHost ? 'duration' : 'host'}
+              onSend={(action) => {
+                onPlayAgainAction(action);
+                setChoice(action.kind === 'assignHost' ? 'handed' : 'sent');
+              }}
+              onCancel={() => setChoice('none')}
+            />
           ) : (
             <>
               <Text style={styles.choose}>{t('gameOver.choose')}</Text>
@@ -214,9 +258,8 @@ export function GameOverOverlay({
                 </Pressable>
                 <Pressable
                   onPress={() => {
-                    void onPlayAgain().then((sent) => {
-                      if (sent) setChoice('again');
-                    });
+                    onOpenPlayAgain();
+                    setChoice('wizard');
                   }}
                   accessibilityRole="button"
                   accessibilityLabel={t('gameOver.playAgain')}
@@ -324,6 +367,7 @@ const styles = StyleSheet.create({
   },
   /* Nút LEADERBOARD nổi hơn nút về màn chính: đây là thứ người chơi muốn xem. */
   buttonBoard: { backgroundColor: 'rgba(202,138,4,0.95)' },
+  cardWide: { maxWidth: 620 },
   buttonEnd: { backgroundColor: 'rgba(192,0,0,0.9)' },
   buttonAgain: { backgroundColor: 'rgba(22,163,74,0.9)' },
   buttonPressed: { opacity: 0.75 },
