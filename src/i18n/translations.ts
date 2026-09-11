@@ -313,7 +313,8 @@ export const en = {
   'battle.title': 'BATTLE',
   'battle.challengedYou': '{name} has challenged you!',
   'battle.youChallenge': "You're challenging {name}",
-  'battle.rules': "3 questions each, answered at the same time. Most right wins - sudden death if it's a tie.",
+  'battle.rules':
+    "3 questions each, answered at the same time. Most right wins. Still tied? One tie-breaker question, then a dice roll.",
   'battle.win': 'Win this battle to earn {points} {unit}.',
   'battle.lose': 'If you lose, you hand over {points} {unit}.',
   'battle.leaderWin': 'Win to stay on this square and take the next turn.',
@@ -324,7 +325,22 @@ export const en = {
   /** Nhãn góc trên khung câu hỏi battle - "BATTLE 2/3". */
   'battle.question': 'BATTLE {index}/3',
   /** Câu sudden death: hết 3 câu mà vẫn hoà. */
-  'battle.suddenDeath': 'SUDDEN DEATH',
+  /* K57: câu thứ 4 là CÂU PHỤ, không còn sudden death. */
+  'battle.tieBreaker': 'TIE-BREAKER',
+  /* Chữ chép mockup "Battle - Tie-breaker" của Tony (bàn cờ web). */
+  'battle.tieBreakerTime': "It's tie-breaker time!",
+  'battle.resultTitle': 'We have a result.',
+  'battle.noWinner': 'After one tie-breaker question, no winner was determined.',
+  'battle.diceTitle':
+    'Still tied! Both players must now roll a die, the player with the higher roll wins the battle.',
+  'battle.diceYouFirst': 'You go first!',
+  'battle.diceYourTurn': "It's your turn!",
+  'battle.diceWaiting': 'Waiting...',
+  'battle.diceRolling': 'Rolling...',
+  'battle.diceWon': '{name} won!',
+  'battle.diceWonYou': 'You won!',
+  'battle.diceTie': 'Same roll - roll again! (round {round})',
+  'battle.diceYou': 'you',
   /** Tổng kết - gói 84 là chỗ duy nhất biết ai đúng mấy câu. */
   'battle.score': 'You {mine} - {theirs} {name}',
   'battle.wonYou': 'You won the battle!',
@@ -669,7 +685,7 @@ const vi: Record<TranslationKey, string> = {
   'battle.challengedYou': '{name} thách đấu bạn!',
   'battle.youChallenge': 'Bạn đang thách đấu {name}',
   'battle.rules':
-    'Mỗi người 3 câu, trả lời cùng lúc. Ai đúng nhiều hơn thì thắng - hoà thì đấu tiếp từng câu.',
+    'Mỗi người 3 câu, trả lời cùng lúc. Ai đúng nhiều hơn thì thắng. Vẫn hoà? Một câu phụ, rồi tung xúc xắc.',
   'battle.win': 'Thắng được {points} {unit}.',
   'battle.lose': 'Thua thì mất {points} {unit}.',
   'battle.leaderWin': 'Thắng thì ở lại ô này và được đi lượt kế.',
@@ -678,7 +694,19 @@ const vi: Record<TranslationKey, string> = {
   'battle.starting': 'ĐANG BẮT ĐẦU...',
   'battle.waiting': 'Đang đợi {name} bắt đầu trận đấu...',
   'battle.question': 'ĐẤU {index}/3',
-  'battle.suddenDeath': 'ĐẤU TIẾP',
+  'battle.tieBreaker': 'CÂU PHỤ',
+  'battle.tieBreakerTime': 'Tới câu phụ!',
+  'battle.resultTitle': 'Đã có kết quả.',
+  'battle.noWinner': 'Sau một câu phụ vẫn chưa phân thắng bại.',
+  'battle.diceTitle': 'Vẫn hoà! Hai người tung xúc xắc, ai cao hơn thắng trận.',
+  'battle.diceYouFirst': 'Bạn tung trước!',
+  'battle.diceYourTurn': 'Tới lượt bạn!',
+  'battle.diceWaiting': 'Đang chờ...',
+  'battle.diceRolling': 'Đang tung...',
+  'battle.diceWon': '{name} thắng!',
+  'battle.diceWonYou': 'Bạn thắng!',
+  'battle.diceTie': 'Bằng nhau - tung lại! (lần {round})',
+  'battle.diceYou': 'bạn',
   'battle.score': 'Bạn {mine} - {theirs} {name}',
   'battle.wonYou': 'Bạn thắng trận đấu!',
   'battle.won': '{name} thắng trận đấu',

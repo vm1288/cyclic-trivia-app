@@ -45,6 +45,7 @@ import { FlyingReward } from '../src/components/FlyingReward';
 import { QuestionOverlay } from '../src/components/QuestionOverlay';
 import { BattleOverlay } from '../src/components/BattleOverlay';
 import { BattleResultOverlay } from '../src/components/BattleResultOverlay';
+import { BattleDiceOverlay, type BattleDiceState } from '../src/components/BattleDiceOverlay';
 import { TurnResultOverlay, type TurnResult } from '../src/components/TurnResultOverlay';
 import { RaceWinnerOverlay } from '../src/components/RaceWinnerOverlay';
 import { CurveBallOverlay } from '../src/components/CurveBallOverlay';
@@ -443,6 +444,19 @@ export default function GameLandscapeScreen() {
    * Gồm cả điểm chuyển tay khi có (ván KHÔNG tính leaderboard). Dữ liệu từ gói 58.
    */
   const [battleResult, setBattleResult] = useState<{ name: string; isMe: boolean } | null>(null);
+
+  /**
+   * Vòng TUNG XÚC XẮC PHÂN ĐỊNH của battle (gói 91, K57) - sau câu phụ mà vẫn
+   * hoà. `null` = không có. Nút ROLL DICE của người tới lượt tung sáng nhờ
+   * `battleRollMine` phía dưới; xem `BattleDiceOverlay`.
+   */
+  const [battleDice, setBattleDice] = useState<BattleDiceState | null>(null);
+  /**
+   * Mốc (ms) mà con xúc xắc đang lăn của vòng phân định sẽ dừng. Gói `tie`/`won`
+   * tới CÙNG LÚC với gói `rolled` của defender, phải xếp sau mốc này kẻo tấm
+   * "[X] won!" hiện trước khi xúc xắc dừng.
+   */
+  const battleDiceLandAt = useRef(0);
 
   /**
    * Ghế này vừa được mở ở một MÁY KHÁC (gói 88).
@@ -1406,13 +1420,26 @@ export default function GameLandscapeScreen() {
           : challengeId;
         const theirName = snapshot?.Players?.find((pl) => same(pl.Id, theirId))?.NickName ?? '';
 
-        setNotice(
-          t('battle.score', {
-            mine: String(count(myAnswers)),
-            theirs: String(count(theirAnswers)),
-            name: theirName,
-          }),
-        );
+        const score = t('battle.score', {
+          mine: String(count(myAnswers)),
+          theirs: String(count(theirAnswers)),
+          name: theirName,
+        });
+        /*
+         * K57 - chữ chép mockup "Battle - Tie-breaker": sau 3 câu hoà là "It's
+         * tie-breaker time!"; sau câu phụ thì "We have a result." hoặc "After one
+         * tie-breaker question, no winner was determined." (rồi tới xúc xắc).
+         */
+        const foundWinner = packet.FoundWinner === true;
+        const isTieBreaker = packet.IsTieBreaker === true;
+        const headline = isTieBreaker
+          ? foundWinner
+            ? t('battle.resultTitle')
+            : t('battle.noWinner')
+          : foundWinner
+            ? ''
+            : t('battle.tieBreakerTime');
+        setNotice(headline ? `${headline} ${score}` : score);
         return;
       }
 
@@ -1422,9 +1449,56 @@ export default function GameLandscapeScreen() {
        * ⚠ `characterId` là của người THUA (handler dùng nó để biết ai phải lùi ô).
        * Người thắng nằm ở `WinnerId`.
        */
+      /*
+       * Vòng tung xúc xắc phân định (K57). Mọi máy nhận cùng một gói; người có
+       * `RollerId` = mình thì nút ROLL DICE sáng (xem `battleRollMine`).
+       * `rolled` thì cho xúc xắc lăn rồi dừng ở số server bốc - cả máy tung lẫn
+       * máy xem, đúng như bàn cờ web chạy hiệu ứng cho cả phòng.
+       */
+      if (packet.typeID === TYPE_ID.BattleDice) {
+        const phase = String(packet.Phase ?? '') as BattleDiceState['phase'];
+        if (!['start', 'rolled', 'tie', 'won'].includes(phase)) return;
+        const next: BattleDiceState = {
+          phase,
+          attackerId: String(packet.AttackerId ?? ''),
+          defenderId: String(packet.DefenderId ?? ''),
+          attackerName: typeof packet.AttackerName === 'string' ? packet.AttackerName : '',
+          defenderName: typeof packet.DefenderName === 'string' ? packet.DefenderName : '',
+          attackerRoll: typeof packet.AttackerRoll === 'number' ? packet.AttackerRoll : null,
+          defenderRoll: typeof packet.DefenderRoll === 'number' ? packet.DefenderRoll : null,
+          rollerId: typeof packet.RollerId === 'string' ? packet.RollerId : null,
+          round: typeof packet.Round === 'number' ? packet.Round : 1,
+          winnerId: typeof packet.WinnerId === 'string' ? packet.WinnerId : null,
+        };
+        /*
+         * `rolled`: xúc xắc lăn toàn màn hình 1,2 giây (khung phân định tạm ẩn -
+         * xem chỗ render), rồi tắt xúc xắc và khung hiện lại với số vừa ra. Không
+         * giữ "YOU ROLLED n" 3 giây như lượt đi thường: số đã nằm trong khung, và
+         * 3 giây sau server đã sang gói 58. Đã thấy 2026-09-11: để xúc xắc chạy
+         * dưới khung thì con xúc xắc bị khung che, người chơi không thấy nó dừng.
+         */
+        const now = Date.now();
+        if (phase === 'rolled') {
+          setDice({ value: null });
+          battleDiceLandAt.current = now + 1200;
+          setTimeout(() => {
+            setDice(null);
+            setBattleDice(next);
+          }, 1200);
+          return;
+        }
+        // +30ms: gói `won` tới cùng mili-giây với gói `rolled`, hẹn bằng giờ thì
+        // hẹn giờ của `won` chạy TRƯỚC và bị `rolled` đè mất WinnerId (thấy 15:41 11/9).
+        const wait = battleDiceLandAt.current - now + 30;
+        if (wait > 0) setTimeout(() => setBattleDice(next), wait);
+        else setBattleDice(next);
+        return;
+      }
+
       if (packet.typeID === TYPE_ID.PlayerBattleWinner) {
         battleQuestionNo.current = 0;
         setBattle(null);
+        setBattleDice(null);
 
         const winnerId = typeof packet.WinnerId === 'string' ? packet.WinnerId : '';
         if (!winnerId) return;
@@ -1879,11 +1953,24 @@ export default function GameLandscapeScreen() {
     challenge !== null ||
     cardStep !== null;
 
+  /*
+   * Tung xúc xắc PHÂN ĐỊNH battle (K57): tới lượt mình tung thì nút sáng, bấm gửi
+   * gói 91 rỗng thay vì 14 - server bốc số và phát lại cho cả phòng. Không nợ
+   * gói 51 (không có nước đi nào sau đó).
+   */
+  const battleRollMine =
+    !!battleDice &&
+    !battleDice.winnerId &&
+    battleDice.phase !== 'rolling' &&
+    !!me &&
+    battleDice.rollerId === me.Id;
+
   const canRoll =
-    rollAction !== null &&
-    connState === 'connected' &&
-    !stepOverlayOpen &&
-    (rollAction !== TYPE_ID.RollDice || isMyTurn);
+    battleRollMine ||
+    (rollAction !== null &&
+      connState === 'connected' &&
+      !stepOverlayOpen &&
+      (rollAction !== TYPE_ID.RollDice || isMyTurn));
 
   /*
    * Chặn bấm dồn 2 giây, chép theo `canTriggerRollDice` của bản web.
@@ -1895,11 +1982,20 @@ export default function GameLandscapeScreen() {
   const lastRoll = useRef(0);
 
   const rollDice = () => {
-    if (!canRoll || rollAction === null) return;
+    if (!canRoll) return;
 
     const now = Date.now();
     if (now - lastRoll.current < ROLL_COOLDOWN_MS) return;
     lastRoll.current = now;
+
+    if (battleRollMine) {
+      setBattleDice((prev) => (prev ? { ...prev, phase: 'rolling' } : prev));
+      setDice({ value: null });
+      void connection.current?.send(TYPE_ID.BattleDice);
+      return;
+    }
+
+    if (rollAction === null) return;
 
     // `TurnId` là bắt buộc - thiếu là server không biết gói tin thuộc lượt nào.
     void connection.current?.send(rollAction, {
@@ -2887,7 +2983,7 @@ export default function GameLandscapeScreen() {
                     ? t('question.race')
                     : question.kind === 'battle'
                       ? (question.battleIndex ?? 0) >= 3
-                        ? t('battle.suddenDeath')
+                        ? t('battle.tieBreaker')
                         : t('battle.question', { index: String((question.battleIndex ?? 0) + 1) })
                       : null
                 }
@@ -2912,6 +3008,10 @@ export default function GameLandscapeScreen() {
 
             {battleResult ? (
               <BattleResultOverlay name={battleResult.name} isMe={battleResult.isMe} />
+            ) : null}
+
+            {battleDice && !battleResult && !dice ? (
+              <BattleDiceOverlay state={battleDice} meId={seat?.playerId ?? ''} />
             ) : null}
 
             {notice ? (

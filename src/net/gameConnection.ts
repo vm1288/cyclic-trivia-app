@@ -280,6 +280,12 @@ export const TYPE_ID = {
    */
   CurveBall: 90,
   /**
+   * Battle - vòng TUNG XÚC XẮC PHÂN ĐỊNH sau câu phụ mà vẫn hoà (K57). HAI CHIỀU:
+   *   nhận `{ Phase: start|rolled|tie|won, AttackerId, DefenderId, ..., RollerId, Value, WinnerId }`
+   *   gửi payload rỗng khi tới lượt mình tung (server bốc số). 20 giây không bấm là server tung hộ.
+   */
+  BattleDice: 91,
+  /**
    * "Ghế này vừa được mở ở một MÁY KHÁC" — gửi cho máy vừa BỊ ĐÁ khỏi slot.
    *
    * Mỗi người chơi chỉ có MỘT ô `ConnectionId` ở server và mọi gói tin đều đi qua
