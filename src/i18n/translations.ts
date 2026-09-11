@@ -167,6 +167,15 @@ export const en = {
     'You’ve paused the game. As the host, you can resume the game by tapping the green button above - once everyone’s ready.',
   'game.pausedGuest': 'Game paused by the host. Tap the resume button on the host’s phone to continue.',
   'game.pausedTitle': 'GAME PAUSED',
+  /*
+   * Hộp "rời ván" khi bấm BACK cứng - tiêu đề và hai nút chép nguyên văn
+   * designs/LeaveGameModal.tsx; thân là chữ của app (bản thiết kế để lorem ipsum).
+   */
+  'game.leaveTitle': 'Leave the current Game?',
+  'game.leaveBody':
+    'The game keeps going without you. Your seat is kept - come back any time with RESUME GAME on the home screen.',
+  'game.leaveCancel': 'CANCEL',
+  'game.leaveConfirm': 'LEAVE',
   /* Chat - chữ của app, bản web không có chat. */
   'chat.title': 'CHAT',
   'chat.placeholder': 'Type a message…',
@@ -543,6 +552,11 @@ const vi: Record<TranslationKey, string> = {
     'Bạn đã tạm dừng ván. Là chủ phòng, bạn bấm nút xanh phía trên để chơi tiếp - khi mọi người đã sẵn sàng.',
   'game.pausedGuest': 'Chủ phòng đã tạm dừng ván. Chạm nút tiếp tục trên máy chủ phòng để chơi tiếp.',
   'game.pausedTitle': 'ĐANG TẠM DỪNG',
+  'game.leaveTitle': 'Rời ván đang chơi?',
+  'game.leaveBody':
+    'Ván vẫn tiếp tục không có bạn. Ghế của bạn được giữ - quay lại lúc nào cũng được bằng TIẾP TỤC VÁN ở màn chính.',
+  'game.leaveCancel': 'HUỶ',
+  'game.leaveConfirm': 'RỜI VÁN',
   'chat.title': 'TRÒ CHUYỆN',
   'chat.placeholder': 'Nhập tin nhắn…',
   'chat.send': 'GỬI',

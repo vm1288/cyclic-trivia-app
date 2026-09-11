@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  BackHandler,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -70,7 +78,7 @@ import {
 import { useConfirm } from '../src/components/ConfirmDialog';
 import { useT } from '../src/i18n/I18nProvider';
 import { apiErrorText } from '../src/i18n/apiError';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { usePlayer } from '../src/session/PlayerSession';
 import { useLicense } from '../src/session/LicenseSession';
 import { neon, text } from '../src/theme/colors';
@@ -1586,6 +1594,58 @@ export default function GameLandscapeScreen() {
     void connection.current?.stop();
     void player.clearSeat().finally(() => router.replace('/'));
   }, [connection, player, router]);
+
+  /*
+   * ============================================================
+   * NÚT BACK CỨNG - hỏi trước khi rời ván (K51, theo designs/LeaveGameModal.tsx)
+   * ============================================================
+   *
+   * Không hỏi thì expo-router pop luôn màn ván: đo K50, bàn phím chat vừa hạ,
+   * bấm BACK thêm một cái là văng về Home giữa lượt. Hộp thoại chính là
+   * `ConfirmDialog` - bản đã port của LeaveGameModal (cùng viền gradient, nút
+   * CANCEL / LEAVE đỏ), nên không dựng thêm component.
+   *
+   * RỜI VÁN ≠ BỎ GHẾ: chỉ ngắt hub và về Home, ghế vẫn lưu nên Home hiện RESUME
+   * GAME để quay lại; ván vẫn chạy nhờ watchdog. `clearSeat` chỉ dành cho lúc
+   * hết ván (`leaveToHome`). Ván đã xong thì BACK = BACK TO HOME của khung Game
+   * Over.
+   *
+   * Thứ tự ưu tiên của BackHandler là "đăng ký sau, xử lý trước": `ChatPanel`
+   * mount sau nên nuốt BACK khi đang mở chat, tới đây thì chat đã đóng.
+   * `useFocusEffect` để listener chỉ sống khi màn này đang ở trên cùng.
+   */
+  const askingLeave = useRef(false);
+  const askLeave = useCallback(async () => {
+    if (askingLeave.current) return;
+    askingLeave.current = true;
+    try {
+      const ok = await confirm({
+        title: t('game.leaveTitle'),
+        message: t('game.leaveBody'),
+        confirmLabel: t('game.leaveConfirm'),
+        cancelLabel: t('game.leaveCancel'),
+        destructive: true,
+      });
+      if (!ok) return;
+      void connection.current?.stop();
+      router.replace('/');
+    } finally {
+      askingLeave.current = false;
+    }
+  }, [confirm, connection, router, t]);
+
+  const gameOverRef = useRef(gameOver);
+  gameOverRef.current = gameOver;
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (gameOverRef.current) leaveToHome();
+        else void askLeave();
+        return true;
+      });
+      return () => sub.remove();
+    }, [askLeave, leaveToHome]),
+  );
 
   const players = snapshot?.Players ?? [];
 
