@@ -9,6 +9,7 @@ import {
   categoryChain,
   characterImageUrl,
   EMPTY_GUID,
+  getChatHistory,
   pauseGame,
   resumeGame,
   startAgain,
@@ -17,6 +18,7 @@ import {
   submitAnswerForTurn,
   type AnswerResult,
   type CardStepPayload,
+  type ChatMessage,
   type DirectionPacket,
   type GamePlayer,
   type GameQuestion,
@@ -38,6 +40,7 @@ import { TurnResultOverlay, type TurnResult } from '../src/components/TurnResult
 import { RaceWinnerOverlay } from '../src/components/RaceWinnerOverlay';
 import { GameOverOverlay } from '../src/components/GameOverOverlay';
 import { PauseOverlay } from '../src/components/PauseOverlay';
+import { ChatPanel } from '../src/components/ChatPanel';
 import type { PlayAgainAction } from '../src/components/PlayAgainWizard';
 import {
   TenSecondsChallengeOverlay,
@@ -297,6 +300,22 @@ export default function GameLandscapeScreen() {
   const pauseDelay = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Đang gọi HTTP tạm dừng / tiếp tục - chặn bấm dồn. */
   const pausing = useRef(false);
+
+  /*
+   * ============================================================
+   * CHAT (gói 89) - tính năng của riêng app, bản web không có
+   * ============================================================
+   *
+   * `chat` là danh sách tin (lịch sử 50 tin + tin tới qua gói); `chatOpen` là
+   * khung đang mở; `unread` đếm tin của NGƯỜI KHÁC tới lúc khung đóng - hiện
+   * trên nút chat như bản thiết kế. Tin của mình cũng về qua gói 89 (server gửi
+   * cho cả người gửi) nên không tự chép vào danh sách.
+   */
+  const [chat, setChat] = useState<ChatMessage[]>([]);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [unread, setUnread] = useState(0);
+  const chatOpenRef = useRef(false);
+  chatOpenRef.current = chatOpen;
 
   /**
    * Kết quả câu trả lời vừa gửi - hiện giữa bàn cờ vài giây.
@@ -1080,6 +1099,14 @@ export default function GameLandscapeScreen() {
        * ⚠ Gói này tới CẢ máy chủ phòng lẫn máy khách, qua kết nối của ghế cũ.
        * Đừng đóng kết nối trước khi nhận được nó.
        */
+      if (packet.typeID === TYPE_ID.Chat) {
+        const m = packet as unknown as ChatMessage;
+        if (!m.Id || typeof m.Text !== 'string') return;
+        setChat((prev) => (prev.some((x) => x.Id === m.Id) ? prev : [...prev, m]));
+        if (!chatOpenRef.current && m.PlayerId !== seat?.playerId) setUnread((n) => n + 1);
+        return;
+      }
+
       /*
        * TẠM DỪNG - chép theo `handlePauseGameText` / `handlePauseGame` /
        * `handleResumeGameFromPause` trong `playerHandlers.js`.
@@ -1384,6 +1411,47 @@ export default function GameLandscapeScreen() {
     if (connState !== 'connected') return;
     void connection.current?.send(TYPE_ID.HostResume);
   }, [connState, connection]);
+
+  /*
+   * Lịch sử chat lúc mở màn (vào lại ván giữa chừng, hoặc đổi ghế Play again).
+   * Gộp với tin đã tới qua gói trong lúc HTTP đang bay, khử trùng theo `Id`.
+   */
+  useEffect(() => {
+    if (!seat?.token) return;
+    let alive = true;
+    void getChatHistory(seat.token).then((res) => {
+      if (!alive || !res.isSuccess) return;
+      const history = res.messages ?? [];
+      setChat((prev) => {
+        const seen = new Set(history.map((m) => m.Id));
+        return [...history, ...prev.filter((m) => !seen.has(m.Id))];
+      });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [seat?.token]);
+
+  /*
+   * Khung chat ĐÓNG LẠI khi có việc phải làm ngay: câu hỏi, chọn hướng, thẻ,
+   * Your Choice, 10-sec, battle. Đo K50: đang chat thì câu hỏi tới, khung chat
+   * (zIndex 25) đè lên câu hỏi (20) - người chơi mất 60 giây mà không biết.
+   */
+  useEffect(() => {
+    if (question || direction || cardStep || choice || challenge || battle) setChatOpen(false);
+  }, [question, direction, cardStep, choice, challenge, battle]);
+
+  const openChat = useCallback(() => {
+    setChatOpen(true);
+    setUnread(0);
+  }, []);
+
+  const sendChat = useCallback(
+    (txt: string) => {
+      void connection.current?.send(TYPE_ID.Chat, { text: txt });
+    },
+    [connection],
+  );
 
   /*
    * LƯỚI AN TOÀN cho tạm dừng - state là nguồn sự thật, gói tin chỉ là nhịp.
@@ -2647,6 +2715,15 @@ export default function GameLandscapeScreen() {
               </View>
             ) : null}
 
+            {chatOpen ? (
+              <ChatPanel
+                messages={chat}
+                meId={seat?.playerId ?? ''}
+                onSend={sendChat}
+                onClose={() => setChatOpen(false)}
+              />
+            ) : null}
+
             {/*
               Chữ gói 82 - web đặt cạnh hai nút ở thanh trên; cột phải của app
               không có chỗ cho một câu dài nên đặt ở đỉnh bàn cờ. Chỉ chủ phòng
@@ -2932,11 +3009,24 @@ export default function GameLandscapeScreen() {
             <View
               style={styles.bottomRow}
             >
-              <View
-                style={styles.squareBtn}
+              {/* CHAT - mở khung đè lên cột bàn cờ; chấm đỏ = số tin chưa đọc (thiết kế). */}
+              <Pressable
+                onPress={openChat}
+                accessibilityRole="button"
+                accessibilityLabel={t('chat.title')}
+                style={({ pressed }) => [
+                  styles.squareBtn,
+                  chatOpen && styles.squareBtnOn,
+                  pressed && styles.iconBtnPressed,
+                ]}
               >
                 <ChatIcon size={22} />
-              </View>
+                {unread > 0 ? (
+                  <View style={styles.unread} pointerEvents="none">
+                    <Text style={styles.unreadText}>{unread > 99 ? '99+' : String(unread)}</Text>
+                  </View>
+                ) : null}
+              </Pressable>
 
               {/*
                 Chưa tới lượt thì XÁM và không bấm được; tới lượt thì sáng.
@@ -3532,6 +3622,28 @@ const styles = StyleSheet.create({
 
     gap: 8,
   },
+
+  /* Nút chat đang mở khung: viền sáng hơn để biết cái gì đang phủ bàn cờ. */
+  squareBtnOn: {
+    borderColor: boardColors.blue,
+    boxShadow: '0 0 12px rgba(47,143,255,0.5)',
+  },
+  /* Số tin chưa đọc - chép `unread` của designs/GameBoardScreen.tsx. */
+  unread: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: 10,
+    backgroundColor: '#ff2d4d',
+    borderWidth: 1.5,
+    borderColor: '#0a0d22',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unreadText: { fontSize: 11, fontWeight: '800', color: '#fff' },
 
   squareBtn: {
     width: 50,

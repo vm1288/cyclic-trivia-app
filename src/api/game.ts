@@ -847,6 +847,29 @@ export function resumeGame(token: string): Promise<ApiResult<{}>> {
   return postForm('/public/game/pause/resume', {}, token);
 }
 
+/* ─── Chat ─────────────────────────────────────────────────────────────── */
+
+/**
+ * Một tin chat - đúng hình gói 89 `Chat_Res` của server (`ChatHandler.cs`).
+ *
+ * ⚠️ Bản web không có chat; đây là tính năng của riêng app. Server chỉ chuyển
+ * tiếp và giữ 50 tin gần nhất trong cache theo ván - không ghi DB.
+ */
+export type ChatMessage = {
+  Id: string;
+  PlayerId: string;
+  NickName: string;
+  /** Màu ghế (`Players.PlayerColor`), để tô tên. */
+  PlayerColor: string;
+  Text: string;
+  SentAt: string;
+};
+
+/** 50 tin gần nhất của ván đang ngồi - gọi lúc mở màn ván. Token ghế. */
+export function getChatHistory(token: string): Promise<ApiResult<{ messages: ChatMessage[] }>> {
+  return postForm('/public/game/chat', {}, token);
+}
+
 /* ─── Chọn hướng đi ────────────────────────────────────────────────────────── */
 
 /**

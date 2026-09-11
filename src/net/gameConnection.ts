@@ -269,6 +269,11 @@ export const TYPE_ID = {
    */
   RaceWinner: 87,
   /**
+   * Chat trong ván - HAI CHIỀU, gói riêng của app (bản web không có chat).
+   *   gửi: `{ text }`   nhận: `ChatMessage` (xem `api/game.ts`), tới CẢ người gửi.
+   */
+  Chat: 89,
+  /**
    * "Ghế này vừa được mở ở một MÁY KHÁC" — gửi cho máy vừa BỊ ĐÁ khỏi slot.
    *
    * Mỗi người chơi chỉ có MỘT ô `ConnectionId` ở server và mọi gói tin đều đi qua
