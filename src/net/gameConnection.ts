@@ -274,6 +274,12 @@ export const TYPE_ID = {
    */
   Chat: 89,
   /**
+   * "Curve ball vừa áp" - gói riêng của app, gửi cho MỌI người chơi:
+   * `{ Type, Message, DurationInSeconds }`. Bàn cờ web hiện tấm Googly / VAR
+   * decisions / Curve Ball; điện thoại web không thấy gì. Xem `CurveBallOverlay`.
+   */
+  CurveBall: 90,
+  /**
    * "Ghế này vừa được mở ở một MÁY KHÁC" — gửi cho máy vừa BỊ ĐÁ khỏi slot.
    *
    * Mỗi người chơi chỉ có MỘT ô `ConnectionId` ở server và mọi gói tin đều đi qua

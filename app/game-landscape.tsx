@@ -46,6 +46,7 @@ import { BattleOverlay } from '../src/components/BattleOverlay';
 import { BattleResultOverlay } from '../src/components/BattleResultOverlay';
 import { TurnResultOverlay, type TurnResult } from '../src/components/TurnResultOverlay';
 import { RaceWinnerOverlay } from '../src/components/RaceWinnerOverlay';
+import { CurveBallOverlay } from '../src/components/CurveBallOverlay';
 import { GameOverOverlay } from '../src/components/GameOverOverlay';
 import { PauseOverlay } from '../src/components/PauseOverlay';
 import { ChatPanel } from '../src/components/ChatPanel';
@@ -77,6 +78,7 @@ import {
 } from '../src/components/GameBoardParts';
 import { useConfirm } from '../src/components/ConfirmDialog';
 import { useT } from '../src/i18n/I18nProvider';
+import { en, type TranslationKey } from '../src/i18n/translations';
 import { apiErrorText } from '../src/i18n/apiError';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { usePlayer } from '../src/session/PlayerSession';
@@ -403,6 +405,14 @@ export default function GameLandscapeScreen() {
    * người thắng.
    */
   const [raceWinner, setRaceWinner] = useState<{ name: string; isMe: boolean } | null>(null);
+
+  /**
+   * CURVE BALL vừa áp (gói 90) - hiện tấm Googly cho tới khi server đi tiếp
+   * (`DurationInSeconds`, thường 10 giây). Xem `CurveBallOverlay`.
+   */
+  const [curveBall, setCurveBall] = useState<{ type: string; message: string; seconds: number } | null>(
+    null,
+  );
 
   /**
    * BATTLE đang diễn ra trên máy NÀY - lời dẫn trước trận (gói 55).
@@ -1080,6 +1090,18 @@ export default function GameLandscapeScreen() {
        * giữa bàn cờ bằng `BoardMessage` (26), nhưng gói đó mang HTML nên app
        * không dùng được, và người THUA còn không nhận được gì.
        */
+      if (packet.typeID === TYPE_ID.CurveBall) {
+        const type = typeof packet.Type === 'string' ? packet.Type : '';
+        const message = typeof packet.Message === 'string' ? packet.Message : '';
+        if (!type && !message) return;
+        setCurveBall({
+          type,
+          message,
+          seconds: Number((packet as { DurationInSeconds?: number }).DurationInSeconds ?? 10),
+        });
+        return;
+      }
+
       if (packet.typeID === TYPE_ID.RaceWinner) {
         const name = typeof packet.NickName === 'string' ? packet.NickName : '';
         if (!name) return;
@@ -1970,6 +1992,13 @@ export default function GameLandscapeScreen() {
    * Lâu hơn thông báo thẻ bài: đây là lúc cả phòng cần hiểu vì sao lượt lại về
    * tay người đó, và ngay sau nó là 10 giây đếm ngược của bàn cờ web.
    */
+  /* Tấm curve ball sống đúng bằng lúc bàn cờ giữ nó (server gửi số giây). */
+  useEffect(() => {
+    if (!curveBall) return;
+    const hide = setTimeout(() => setCurveBall(null), Math.max(3, curveBall.seconds) * 1000);
+    return () => clearTimeout(hide);
+  }, [curveBall]);
+
   useEffect(() => {
     if (!raceWinner) return;
     const hide = setTimeout(() => setRaceWinner(null), 4000);
@@ -2685,6 +2714,21 @@ export default function GameLandscapeScreen() {
 
             {raceWinner ? (
               <RaceWinnerOverlay name={raceWinner.name} isMe={raceWinner.isMe} />
+            ) : null}
+
+            {curveBall ? (
+              <CurveBallOverlay
+                boardGameId={boardGameId}
+                /*
+                 * Câu theo ngôn ngữ app nếu biết kiểu; không biết thì in nguyên
+                 * câu server gửi (cùng nguồn với bàn cờ web).
+                 */
+                message={
+                  `curve.${curveBall.type}` in en
+                    ? t(`curve.${curveBall.type}` as TranslationKey)
+                    : curveBall.message
+                }
+              />
             ) : null}
 
             {turnResult ? (

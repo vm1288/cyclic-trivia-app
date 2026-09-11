@@ -61,6 +61,7 @@ const REFRESH_ON = new Set<number>([
   85, // PlayersStatus
   86, // PlayerUsedCard    - người khác vừa dùng thẻ, tay bài của họ đổi
   87, // RaceWinner        - vòng đua xong, thứ tự lượt vừa xếp lại
+  90, // CurveBall         - vừa áp biến cố: thứ tự lượt / thẻ / sao có thể đã đổi
 ]);
 
 /**
