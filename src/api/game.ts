@@ -790,6 +790,35 @@ export function ackFlow(
   return postForm('/public/game/flow-received', { flow }, token);
 }
 
+/* ─── Chơi lại ─────────────────────────────────────────────────────────── */
+
+/**
+ * Đổi ghế CŨ (ván vừa xong) lấy ghế MỚI mà server vừa tạo khi chủ phòng bấm
+ * Play again.
+ *
+ * Gói `PlayerStartAgain` (74) tới từng máy mang `PlayerId` của ghế mới. Bản web
+ * chỉ việc `window.location = '/player/start/{id}'`; app không mở trang nên gọi
+ * đây - server mint token cho ghế mới, và chỉ cấp khi ghế mới đúng là BẢN SAO
+ * của ghế đang cầm token (cùng chủ phòng, cùng thứ tự, cùng tên, cùng nhân vật).
+ *
+ * Gọi bằng token ghế CŨ.
+ */
+export function startAgain(
+  playerId: string,
+  token: string,
+): Promise<
+  ApiResult<{
+    GameId: string;
+    PlayerId: string;
+    Token: string;
+    NickName: string;
+    CharacterId: string;
+    IsHost: boolean;
+  }>
+> {
+  return postForm('/public/player/start-again', { playerId }, token);
+}
+
 /* ─── Chọn hướng đi ────────────────────────────────────────────────────────── */
 
 /**

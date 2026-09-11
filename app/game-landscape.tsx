@@ -9,6 +9,7 @@ import {
   categoryChain,
   characterImageUrl,
   EMPTY_GUID,
+  startAgain,
   submitAnswer,
   submitAnswerBattle,
   submitAnswerForTurn,
@@ -62,6 +63,7 @@ import { useConfirm } from '../src/components/ConfirmDialog';
 import { useT } from '../src/i18n/I18nProvider';
 import { useRouter } from 'expo-router';
 import { usePlayer } from '../src/session/PlayerSession';
+import { useLicense } from '../src/session/LicenseSession';
 import { neon, text } from '../src/theme/colors';
 
 /**
@@ -187,6 +189,7 @@ type ActiveQuestion = {
 
 export default function GameLandscapeScreen() {
   const player = usePlayer();
+  const license = useLicense();
   const router = useRouter();
   const t = useT();
   const confirm = useConfirm();
@@ -1027,6 +1030,56 @@ export default function GameLandscapeScreen() {
         return;
       }
 
+      /*
+       * CHƠI LẠI: server vừa dựng ván mới (KeepDurationAndPlayersHandler) và
+       * gửi cho TỪNG máy `PlayerId` của ghế mới của chính máy đó. Bản web chỉ
+       * việc `window.location = '/player/start/{id}'`; app đổi ghế qua
+       * `startAgain` rồi đi thẳng vào phòng chờ - chủ phòng vào lobby (có mã
+       * phòng + nút START), người khác vào waiting.
+       *
+       * ⚠ Gói này tới CẢ máy chủ phòng lẫn máy khách, qua kết nối của ghế cũ.
+       * Đừng đóng kết nối trước khi nhận được nó.
+       */
+      if (packet.typeID === TYPE_ID.PlayerStartAgain) {
+        const newId = typeof packet.PlayerId === 'string' ? packet.PlayerId : '';
+        if (!newId || !seat) return;
+        void (async () => {
+          const res = await startAgain(newId, seat.token);
+          if (!res.isSuccess) return;
+          await player.saveSeat({
+            gameId: res.GameId,
+            playerId: res.PlayerId,
+            token: res.Token,
+            roomCode: null,
+            nickname: res.NickName,
+            characterId: res.CharacterId,
+          });
+          if (res.IsHost) license.setCurrentGame(res.GameId);
+          /*
+           * KHÔNG gọi `connection.stop()` ở đây: màn này unmount là hook tự ngắt,
+           * còn gọi tay thì đua với vòng nối lại 5 giây của `useGameConnection`
+           * và nổ "Failed to start the connection: stopped" trên LogBox.
+           */
+
+          /*
+           * ⚠️ Đóng khung Game Over TRƯỚC, đổi màn SAU một nhịp. Gọi
+           * `router.replace` ngay trong callback gói tin, khi khung Game Over và
+           * hộp xác nhận còn đang gỡ, thì Fabric nổ *"addViewAt: The specified
+           * child already has a parent"* - màn đỏ, mất luôn ván mới. Đã dính
+           * 2026-09-11 ngay lần chạy đầu.
+           */
+          setGameOver(null);
+          setTimeout(() => {
+            if (res.IsHost) {
+              router.replace({ pathname: '/lobby', params: { gameId: res.GameId } });
+            } else {
+              router.replace('/waiting');
+            }
+          }, 120);
+        })();
+        return;
+      }
+
       if (packet.typeID === TYPE_ID.ConnectionReplaced) {
         setReplaced(true);
         setQuestion(null);
@@ -1244,6 +1297,41 @@ export default function GameLandscapeScreen() {
    *
    * Ngắt kết nối trước để server khỏi giữ một socket không còn việc gì.
    */
+  /**
+   * Chủ phòng bấm END GAME - gói 71, chép `EndGame()` của `playerHandlers.js`.
+   * Server chỉ báo cho bàn cờ ("Host has ended the session"); máy khách không
+   * nhận gì, họ vẫn đứng ở khung Game Over cho tới khi tự về màn chính.
+   */
+  const endGame = useCallback(() => {
+    void connection.current?.send(TYPE_ID.EndGame, {});
+  }, [connection]);
+
+  /**
+   * Chủ phòng bấm PLAY AGAIN.
+   *
+   * Cây hỏi của bản web có ba tầng ("còn muốn làm chủ phòng?" → "giữ thể thức?"
+   * → "giữ người chơi?") nhưng chỉ nhánh YES-YES-YES là hoàn chỉnh; ba nhánh NO
+   * hoặc dở dang (`onConfirm: console.log`) hoặc dẫn sang màn dựng ván đầy đủ.
+   * App gom nhánh hoàn chỉnh thành MỘT câu hỏi. Xem GAME_RULES mục 15c.
+   *
+   * Thứ tự gói y như web: 72 (`SettingPlayAgain`, để bàn cờ hiện "Host is
+   * setting up") rồi 73 (`KeepDurationAndPlayers`) mang thời lượng ván cũ -
+   * server đọc nó để quyết `TotalRollDice` cho ván mới.
+   */
+  const playAgain = useCallback(async () => {
+    const ok = await confirm({
+      title: t('gameOver.againTitle'),
+      confirmLabel: t('gameOver.againYes'),
+      cancelLabel: t('gameOver.againNo'),
+    });
+    if (!ok) return false;
+    void connection.current?.send(TYPE_ID.SettingPlayAgain, {});
+    void connection.current?.send(TYPE_ID.KeepDurationAndPlayers, {
+      GameDuration: snapshot?.Game?.DurationMinutes ?? 0,
+    });
+    return true;
+  }, [confirm, connection, snapshot?.Game?.DurationMinutes, t]);
+
   const leaveToHome = useCallback(() => {
     void connection.current?.stop();
     void player.clearSeat().finally(() => router.replace('/'));
@@ -2684,7 +2772,11 @@ export default function GameLandscapeScreen() {
            * chẳng có gì để xếp hạng.
            */
           isLeaderboard={(snapshot?.Game?.TotalRollDice ?? 0) > 0}
+          isHost={me?.IsHost === true}
+          hostName={players.find((p) => p.IsHost)?.NickName ?? ''}
           onLeave={leaveToHome}
+          onEndGame={endGame}
+          onPlayAgain={playAgain}
         />
       ) : null}
 

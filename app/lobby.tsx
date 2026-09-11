@@ -147,7 +147,16 @@ export default function LobbyScreen() {
       SiteUrl: result.SiteUrl,
       JoinUrl: result.JoinUrl,
     });
-  }, [gameId, session, t]);
+
+    /*
+     * Ghế của ván CHƠI LẠI sinh ra từ gói 74, chưa có mã phòng (mã chỉ được cấp ở
+     * đây, khi chủ phòng mở lobby). Ghi vào ghế để màn ván chơi hiện "Room XXX"
+     * thay vì "IN GAME" trơn - đã thấy trên máy 2026-09-11.
+     */
+    if (seat && seat.gameId === gameId && seat.roomCode !== result.RoomCode) {
+      void player.saveSeat({ ...seat, roomCode: result.RoomCode });
+    }
+  }, [gameId, session, t, seat, player]);
 
   useEffect(() => {
     void openRoom();

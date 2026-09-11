@@ -304,6 +304,19 @@ export const en = {
    */
   /* Nút trên khung Game Over, chỉ thể thức Leaderboard Challenge - chữ của bản web (`mainControl.js`). */
   'gameOver.leaderboard': 'LEADERBOARD',
+  /*
+   * Chủ phòng chọn gì sau khi hết ván - chữ chép từ `playerHandlers.js`
+   * (handleGameOver, EndGame) và bàn cờ web (`mainControl.js`, `mainHandlers.js`).
+   */
+  'gameOver.choose': 'Please choose',
+  'gameOver.endGame': 'END GAME',
+  'gameOver.playAgain': 'PLAY AGAIN',
+  'gameOver.thanks': 'Thanks for playing!',
+  'gameOver.settingUp': 'Setting up a new match. Get ready!',
+  'gameOver.waitingHost': 'Waiting for host. {name}, please select Play Again or End Game on your device.',
+  'gameOver.againTitle': 'Same game duration and same players?',
+  'gameOver.againYes': 'Yes, play again',
+  'gameOver.againNo': 'Cancel',
   'gameOver.global': 'GLOBAL LEADERBOARD',
   'gameOver.currentMatch': 'CURRENT MATCH RESULT',
   'gameOver.boardFailed': "Couldn't load the leaderboard.",
@@ -575,6 +588,15 @@ const vi: Record<TranslationKey, string> = {
   'gameOver.youSuffix': ' (bạn)',
   'gameOver.defaultMessage': 'Điểm cuối cùng là đây.',
   'gameOver.leaderboard': 'BẢNG XẾP HẠNG',
+  'gameOver.choose': 'Mời chọn',
+  'gameOver.endGame': 'KẾT THÚC',
+  'gameOver.playAgain': 'CHƠI LẠI',
+  'gameOver.thanks': 'Cảm ơn đã chơi!',
+  'gameOver.settingUp': 'Đang dựng ván mới. Sẵn sàng nhé!',
+  'gameOver.waitingHost': 'Đang chờ chủ phòng. {name}, hãy chọn Chơi lại hoặc Kết thúc trên máy của bạn.',
+  'gameOver.againTitle': 'Giữ nguyên thể thức và người chơi?',
+  'gameOver.againYes': 'Ừ, chơi lại',
+  'gameOver.againNo': 'Thôi',
   'gameOver.global': 'BẢNG XẾP HẠNG CHUNG',
   'gameOver.currentMatch': 'KẾT QUẢ VÁN NÀY',
   'gameOver.boardFailed': 'Không tải được bảng xếp hạng.',

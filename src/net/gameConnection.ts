@@ -132,6 +132,15 @@ export const TYPE_ID = {
   TenSecondsChallengeCountDown: 43,
   GameStart: 38,
   GameOver: 39,
+  /*
+   * Bốn gói của lượt CHƠI LẠI / KẾT THÚC sau khi ván xong - chỉ chủ phòng gửi.
+   * Luồng đầy đủ của bản web ở `playerHandlers.js` (EndGame, PlayAgain,
+   * KeepPlayers); app làm nhánh đã hoàn chỉnh của nó, xem GAME_RULES mục 15c.
+   */
+  EndGame: 71,
+  SettingPlayAgain: 72,
+  KeepDurationAndPlayers: 73,
+  PlayerStartAgain: 74,
   /**
    * "Tôi vừa nối xong, còn flow nào đang treo thì phát lại đi."
    *

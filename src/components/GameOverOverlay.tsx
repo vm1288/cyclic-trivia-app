@@ -56,7 +56,11 @@ export function GameOverOverlay({
   meId,
   message,
   isLeaderboard,
+  isHost,
+  hostName,
   onLeave,
+  onEndGame,
+  onPlayAgain,
 }: {
   gameId: string | null;
   meId: string | null;
@@ -71,7 +75,22 @@ export function GameOverOverlay({
    * tung), nhưng `TotalRollDice` mới là thứ cả server lẫn bàn cờ đọc.
    */
   isLeaderboard: boolean;
+  /**
+   * Máy này có phải CHỦ PHÒNG không - đọc từ `isHost` của ghế mình trong state.
+   * Chỉ chủ phòng có hai nút End game / Play again; người khác thấy dòng "đang
+   * chờ chủ phòng", y như bàn cờ web ghi *"Waiting for host…"*.
+   */
+  isHost: boolean;
+  /** Tên chủ phòng, cho dòng chờ của người không phải chủ. */
+  hostName: string;
   onLeave: () => void;
+  /** Chủ phòng bấm END GAME. Gửi gói 71. */
+  onEndGame: () => void;
+  /**
+   * Chủ phòng bấm PLAY AGAIN. Trả `true` nếu đã xác nhận và gói đã đi - khung
+   * chuyển sang "đang dựng ván mới"; `false` nếu người chơi bấm huỷ.
+   */
+  onPlayAgain: () => Promise<boolean>;
 }) {
   const t = useT();
 
@@ -102,6 +121,13 @@ export function GameOverOverlay({
    * Over vừa rồi. Về màn chính là việc của nút khác.
    */
   const [showBoard, setShowBoard] = useState(false);
+
+  /*
+   * Chủ phòng đã chọn gì. Bản web giấu hai nút ngay khi bấm (`EndGame()` /
+   * `PlayAgain()` trong `playerHandlers.js`) và thay bằng một dòng chữ - không
+   * cho bấm lần hai, vì cả hai gói đều tạo tác dụng phía server.
+   */
+  const [choice, setChoice] = useState<'none' | 'ended' | 'again'>('none');
 
   /*
    * Chỉ gọi cho thể thức Leaderboard Challenge. Ván tính giờ mà gọi thì endpoint
@@ -160,6 +186,50 @@ export function GameOverOverlay({
 
         <Text style={styles.title}>{t('gameOver.title')}</Text>
         <Text style={styles.message}>{message || t('gameOver.defaultMessage')}</Text>
+
+        {/*
+          Chép `handleGameOver` của `playerHandlers.js`: chủ phòng thấy "Please
+          choose" + End game / Play again; người khác chỉ thấy câu kết ván - và
+          vì app cũng là bàn cờ, thêm dòng bàn cờ web ghi: "Waiting for host…".
+        */}
+        {isHost ? (
+          choice === 'ended' ? (
+            <Text style={styles.choose}>{t('gameOver.thanks')}</Text>
+          ) : choice === 'again' ? (
+            <Text style={styles.choose}>{t('gameOver.settingUp')}</Text>
+          ) : (
+            <>
+              <Text style={styles.choose}>{t('gameOver.choose')}</Text>
+              <View style={styles.hostRow}>
+                <Pressable
+                  onPress={() => {
+                    setChoice('ended');
+                    onEndGame();
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('gameOver.endGame')}
+                  style={({ pressed }) => [styles.button, styles.buttonEnd, pressed && styles.buttonPressed]}
+                >
+                  <Text style={styles.buttonText}>{t('gameOver.endGame')}</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    void onPlayAgain().then((sent) => {
+                      if (sent) setChoice('again');
+                    });
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('gameOver.playAgain')}
+                  style={({ pressed }) => [styles.button, styles.buttonAgain, pressed && styles.buttonPressed]}
+                >
+                  <Text style={styles.buttonText}>{t('gameOver.playAgain')}</Text>
+                </Pressable>
+              </View>
+            </>
+          )
+        ) : (
+          <Text style={styles.waiting}>{t('gameOver.waitingHost', { name: hostName })}</Text>
+        )}
 
         {/*
           Khung này là khung Game Over CHUNG cho mọi thể thức: "Game Over" + câu
@@ -254,6 +324,24 @@ const styles = StyleSheet.create({
   },
   /* Nút LEADERBOARD nổi hơn nút về màn chính: đây là thứ người chơi muốn xem. */
   buttonBoard: { backgroundColor: 'rgba(202,138,4,0.95)' },
+  buttonEnd: { backgroundColor: 'rgba(192,0,0,0.9)' },
+  buttonAgain: { backgroundColor: 'rgba(22,163,74,0.9)' },
   buttonPressed: { opacity: 0.75 },
+  choose: {
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+    textAlign: 'center',
+    color: text.primary,
+    marginTop: 2,
+  },
+  hostRow: { flexDirection: 'row', justifyContent: 'center', gap: 12 },
+  waiting: {
+    fontSize: 12,
+    lineHeight: 16,
+    textAlign: 'center',
+    color: '#FDE68A',
+    paddingHorizontal: 6,
+  },
   buttonText: { fontSize: 14, fontWeight: '800', letterSpacing: 0.6, color: '#fff' },
 });
