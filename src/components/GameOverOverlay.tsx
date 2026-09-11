@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   Easing,
@@ -92,6 +92,18 @@ export function GameOverOverlay({
   const [failed, setFailed] = useState(false);
 
   /*
+   * Màn xếp hạng là một LỚP MỞ RA TỪ khung Game Over, không thay thế nó.
+   *
+   * ⚠️ Bản đầu tôi cho màn xếp hạng hiện thẳng và nút BACK của nó về màn chính -
+   * sai với bản web, Tony nhìn ra ngay. Bản web: bàn cờ hiện "Game Over" + câu
+   * ngẫu nhiên + nút **Leaderboard** (`mainControl.js`); bấm vào mới mở màn xếp
+   * hạng, và nút **← BACK** trên đó chỉ làm `IsLeaderBoard = false`
+   * (`board.js`, `backBoard()`) - tức đóng màn xếp hạng, quay về đúng khung Game
+   * Over vừa rồi. Về màn chính là việc của nút khác.
+   */
+  const [showBoard, setShowBoard] = useState(false);
+
+  /*
    * Chỉ gọi cho thể thức Leaderboard Challenge. Ván tính giờ mà gọi thì endpoint
    * vẫn trả 200 nhưng toàn số 0 - hiện lên là nói dối người chơi.
    */
@@ -121,46 +133,24 @@ export function GameOverOverlay({
     [board],
   );
 
-  const row = (item: LeaderboardRow, index: number, showRank: boolean) => {
-    const isMe = item.PlayerId === meId;
-    return (
-      <View
-        key={item.PlayerId + '-' + index}
-        style={[styles.row, isMe && styles.rowMe, item.IsTopGlobal && styles.rowTop]}
-      >
-        <Text style={[styles.place, item.IsTopGlobal && styles.placeTop]} numberOfLines={1}>
-          {showRank ? item.Rank : String(index + 1)}
-        </Text>
-
-        <Text style={[styles.name, isMe && styles.nameMe]} numberOfLines={1}>
-          {item.PlayerName}
-          {isMe ? t('gameOver.youSuffix') : ''}
-        </Text>
-
-        <Text style={styles.point}>{item.Score.toLocaleString()}</Text>
-      </View>
-    );
-  };
-
   /*
-   * Thể thức Leaderboard Challenge có MÀN RIÊNG, dựng trên bộ tranh sân khấu -
-   * xem `LeaderboardStage`. Khung chữ dưới đây chỉ còn dành cho ván tính giờ,
-   * đúng như bản web: "Game Over" + câu ngẫu nhiên, không bảng nào.
+   * Màn xếp hạng (bộ tranh sân khấu, xem `LeaderboardStage`) chỉ mở khi người
+   * chơi bấm nút LEADERBOARD ở khung dưới. BACK trên đó đóng màn, về lại khung.
    */
-  if (isLeaderboard && board && hasBoard) {
+  if (isLeaderboard && showBoard && board && hasBoard) {
     return (
       <LeaderboardStage
         global={board.global}
         current={board.current}
         meId={meId}
-        onLeave={onLeave}
+        onLeave={() => setShowBoard(false)}
       />
     );
   }
 
   return (
     <View style={styles.wrap}>
-      <Animated.View style={[styles.card, isLeaderboard && styles.cardWide, card]}>
+      <Animated.View style={[styles.card, card]}>
         <LinearGradient
           colors={['rgba(24,20,60,0.98)', 'rgba(8,8,24,0.99)']}
           start={{ x: 0, y: 0 }}
@@ -172,13 +162,23 @@ export function GameOverOverlay({
         <Text style={styles.message}>{message || t('gameOver.defaultMessage')}</Text>
 
         {/*
-          Tới được đây thì hoặc là ván tính giờ (không có bảng nào, đúng bản
-          web), hoặc là ván Leaderboard Challenge mà bảng chưa tải xong / tải
-          hỏng - lúc đó vẫn phải nói cho người chơi biết VÁN ĐÃ XONG.
+          Khung này là khung Game Over CHUNG cho mọi thể thức: "Game Over" + câu
+          ngẫu nhiên. Thể thức Leaderboard Challenge có thêm nút LEADERBOARD -
+          đúng như bàn cờ web có thêm `btnGameOverLeaderboard` chỉ khi
+          `TotalRollDice > 0`. Bảng chưa tải xong thì nút chờ; tải hỏng thì nói.
         */}
         {isLeaderboard ? (
           failed ? (
             <Text style={styles.note}>{t('gameOver.boardFailed')}</Text>
+          ) : hasBoard ? (
+            <Pressable
+              onPress={() => setShowBoard(true)}
+              accessibilityRole="button"
+              accessibilityLabel={t('gameOver.leaderboard')}
+              style={({ pressed }) => [styles.button, styles.buttonBoard, pressed && styles.buttonPressed]}
+            >
+              <Text style={styles.buttonText}>{t('gameOver.leaderboard')}</Text>
+            </Pressable>
           ) : (
             <ActivityIndicator color="#C7D2FE" style={styles.spinner} />
           )
@@ -224,10 +224,6 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     gap: 8,
   },
-  /* Hai bảng cạnh nhau thì cần rộng; ván tính giờ chỉ có hai dòng chữ. */
-  cardWide: { maxWidth: 720, flex: 1 },
-  columns: { flex: 1, flexDirection: 'row', gap: 14, minHeight: 0 },
-  column: { flex: 1, minHeight: 0 },
   title: {
     fontSize: 21,
     fontWeight: '900',
@@ -248,39 +244,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   spinner: { paddingVertical: 14 },
-  listInner: { gap: 4, paddingVertical: 2, paddingBottom: 6 },
-  section: {
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 1.2,
-    color: 'rgba(148,163,255,0.9)',
-    marginBottom: 4,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    /* Đủ khít để SÁU dòng top 6 vào trọn một màn ngang, không phải cuộn. */
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  rowMe: { borderColor: 'rgba(148,163,255,0.55)' },
-  /* Bản web tô sáng người nằm trong top 6 toàn cục (`class inGlobalTop`). */
-  rowTop: { backgroundColor: 'rgba(253,230,138,0.12)' },
-  place: {
-    minWidth: 46,
-    fontSize: 13,
-    fontWeight: '800',
-    color: 'rgba(226,232,255,0.6)',
-  },
-  placeTop: { color: '#FDE68A' },
-  name: { flex: 1, fontSize: 13.5, fontWeight: '700', color: text.primary },
-  nameMe: { color: '#C7D2FE' },
-  point: { fontSize: 15, fontWeight: '900', color: text.primary, minWidth: 52, textAlign: 'right' },
   button: {
     marginTop: 2,
     alignSelf: 'center',
@@ -289,6 +252,8 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: 'rgba(99,102,241,0.9)',
   },
+  /* Nút LEADERBOARD nổi hơn nút về màn chính: đây là thứ người chơi muốn xem. */
+  buttonBoard: { backgroundColor: 'rgba(202,138,4,0.95)' },
   buttonPressed: { opacity: 0.75 },
   buttonText: { fontSize: 14, fontWeight: '800', letterSpacing: 0.6, color: '#fff' },
 });

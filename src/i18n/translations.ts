@@ -302,6 +302,8 @@ export const en = {
    * Hai phần của màn xếp hạng, CHỈ hiện với thể thức Leaderboard Challenge -
    * xem `GameOverOverlay`. Chữ chép theo bản web (`MainBoard.cshtml`).
    */
+  /* Nút trên khung Game Over, chỉ thể thức Leaderboard Challenge - chữ của bản web (`mainControl.js`). */
+  'gameOver.leaderboard': 'LEADERBOARD',
   'gameOver.global': 'GLOBAL LEADERBOARD',
   'gameOver.currentMatch': 'CURRENT MATCH RESULT',
   'gameOver.boardFailed': "Couldn't load the leaderboard.",
@@ -572,6 +574,7 @@ const vi: Record<TranslationKey, string> = {
   'gameOver.leave': 'VỀ MÀN CHÍNH',
   'gameOver.youSuffix': ' (bạn)',
   'gameOver.defaultMessage': 'Điểm cuối cùng là đây.',
+  'gameOver.leaderboard': 'BẢNG XẾP HẠNG',
   'gameOver.global': 'BẢNG XẾP HẠNG CHUNG',
   'gameOver.currentMatch': 'KẾT QUẢ VÁN NÀY',
   'gameOver.boardFailed': 'Không tải được bảng xếp hạng.',
