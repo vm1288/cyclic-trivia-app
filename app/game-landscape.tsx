@@ -52,7 +52,6 @@ import { CurveBallOverlay } from '../src/components/CurveBallOverlay';
 import { GameOverOverlay } from '../src/components/GameOverOverlay';
 import { PauseOverlay } from '../src/components/PauseOverlay';
 import { ChatPanel } from '../src/components/ChatPanel';
-import type { PlayAgainAction } from '../src/components/PlayAgainWizard';
 import {
   TenSecondsChallengeOverlay,
   type ChallengePhase,
@@ -353,15 +352,6 @@ export default function GameLandscapeScreen() {
    * tưởng app hỏng.
    */
   const [boardHidden, setBoardHidden] = useState(false);
-
-  /**
-   * Hai trạng thái của lượt CHƠI LẠI liên quan tới đổi chủ phòng (gói 76):
-   *   - `becameHost`: máy này vừa được chủ phòng cũ giao ghế - hiện "YOU ARE THE
-   *     NEW HOST!" và mở cây hỏi từ câu thời lượng (`handleChangePlayerAsHost`).
-   *   - `handedOverTo`: máy này là chủ phòng cũ, đã giao ghế - chỉ còn chờ.
-   */
-  const [becameHost, setBecameHost] = useState(false);
-  const [handedOverTo, setHandedOverTo] = useState<string | null>(null);
 
   /**
    * Ô 10-SEC CHALLENGE đang mở trên máy NÀY.
@@ -1237,12 +1227,11 @@ export default function GameLandscapeScreen() {
       }
 
       /*
-       * Chủ phòng cũ giao ghế cho MÌNH (gói 76 `ChangePlayerAsHost`). Server đã
-       * đổi cờ `isHost` trong ván cũ; nạp lại state để `me.IsHost` đúng, và mở
-       * cây hỏi từ câu thời lượng như `handleChangePlayerAsHost` của bản web.
+       * Chủ phòng (bàn cờ web) giao ghế cho MÌNH - gói 76 `ChangePlayerAsHost`.
+       * App không còn cây hỏi Play again (Tony bỏ 2026-09-11), chỉ nạp lại state
+       * cho `me.IsHost` đúng.
        */
       if (packet.typeID === TYPE_ID.ChangePlayerAsHost) {
-        setBecameHost(true);
         void refresh();
         return;
       }
@@ -1674,55 +1663,6 @@ export default function GameLandscapeScreen() {
    *
    * Ngắt kết nối trước để server khỏi giữ một socket không còn việc gì.
    */
-  /**
-   * Chủ phòng bấm END GAME - gói 71, chép `EndGame()` của `playerHandlers.js`.
-   * Server chỉ báo cho bàn cờ ("Host has ended the session"); máy khách không
-   * nhận gì, họ vẫn đứng ở khung Game Over cho tới khi tự về màn chính.
-   */
-  const endGame = useCallback(() => {
-    void connection.current?.send(TYPE_ID.EndGame, {});
-  }, [connection]);
-
-  /**
-   * Chủ phòng bấm PLAY AGAIN: gửi 72 (`SettingPlayAgain`) NGAY - bản web gửi nó
-   * trước khi hỏi gì (`PlayAgain()`), để bàn cờ hiện "Host is setting up a new
-   * match". Cây hỏi mở sau; kết quả đi qua `playAgainAction`.
-   */
-  const openPlayAgain = useCallback(() => {
-    void connection.current?.send(TYPE_ID.SettingPlayAgain, {});
-  }, [connection]);
-
-  /**
-   * Ba đích của cây hỏi, đúng ba gói bản web gửi:
-   *   keep       -> 73 `KeepDurationAndPlayers { GameDuration }`  (`KeepPlayers()`)
-   *   setup      -> 75 `SetupNewGame { hostId, selectedPlayerIds, GameDuration,
-   *                 NumberOfPlayers }`                              (`submitSetup()`)
-   *   assignHost -> 76 `ChangePlayerAsHost { hostId }`             (`changeHost()`)
-   *
-   * Sau 73/75 server gửi 74 cho từng người - xử lý ở `onPacket`. Sau 76 thì máy
-   * của chủ phòng MỚI nhận 76 và tiếp tục cây; máy này chỉ còn chờ.
-   */
-  const playAgainAction = useCallback(
-    (action: PlayAgainAction) => {
-      if (action.kind === 'keep') {
-        void connection.current?.send(TYPE_ID.KeepDurationAndPlayers, { GameDuration: action.duration });
-      } else if (action.kind === 'setup') {
-        void connection.current?.send(TYPE_ID.SetupNewGame, {
-          hostId: action.hostId,
-          selectedPlayerIds: action.selectedPlayerIds,
-          GameDuration: action.duration,
-          NumberOfPlayers: action.numberOfPlayers,
-        });
-      } else {
-        void connection.current?.send(TYPE_ID.ChangePlayerAsHost, { hostId: action.hostId });
-        // `players` khai báo phía dưới - đọc thẳng từ snapshot để khỏi kéo lên.
-        const target = (snapshot?.Players ?? []).find((p) => p.Id === action.hostId);
-        setHandedOverTo(target?.NickName ?? '');
-      }
-    },
-    [connection, snapshot?.Players],
-  );
-
   const leaveToHome = useCallback(() => {
     void connection.current?.stop();
     void player.clearSeat().finally(() => router.replace('/'));
@@ -3409,17 +3349,7 @@ export default function GameLandscapeScreen() {
            * chẳng có gì để xếp hạng.
            */
           isLeaderboard={(snapshot?.Game?.TotalRollDice ?? 0) > 0}
-          isHost={me?.IsHost === true}
-          hostName={players.find((p) => p.IsHost)?.NickName ?? ''}
           onLeave={leaveToHome}
-          onEndGame={endGame}
-          onOpenPlayAgain={openPlayAgain}
-          onPlayAgainAction={playAgainAction}
-          players={players}
-          currentDuration={snapshot?.Game?.DurationMinutes ?? 0}
-          currentPlayers={snapshot?.Game?.NumberOfPlayers ?? players.length}
-          becameHost={becameHost}
-          handedOverTo={handedOverTo}
         />
       ) : null}
 

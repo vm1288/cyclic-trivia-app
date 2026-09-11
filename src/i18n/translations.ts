@@ -368,12 +368,6 @@ export const en = {
    * Chủ phòng chọn gì sau khi hết ván - chữ chép từ `playerHandlers.js`
    * (handleGameOver, EndGame) và bàn cờ web (`mainControl.js`, `mainHandlers.js`).
    */
-  'gameOver.choose': 'Please choose',
-  'gameOver.endGame': 'END GAME',
-  'gameOver.playAgain': 'PLAY AGAIN',
-  'gameOver.thanks': 'Thanks for playing!',
-  'gameOver.settingUp': 'Setting up a new match. Get ready!',
-  'gameOver.waitingHost': 'Waiting for host. {name}, please select Play Again or End Game on your device.',
   /*
    * Cây "Play again" - chữ chép nguyên văn từ `playerHandlers.js` và hai Vue
    * component `SelectDurations` / `SelectPlayers` của bản web.
@@ -404,9 +398,6 @@ export const en = {
   'again.continue': 'Continue',
   'again.back': 'Back',
   'again.cancel': 'Cancel',
-  'gameOver.newHostTitle': 'YOU ARE THE NEW HOST!',
-  'gameOver.newHostBody': 'You now have the power to decide the next game.',
-  'gameOver.handedOver': '{name} is the new host. Waiting for them to set up the next game.',
   'gameOver.global': 'GLOBAL LEADERBOARD',
   'gameOver.currentMatch': 'CURRENT MATCH RESULT',
   'gameOver.boardFailed': "Couldn't load the leaderboard.",
@@ -719,12 +710,6 @@ const vi: Record<TranslationKey, string> = {
   'gameOver.youSuffix': ' (bạn)',
   'gameOver.defaultMessage': 'Điểm cuối cùng là đây.',
   'gameOver.leaderboard': 'BẢNG XẾP HẠNG',
-  'gameOver.choose': 'Mời chọn',
-  'gameOver.endGame': 'KẾT THÚC',
-  'gameOver.playAgain': 'CHƠI LẠI',
-  'gameOver.thanks': 'Cảm ơn đã chơi!',
-  'gameOver.settingUp': 'Đang dựng ván mới. Sẵn sàng nhé!',
-  'gameOver.waitingHost': 'Đang chờ chủ phòng. {name}, hãy chọn Chơi lại hoặc Kết thúc trên máy của bạn.',
   'again.hostQ': 'Bạn còn muốn làm chủ phòng ván sau không?',
   'again.hostHint': 'Nếu CÓ, bạn vẫn là chủ phòng và sẽ dựng ván mới.',
   'again.hostYes': 'CÓ, chơi và làm chủ phòng',
@@ -751,9 +736,6 @@ const vi: Record<TranslationKey, string> = {
   'again.continue': 'Tiếp tục',
   'again.back': 'Quay lại',
   'again.cancel': 'Thôi',
-  'gameOver.newHostTitle': 'BẠN LÀ CHỦ PHÒNG MỚI!',
-  'gameOver.newHostBody': 'Bạn quyết định ván tiếp theo.',
-  'gameOver.handedOver': '{name} là chủ phòng mới. Đang chờ họ dựng ván sau.',
   'gameOver.global': 'BẢNG XẾP HẠNG CHUNG',
   'gameOver.currentMatch': 'KẾT QUẢ VÁN NÀY',
   'gameOver.boardFailed': 'Không tải được bảng xếp hạng.',

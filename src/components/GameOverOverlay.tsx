@@ -11,8 +11,6 @@ import Animated, {
 import { useT } from '../i18n/I18nProvider';
 import { getLeaderboard, type LeaderboardRow } from '../api/game';
 import { LeaderboardStage } from './LeaderboardStage';
-import { PlayAgainWizard, type PlayAgainAction } from './PlayAgainWizard';
-import type { GamePlayer } from '../api/game';
 import { text } from '../theme/colors';
 
 /**
@@ -49,26 +47,18 @@ import { text } from '../theme/colors';
  * ⚠️ App vẽ hai phần này thành danh sách; bản web vẽ top 6 lên một tấm hình sân
  * vận động (`leaderboard-img-map4.png` + image map). Khác cách vẽ, cùng dữ liệu.
  *
- * ⚠️ Chưa có **End game / Play again** của chủ phòng (bản web hiện hai nút đó
- * cho `data.isHost`) — đó là ca **UI-9**, chưa làm. Nút VỀ MÀN CHÍNH ở đây chỉ
- * là đường ra cho máy này, không thay hai nút kia.
+ * ⚠️ **KHÔNG có End game / Play again** — Tony bỏ hai nút này khỏi khung Game Over
+ * ngày 2026-09-11 (từng dựng ở K47/K48, gỡ vì chuỗi "chơi lại" vướng license,
+ * xem NEXT_STEPS mục K52). Bản web vẫn hiện hai nút cho `data.isHost`; app thì
+ * chủ phòng lẫn người chơi đều chỉ có (LEADERBOARD +) BACK TO HOME. Cây hỏi
+ * `PlayAgainWizard` còn nguyên trong repo, chưa nối vào đâu.
  */
 export function GameOverOverlay({
   gameId,
   meId,
   message,
   isLeaderboard,
-  isHost,
-  hostName,
   onLeave,
-  onEndGame,
-  onOpenPlayAgain,
-  onPlayAgainAction,
-  players,
-  currentDuration,
-  currentPlayers,
-  becameHost,
-  handedOverTo,
 }: {
   gameId: string | null;
   meId: string | null;
@@ -83,28 +73,7 @@ export function GameOverOverlay({
    * tung), nhưng `TotalRollDice` mới là thứ cả server lẫn bàn cờ đọc.
    */
   isLeaderboard: boolean;
-  /**
-   * Máy này có phải CHỦ PHÒNG không - đọc từ `isHost` của ghế mình trong state.
-   * Chỉ chủ phòng có hai nút End game / Play again; người khác thấy dòng "đang
-   * chờ chủ phòng", y như bàn cờ web ghi *"Waiting for host…"*.
-   */
-  isHost: boolean;
-  /** Tên chủ phòng, cho dòng chờ của người không phải chủ. */
-  hostName: string;
   onLeave: () => void;
-  /** Chủ phòng bấm END GAME. Gửi gói 71. */
-  onEndGame: () => void;
-  /** Chủ phòng bấm PLAY AGAIN - gửi 72 rồi mở cây hỏi. */
-  onOpenPlayAgain: () => void;
-  /** Kết quả của cây hỏi: gửi 73 / 75 / 76 tuỳ nhánh. */
-  onPlayAgainAction: (action: PlayAgainAction) => void;
-  players: GamePlayer[];
-  currentDuration: number;
-  currentPlayers: number;
-  /** Máy này vừa nhận gói 76: được giao làm chủ phòng mới. */
-  becameHost: boolean;
-  /** Chủ phòng cũ đã giao ghế cho người này (đã gửi 76). */
-  handedOverTo: string | null;
 }) {
   const t = useT();
 
@@ -135,21 +104,6 @@ export function GameOverOverlay({
    * Over vừa rồi. Về màn chính là việc của nút khác.
    */
   const [showBoard, setShowBoard] = useState(false);
-
-  /*
-   * Chủ phòng đã chọn gì. Bản web giấu hai nút ngay khi bấm (`EndGame()` /
-   * `PlayAgain()` trong `playerHandlers.js`) và thay bằng một dòng chữ - không
-   * cho bấm lần hai, vì cả hai gói đều tạo tác dụng phía server.
-   */
-  const [choice, setChoice] = useState<'none' | 'ended' | 'wizard' | 'sent' | 'handed'>('none');
-
-  /* Gói 76 tới: máy này thành chủ phòng, vào thẳng cây hỏi từ câu thời lượng. */
-  useEffect(() => {
-    if (becameHost) setChoice('wizard');
-  }, [becameHost]);
-  useEffect(() => {
-    if (handedOverTo) setChoice('handed');
-  }, [handedOverTo]);
 
   /*
    * Chỉ gọi cho thể thức Leaderboard Challenge. Ván tính giờ mà gọi thì endpoint
@@ -198,7 +152,7 @@ export function GameOverOverlay({
 
   return (
     <View style={styles.wrap}>
-      <Animated.View style={[styles.card, choice === 'wizard' && styles.cardWide, card]}>
+      <Animated.View style={[styles.card, card]}>
         <LinearGradient
           colors={['rgba(24,20,60,0.98)', 'rgba(8,8,24,0.99)']}
           start={{ x: 0, y: 0 }}
@@ -208,71 +162,6 @@ export function GameOverOverlay({
 
         <Text style={styles.title}>{t('gameOver.title')}</Text>
         <Text style={styles.message}>{message || t('gameOver.defaultMessage')}</Text>
-
-        {/*
-          Chép `handleGameOver` của `playerHandlers.js`: chủ phòng thấy "Please
-          choose" + End game / Play again; người khác chỉ thấy câu kết ván - và
-          vì app cũng là bàn cờ, thêm dòng bàn cờ web ghi: "Waiting for host…".
-        */}
-        {becameHost && choice === 'wizard' ? (
-          <>
-            <Text style={styles.choose}>{t('gameOver.newHostTitle')}</Text>
-            <Text style={styles.waiting}>{t('gameOver.newHostBody')}</Text>
-          </>
-        ) : null}
-
-        {isHost || becameHost ? (
-          choice === 'ended' ? (
-            <Text style={styles.choose}>{t('gameOver.thanks')}</Text>
-          ) : choice === 'sent' ? (
-            <Text style={styles.choose}>{t('gameOver.settingUp')}</Text>
-          ) : choice === 'handed' ? (
-            <Text style={styles.waiting}>{t('gameOver.handedOver', { name: handedOverTo ?? '' })}</Text>
-          ) : choice === 'wizard' ? (
-            <PlayAgainWizard
-              players={players}
-              meId={meId}
-              currentDuration={currentDuration}
-              currentPlayers={currentPlayers}
-              startAt={becameHost ? 'duration' : 'host'}
-              onSend={(action) => {
-                onPlayAgainAction(action);
-                setChoice(action.kind === 'assignHost' ? 'handed' : 'sent');
-              }}
-              onCancel={() => setChoice('none')}
-            />
-          ) : (
-            <>
-              <Text style={styles.choose}>{t('gameOver.choose')}</Text>
-              <View style={styles.hostRow}>
-                <Pressable
-                  onPress={() => {
-                    setChoice('ended');
-                    onEndGame();
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('gameOver.endGame')}
-                  style={({ pressed }) => [styles.button, styles.buttonEnd, pressed && styles.buttonPressed]}
-                >
-                  <Text style={styles.buttonText}>{t('gameOver.endGame')}</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    onOpenPlayAgain();
-                    setChoice('wizard');
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('gameOver.playAgain')}
-                  style={({ pressed }) => [styles.button, styles.buttonAgain, pressed && styles.buttonPressed]}
-                >
-                  <Text style={styles.buttonText}>{t('gameOver.playAgain')}</Text>
-                </Pressable>
-              </View>
-            </>
-          )
-        ) : (
-          <Text style={styles.waiting}>{t('gameOver.waitingHost', { name: hostName })}</Text>
-        )}
 
         {/*
           Khung này là khung Game Over CHUNG cho mọi thể thức: "Game Over" + câu
@@ -367,25 +256,6 @@ const styles = StyleSheet.create({
   },
   /* Nút LEADERBOARD nổi hơn nút về màn chính: đây là thứ người chơi muốn xem. */
   buttonBoard: { backgroundColor: 'rgba(202,138,4,0.95)' },
-  cardWide: { maxWidth: 620 },
-  buttonEnd: { backgroundColor: 'rgba(192,0,0,0.9)' },
-  buttonAgain: { backgroundColor: 'rgba(22,163,74,0.9)' },
   buttonPressed: { opacity: 0.75 },
-  choose: {
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-    textAlign: 'center',
-    color: text.primary,
-    marginTop: 2,
-  },
-  hostRow: { flexDirection: 'row', justifyContent: 'center', gap: 12 },
-  waiting: {
-    fontSize: 12,
-    lineHeight: 16,
-    textAlign: 'center',
-    color: '#FDE68A',
-    paddingHorizontal: 6,
-  },
   buttonText: { fontSize: 14, fontWeight: '800', letterSpacing: 0.6, color: '#fff' },
 });
