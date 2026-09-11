@@ -23,62 +23,52 @@ import { text } from '../theme/colors';
  * chứ không vẽ bằng khối màu: `arena.png` làm nền, `podium.png` là bục sáu chỗ,
  * hai dải `title-*.png` làm tiêu đề, `btn-back.png` làm nút ra.
  *
- * ⚠️ **`podium.png` cố định SÁU chỗ theo thế 3 cao + 3 thấp.** Đó là lý do bố
- * cục là bục giữa màn chứ không phải hai cột: chia đôi màn là chống lại chính
- * bức tranh. Bảng chung của server cũng đúng **top 6** (`Take(6)`), khớp sẵn.
+ * ⚠️ **`podium.png` cố định SÁU chỗ.** Đó là lý do bố cục là một dải giữa màn
+ * chứ không phải hai cột: chia đôi màn là chống lại chính bức tranh. Bảng chung
+ * của server cũng đúng **top 6** (`Take(6)`), khớp sẵn.
  */
 
 /**
  * Sáu chỗ trên `podium.png`, tính theo PHẦN TRĂM khung ảnh.
  *
- * Bộ tranh thứ hai (2026-09-10 tối) là **sáu chiếc cúp**, mỗi cúp có hai ô để
- * trống: **huy chương tròn** ở trên và **biển tên** ở dưới. Nên mỗi hạng cần
- * HAI vùng chứ không phải một.
+ * Bộ tranh thứ BA (2026-09-11 sáng) là **sáu thẻ hiệu** đánh số sẵn 1-6 từ trái
+ * sang phải. Mỗi thẻ có hai chỗ trống: **ô tối** ở giữa (tên) và **dải màu** bên
+ * dưới (điểm). **Số hạng đã in trong tranh nên app KHÔNG vẽ số nữa** — vẽ đè là
+ * hai con số chồng nhau.
  *
- * ⚠️ Sáu cúp KHÔNG xếp theo hạng từ trái sang phải. Thứ tự trong tranh là
- * **4 – 2 – 1 – 3 – 5 – 6**, nhận ra bằng chiều cao (cúp cao hơn = hạng cao
- * hơn). Mảng này xếp theo HẠNG, phần trăm bên trong đã trỏ đúng cột.
+ * ⚠️ Mỗi ô là **hộp canh theo TÂM của vùng**, không phải theo mép — tên người
+ * chơi dài ngắn khác nhau. `scripts/dev-podium-zones.py --badge` gom hàng tối
+ * liền nhau thành ô tối, tìm dải màu ngay dưới, lấy tâm rồi dựng hộp quanh tâm.
+ * Đổi tranh thì chạy lại, đừng ướm mắt.
  *
- * ⚠️ Mỗi ô là **hộp canh theo TÂM của vùng**, không phải theo mép.
- * `scripts/dev-podium-zones.py` gom các hàng tối liền nhau trong mỗi cột thành
- * hai miền (vòng tròn, biển tên), lấy tâm rồi dựng hộp quanh tâm đó. Phải làm
- * vậy vì **tên người chơi dài ngắn khác nhau**: canh theo mép thì tên ngắn nằm
- * lệch, tên dài tràn ra. Bản trước đo theo mép và Tony nhìn ra ngay.
- *
- * ⚠️ Đổi tranh thì chạy lại công cụ đó, đừng ướm mắt. Nó tự tìm sáu cột và tự
- * sắp hạng theo chiều cao cúp.
- *
- * ⚠️ Hạng 4 và 5 trong tranh này **cao gần bằng nhau** (lệch 0,6%), nên thứ tự
- * giữa chúng là quy ước chứ không phải đo được: giữ thế sóng 4-2-1-3-5-6 đọc từ
- * trái sang phải, tức cúp tím = 4, cúp xanh lá = 5.
+ * Lịch sử: v1 bục 3 cao + 3 thấp, v2 sáu cúp (hạng theo chiều cao, thứ tự
+ * 4-2-1-3-5-6), v3 thẻ hiệu này. Bản gốc từng bộ ở `assets/leaderboard/original/`.
  */
 const SLOTS = [
-  { medal: { left: '40.18%', top: '20.66%', width: '8.85%', height: '19.05%' },
-    plate: { left: '39.30%', top: '54.90%', width: '10.55%', height: '7.83%' } },
-  { medal: { left: '22.08%', top: '34.93%', width: '7.96%', height: '17.07%' },
-    plate: { left: '21.11%', top: '65.43%', width: '9.71%', height: '6.49%' } },
-  { medal: { left: '57.45%', top: '36.52%', width: '7.49%', height: '16.79%' },
-    plate: { left: '56.61%', top: '65.66%', width: '9.09%', height: '7.06%' } },
-  { medal: { left: '5.95%', top: '45.78%', width: '6.86%', height: '13.83%' },
-    plate: { left: '4.73%', top: '72.01%', width: '8.81%', height: '5.15%' } },
-  { medal: { left: '72.80%', top: '43.75%', width: '6.97%', height: '16.65%' },
-    plate: { left: '72.05%', top: '70.85%', width: '8.58%', height: '7.06%' } },
-  { medal: { left: '88.14%', top: '51.73%', width: '6.44%', height: '14.39%' },
-    plate: { left: '87.36%', top: '75.98%', width: '8.14%', height: '5.73%' } },
+  { name: { left: '2.41%', top: '48.88%', width: '11.53%', height: '11.31%' },
+    score: { left: '2.54%', top: '66.04%', width: '11.26%', height: '12.02%' } },
+  { name: { left: '19.29%', top: '49.01%', width: '11.42%', height: '11.05%' },
+    score: { left: '19.42%', top: '66.07%', width: '11.16%', height: '12.15%' } },
+  { name: { left: '36.00%', top: '49.47%', width: '11.42%', height: '10.67%' },
+    score: { left: '36.13%', top: '66.04%', width: '11.16%', height: '12.02%' } },
+  { name: { left: '52.58%', top: '49.04%', width: '11.42%', height: '11.18%' },
+    score: { left: '52.71%', top: '66.04%', width: '11.16%', height: '12.02%' } },
+  { name: { left: '69.35%', top: '49.63%', width: '11.42%', height: '10.54%' },
+    score: { left: '69.48%', top: '66.07%', width: '11.16%', height: '12.15%' } },
+  { name: { left: '85.75%', top: '48.60%', width: '12.16%', height: '11.69%' },
+    score: { left: '85.89%', top: '66.04%', width: '11.88%', height: '12.02%' } },
 ] as const;
 
 /**
- * Tỉ lệ thật của `podium.png` (1604×482).
+ * Tỉ lệ thật của `podium.png` (1634×551).
  *
  * ⚠️ Khung bọc PHẢI đúng tỉ lệ này. Bản đầu để khung `flex: 1` rồi vẽ ảnh bằng
  * `contain`: ảnh co lại nằm giữa khung, còn sáu ô chữ vẫn tính theo phần trăm
  * của KHUNG - thành ra tên và điểm trôi hẳn ra ngoài mặt bục. Nhìn ảnh chụp là
  * thấy ngay, nhưng đọc mã thì không.
  */
-const PODIUM_RATIO = 1604 / 482;
+const PODIUM_RATIO = 1634 / 551;
 
-/** Màu điểm của từng bục, lấy theo đúng màu neon trong tranh. */
-const SLOT_COLOR = ['#FFC93C', '#7FB6FF', '#FF8A50', '#C07BFF', '#4FE38A', '#FF5C6A'];
 
 const ARENA = require('../../assets/leaderboard/arena.png');
 const PODIUM = require('../../assets/leaderboard/podium.png');
@@ -111,9 +101,10 @@ export function LeaderboardStage({
   /*
    * Chiều cao thật của khung tranh, đo một lần khi bố cục xong.
    *
-   * ⚠️ Cỡ chữ phải tính TỪ Ô, không đặt cứng. Sáu cúp to nhỏ khác nhau: ô của
-   * hạng 1 cao 17,4% còn hạng 4 chỉ 12,6% - một cỡ chữ dùng chung thì ô nhỏ bị
-   * bóp, số hạng teo lại còn tên thì đè lên nó. Đã thấy tận mắt.
+   * ⚠️ Cỡ chữ phải tính TỪ Ô, không đặt cứng. Bộ tranh cúp (v2) có sáu ô to nhỏ
+   * khác nhau: ô của hạng 1 cao 17,4% còn hạng 4 chỉ 12,6% - một cỡ chữ dùng
+   * chung thì ô nhỏ bị bóp. Bộ thẻ hiệu (v3) sáu ô bằng nhau, nhưng giữ cách
+   * này để đổi tranh lần nữa không phải sửa.
    */
   const [podiumHeight, setPodiumHeight] = useState(0);
 
@@ -182,19 +173,16 @@ export function LeaderboardStage({
             const row = globalRows[i];
             if (!row) return null;
             const isMe = row.PlayerId === meId;
-            const color = SLOT_COLOR[i];
 
-            /* Chiều cao ô = phần trăm của khung tranh -> cỡ chữ theo tỉ lệ ô. */
-            const medalH = (podiumHeight * parseFloat(slot.medal.height)) / 100;
-            const plateH = (podiumHeight * parseFloat(slot.plate.height)) / 100;
-            const rankSize = Math.max(10, medalH * 0.42);
-            const nameSize = Math.max(9, medalH * 0.26);
             /*
-             * ⚠️ `lineHeight` KHÔNG được vượt chiều cao biển: vượt là
-             * `adjustsFontSizeToFit` co chữ lại cho vừa, và điểm teo đi một
-             * nửa dù cỡ chữ tính ra đã đúng. Nên để đúng bằng cỡ chữ.
+             * Cỡ chữ tính TỪ Ô, không đặt cứng - xem ghi chú ở `podiumHeight`.
+             * Sáu thẻ này bằng nhau nên sáu cỡ ra như nhau, nhưng đổi tranh là
+             * khác ngay.
              */
-            const scoreSize = Math.max(11, plateH * 0.82);
+            const nameH = (podiumHeight * parseFloat(slot.name.height)) / 100;
+            const scoreH = (podiumHeight * parseFloat(slot.score.height)) / 100;
+            const nameSize = Math.max(10, nameH * 0.58);
+            const scoreSize = Math.max(11, scoreH * 0.74);
 
             return (
               /*
@@ -204,26 +192,12 @@ export function LeaderboardStage({
                * thường nên nhìn như "chưa có dữ liệu". Đã dính 2026-09-10.
                */
               <Fragment key={i}>
-                {/*
-                  Vòng tròn giữ DANH TÍNH: số hạng ở trên, tên ngay dưới. Hai thứ
-                  này đi liền nhau nên phải nằm chung một chỗ - tách ra hai đầu
-                  cúp thì mắt phải nhảy qua lại mới ghép được ai đứng thứ mấy.
-                */}
-                <View style={[styles.zone, slot.medal]}>
+                {/* Ô tối: TÊN. Số hạng đã in sẵn trong tranh, không vẽ. */}
+                <View style={[styles.zone, slot.name]}>
                   <Text
                     style={[
-                      styles.medalRank,
-                      { color, fontSize: rankSize, lineHeight: rankSize * 1.1 },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {i + 1}
-                  </Text>
-                  {/* Tên dài ngắn tuỳ người nên vẫn cho co lại, nhưng co từ cỡ đã hợp ô. */}
-                  <Text
-                    style={[
-                      styles.medalName,
-                      { fontSize: nameSize, lineHeight: nameSize * 1.2 },
+                      styles.nameText,
+                      { fontSize: nameSize, lineHeight: nameSize },
                       isMe && styles.slotMine,
                     ]}
                     numberOfLines={1}
@@ -233,13 +207,13 @@ export function LeaderboardStage({
                   </Text>
                 </View>
 
-                {/* Biển chữ nhật: ĐIỂM, số to nhất trên cúp. */}
-                <View style={[styles.zone, slot.plate]}>
+                {/*
+                  Dải màu: ĐIỂM. Dải đã rực màu nên chữ trắng + bóng tối để đọc
+                  được trên cả vàng lẫn tím - chữ màu thẻ thì chìm vào dải.
+                */}
+                <View style={[styles.zone, slot.score]}>
                   <Text
-                    style={[
-                      styles.plateScore,
-                      { color, fontSize: scoreSize, lineHeight: scoreSize },
-                    ]}
+                    style={[styles.scoreText, { fontSize: scoreSize, lineHeight: scoreSize }]}
                     numberOfLines={1}
                     adjustsFontSizeToFit
                   >
@@ -331,9 +305,16 @@ const styles = StyleSheet.create({
    * `lineHeight`. Đệm đó làm chữ không vừa ô, `adjustsFontSizeToFit` bèn co lại
    * - điểm teo còn một nửa dù cỡ chữ tính ra đã đúng ô.
    */
-  medalRank: { fontWeight: '900', textAlign: 'center', includeFontPadding: false },
-  medalName: { fontWeight: '800', color: '#fff', textAlign: 'center', includeFontPadding: false },
-  plateScore: { fontWeight: '900', textAlign: 'center', includeFontPadding: false },
+  nameText: { fontWeight: '800', color: '#fff', textAlign: 'center', includeFontPadding: false },
+  scoreText: {
+    fontWeight: '900',
+    color: '#fff',
+    textAlign: 'center',
+    includeFontPadding: false,
+    textShadowColor: 'rgba(0,0,0,0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
   slotMine: { color: '#FDE68A' },
 
   footer: {},
