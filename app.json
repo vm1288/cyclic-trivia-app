@@ -42,7 +42,8 @@
         }
       ],
       "expo-secure-store",
-      "expo-screen-orientation"
+      "expo-screen-orientation",
+      "expo-video"
     ]
   }
 }

@@ -46,6 +46,7 @@ import { QuestionOverlay } from '../src/components/QuestionOverlay';
 import { BattleOverlay } from '../src/components/BattleOverlay';
 import { BattleResultOverlay } from '../src/components/BattleResultOverlay';
 import { BattleDiceOverlay, type BattleDiceState } from '../src/components/BattleDiceOverlay';
+import { BattleVideoOverlay } from '../src/components/BattleVideoOverlay';
 import { TurnResultOverlay, type TurnResult } from '../src/components/TurnResultOverlay';
 import { RaceWinnerOverlay } from '../src/components/RaceWinnerOverlay';
 import { CurveBallOverlay } from '../src/components/CurveBallOverlay';
@@ -441,6 +442,21 @@ export default function GameLandscapeScreen() {
    * `battleRollMine` phía dưới; xem `BattleDiceOverlay`.
    */
   const [battleDice, setBattleDice] = useState<BattleDiceState | null>(null);
+
+  /**
+   * Video battle đang chiếu (K61): mở màn sau gói 54, người thắng sau gói 58. Mọi ghế
+   * cùng chiếu như đang nhìn TV; chiếu xong thì `onDone` gửi gói mà bàn cờ web sẽ gửi
+   * (55, hoặc 58 kèm ba trường), server chỉ nhận ghế đầu tiên. `seq` để React dựng
+   * lại player khi hai video liền nhau (54 rồi 58 cùng tên không thể xảy ra, nhưng
+   * rẻ). Xem `BattleVideoOverlay`.
+   */
+  const [battleVideo, setBattleVideo] = useState<{
+    seq: number;
+    kind: 'battle' | 'winner';
+    name: string;
+    onDone: () => void;
+  } | null>(null);
+  const battleVideoSeq = useRef(0);
   /**
    * Mốc (ms) mà con xúc xắc đang lăn của vòng phân định sẽ dừng. Gói `tie`/`won`
    * tới CÙNG LÚC với gói `rolled` của defender, phải xếp sau mốc này kẻo tấm
@@ -1338,11 +1354,27 @@ export default function GameLandscapeScreen() {
         const incumbentId = typeof packet.IncumbentPlayerId === 'string' ? packet.IncumbentPlayerId : '';
         const mine = seat?.playerId ?? '';
         const inIt = same(mine, challengerId) || same(mine, incumbentId);
-        if (inIt) return;
 
-        const a = snapshot?.Players?.find((pl) => same(pl.Id, challengerId))?.NickName ?? '';
-        const b = snapshot?.Players?.find((pl) => same(pl.Id, incumbentId))?.NickName ?? '';
-        if (a && b) setNotice(t('battle.notice', { a, b }));
+        /*
+         * K61 - video mở màn battle như bàn cờ web (`handlePlayerBattle`): chiếu xong mới
+         * gửi 55 `PlayerBattleInstruction`, và đó là thứ mở trận. Không có tên video
+         * (server cũ) thì gửi ngay như trước.
+         */
+        const videoName = typeof packet.BattleVideoName === 'string' ? packet.BattleVideoName : '';
+        const afterVideo = () => {
+          setBattleVideo(null);
+          void connection.current?.send(TYPE_ID.PlayerBattleInstruction);
+          if (inIt) return;
+          const a = snapshot?.Players?.find((pl) => same(pl.Id, challengerId))?.NickName ?? '';
+          const b = snapshot?.Players?.find((pl) => same(pl.Id, incumbentId))?.NickName ?? '';
+          if (a && b) setNotice(t('battle.notice', { a, b }));
+        };
+        if (!videoName) {
+          afterVideo();
+          return;
+        }
+        battleVideoSeq.current += 1;
+        setBattleVideo({ seq: battleVideoSeq.current, kind: 'battle', name: videoName, onDone: afterVideo });
         return;
       }
 
@@ -1508,7 +1540,29 @@ export default function GameLandscapeScreen() {
         const winnerId = typeof packet.WinnerId === 'string' ? packet.WinnerId : '';
         if (!winnerId) return;
         const name = snapshot?.Players?.find((pl) => same(pl.Id, winnerId))?.NickName ?? '';
-        setBattleResult({ name, isMe: same(seat?.playerId ?? '', winnerId) });
+
+        /*
+         * K61 - video người thắng như bàn cờ web (`handlePlayerBattleWinner`): chiếu xong
+         * mới gửi 58 lên với đúng ba trường bàn cờ gửi - gói đó mới LÙI Ô người thua và
+         * nối lại lượt. Khung "You won the battle!" hiện sau video, lúc quân cờ lùi.
+         */
+        const videoName = typeof packet.WinnerVideoName === 'string' ? packet.WinnerVideoName : '';
+        const echo = {
+          characterId: typeof packet.characterId === 'string' ? packet.characterId : '',
+          IsChallenger: packet.IsChallenger === true,
+          WinnerId: winnerId,
+        };
+        const afterVideo = () => {
+          setBattleVideo(null);
+          setBattleResult({ name, isMe: same(seat?.playerId ?? '', winnerId) });
+          void connection.current?.send(TYPE_ID.PlayerBattleWinner, echo);
+        };
+        if (!videoName) {
+          afterVideo();
+          return;
+        }
+        battleVideoSeq.current += 1;
+        setBattleVideo({ seq: battleVideoSeq.current, kind: 'winner', name: videoName, onDone: afterVideo });
         return;
       }
 
@@ -3352,6 +3406,16 @@ export default function GameLandscapeScreen() {
         nghĩa. Đặt SAU con xúc xắc để nếu lỡ cả hai cùng hiện thì nó nằm trên;
         `zIndex` của nó cũng cao hơn.
       */}
+      {/* K61: video battle ở GỐC màn hình, che cả hai cột (TV chiếu toàn màn). */}
+      {battleVideo ? (
+        <BattleVideoOverlay
+          key={battleVideo.seq}
+          kind={battleVideo.kind}
+          name={battleVideo.name}
+          onDone={battleVideo.onDone}
+        />
+      ) : null}
+
       {gameOver ? (
         <GameOverOverlay
           gameId={seat?.gameId ?? null}
