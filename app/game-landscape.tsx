@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   BackHandler,
   Image,
   Pressable,
@@ -773,6 +774,25 @@ export default function GameLandscapeScreen() {
         setChallenge(null);
         setDirection(null);
         setCardStep(null);
+
+        /*
+         * Khung CÂU HỎI cũng phải dọn khi gói 16 giao một việc KHÔNG PHẢI câu hỏi
+         * (tung xúc xắc, chờ người khác, curve ball…) - tức câu đang mở đã khép ở
+         * server mà máy này chưa được báo. Đo K56 (khoá màn 3 phút): đồng hồ JS
+         * chạy chậm ~20 giây trong lúc màn khoá, khung tranh trả lời của lượt Maya
+         * còn mở khi gói RollDice của lượt Tony tới; nó hết giờ và gửi `IsTimeout`
+         * cho câu CŨ - server đọc thành Tony trả lời sai, Tony mất lượt chưa tung.
+         * Server nay cũng chặn câu cũ, nhưng khung chết vẫn phải dọn.
+         *
+         * Giữ nguyên khi Action là 6 / 11 (chính câu hỏi) và trong battle (câu
+         * battle đi đường 56, không phải 16).
+         */
+        if (
+          packet.Action !== CASE_ACTION.ShowSubCategoriesAndQuestions &&
+          packet.Action !== CASE_ACTION.OtherPlayersAnswering
+        ) {
+          setQuestion((prev) => (prev && prev.kind !== 'battle' ? null : prev));
+        }
 
         /*
          * ⚠️ TRƯỚC câu hỏi còn một bước nữa: server mời dùng thẻ bài
@@ -2272,6 +2292,72 @@ export default function GameLandscapeScreen() {
   useEffect(() => {
     if (question) questionAt.current = Date.now();
   }, [question?.question.Id, question?.duration]);
+
+  /*
+   * ============================================================
+   * TỈNH DẬY SAU KHOÁ MÀN / CHUYỂN APP - đồng bộ lại với server (K56)
+   * ============================================================
+   *
+   * Đo NET-11 (khoá màn 3 phút, 2026-09-11): socket KHÔNG rớt, nhưng luồng JS
+   * bị Android bóp trong lúc màn tắt - gói tin nằm chờ, lúc mở khoá mới xử lý
+   * dồn một lượt. Hậu quả: khung hiện ra là của một bước server đã khép từ lâu
+   * (câu hỏi tranh trả lời của lượt trước, bước thẻ bài còn 00:01), đồng hồ
+   * đếm từ lúc XỬ LÝ chứ không phải lúc server gửi. Khung chết ấy hết giờ rồi
+   * tự gửi trả lời / ActionDone cho một bước không còn tồn tại - lần đầu nó
+   * làm Tony mất nguyên lượt (server nay đã chặn câu trả lời cũ, K56).
+   *
+   * Hai việc lúc tỉnh: nạp state ngay, và gửi `HostResume` để server phát lại
+   * bước ĐANG treo của mình với số giây còn lại thật. Khung cũ thì effect đối
+   * chiếu phía dưới dọn.
+   */
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      void refresh();
+      void connection.current?.send(TYPE_ID.HostResume);
+    });
+    return () => sub.remove();
+  }, [refresh, connection]);
+
+  /*
+   * Khung bước chơi phải KHỚP state - state là nguồn sự thật, khung chỉ là cái
+   * vẽ ra từ gói tin. Đối chiếu ở mỗi lần state về, nhưng CHỈ với khung đã mở
+   * quá 5 giây: gói tin và state nạp trước nó có thể lệch nhau vài trăm mili
+   * giây, dọn ngay là dọn nhầm khung vừa mở.
+   *
+   *   câu hỏi lượt thường (`kind: 'turn'`, cả của mình lẫn tranh trả lời)
+   *                         -> `me.CurrentAction` phải là 6 hoặc 11
+   *   bước thẻ bài          -> `me.CurrentAction` phải là 5, và đúng lượt mình
+   *
+   * Vòng đua và battle đi đường riêng, không đụng.
+   */
+  const cardStepAt = useRef(0);
+  useEffect(() => {
+    if (cardStep) cardStepAt.current = Date.now();
+  }, [cardStep]);
+
+  useEffect(() => {
+    const mine = snapshot?.Players.find((p) => p.Id === seat?.playerId);
+    if (!mine) return;
+    const now = Date.now();
+    const myTurn = snapshot?.Game.CurrentTurnPlayerId === mine.Id;
+
+    if (question && now - questionAt.current > 5000) {
+      const stale =
+        question.kind === 'turn' &&
+        mine.CurrentAction !== CASE_ACTION.ShowSubCategoriesAndQuestions &&
+        mine.CurrentAction !== CASE_ACTION.OtherPlayersAnswering;
+      if (stale) setQuestion(null);
+    }
+
+    if (cardStep && now - cardStepAt.current > 5000) {
+      if (!myTurn || mine.CurrentAction !== CASE_ACTION.ShowCardsBeforeSubCategoryOrQuestion) {
+        setCardStep(null);
+      }
+    }
+    // Chỉ chạy khi state đổi - khung mở ra rồi đợi 5 giây để state kế xác nhận.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapshot]);
 
   useEffect(() => {
     if (!pendingMove) return;
