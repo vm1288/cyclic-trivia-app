@@ -9,6 +9,8 @@ import {
   categoryChain,
   characterImageUrl,
   EMPTY_GUID,
+  pauseGame,
+  resumeGame,
   startAgain,
   submitAnswer,
   submitAnswerBattle,
@@ -35,6 +37,7 @@ import { BattleResultOverlay } from '../src/components/BattleResultOverlay';
 import { TurnResultOverlay, type TurnResult } from '../src/components/TurnResultOverlay';
 import { RaceWinnerOverlay } from '../src/components/RaceWinnerOverlay';
 import { GameOverOverlay } from '../src/components/GameOverOverlay';
+import { PauseOverlay } from '../src/components/PauseOverlay';
 import type { PlayAgainAction } from '../src/components/PlayAgainWizard';
 import {
   TenSecondsChallengeOverlay,
@@ -57,11 +60,13 @@ import {
   Dice3D,
   HandTile,
   lighten,
+  PlayIcon,
   Stars,
   TurnPulse,
 } from '../src/components/GameBoardParts';
 import { useConfirm } from '../src/components/ConfirmDialog';
 import { useT } from '../src/i18n/I18nProvider';
+import { apiErrorText } from '../src/i18n/apiError';
 import { useRouter } from 'expo-router';
 import { usePlayer } from '../src/session/PlayerSession';
 import { useLicense } from '../src/session/LicenseSession';
@@ -267,6 +272,31 @@ export default function GameLandscapeScreen() {
 
   /** Thông báo thoáng qua: người khác vừa dùng thẻ gì. */
   const [notice, setNotice] = useState<string | null>(null);
+
+  /*
+   * ============================================================
+   * TẠM DỪNG (gói 80 / 81 / 82) - chỉ chủ phòng bấm, mọi người đều thấy
+   * ============================================================
+   *
+   * Hai trạng thái, đúng như hai nút của bản web (`PlayerHomeScreen.cshtml`):
+   *
+   *   `pausePending` - chủ phòng ĐÃ BẤM, ván chưa dừng. Chữ là câu gói 82
+   *                    mang tới ("Game pause once X finishes 3 turns…"); nút
+   *                    TIẾP TỤC hiện nhưng XÁM, chưa bấm được - web để
+   *                    `disabled` cho tới khi gói 80 tới.
+   *   `paused`       - ván dừng THẬT (gói 80, sau `Delay` giây). Khung phủ bàn
+   *                    cờ; chủ phòng thấy nút TIẾP TỤC XANH và bấm được.
+   *
+   * ⚠️ Không suy `paused` thẳng từ `snapshot.Game.IsPauseOnClient`: cờ đó lên
+   * TRƯỚC khi gói 80 tới, mà web cố ý đợi `Delay` (3 giây ở đầu lượt) cho bàn
+   * cờ chạy nốt hiệu ứng đổi lượt. Snapshot chỉ là LƯỚI AN TOÀN - xem effect
+   * phía dưới.
+   */
+  const [pausePending, setPausePending] = useState<string | null>(null);
+  const [paused, setPaused] = useState(false);
+  const pauseDelay = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Đang gọi HTTP tạm dừng / tiếp tục - chặn bấm dồn. */
+  const pausing = useRef(false);
 
   /**
    * Kết quả câu trả lời vừa gửi - hiện giữa bàn cờ vài giây.
@@ -1051,6 +1081,54 @@ export default function GameLandscapeScreen() {
        * Đừng đóng kết nối trước khi nhận được nó.
        */
       /*
+       * TẠM DỪNG - chép theo `handlePauseGameText` / `handlePauseGame` /
+       * `handleResumeGameFromPause` trong `playerHandlers.js`.
+       */
+      if (packet.typeID === TYPE_ID.PauseGameText) {
+        /* Chỉ chủ phòng nhận. Rỗng = server vừa xoá (đã tiếp tục). */
+        const txt = (packet as { pauseText?: string }).pauseText ?? '';
+        setPausePending(txt ? txt : null);
+        return;
+      }
+
+      if (packet.typeID === TYPE_ID.PauseGame) {
+        /*
+         * Web: `if (playerFunc.IsGameOver) return;` rồi đợi `Delay` giây mới
+         * `removeAllComponents()` + đặt câu "Game paused…". `Delay` = 3 ở đầu
+         * lượt (StartTurnHandler), 1 sau battle, 0 ở vòng đua.
+         */
+        const delay = Number((packet as { Delay?: number }).Delay ?? 0);
+        if (pauseDelay.current) clearTimeout(pauseDelay.current);
+        pauseDelay.current = setTimeout(
+          () => {
+            pauseDelay.current = null;
+            setPausePending(null);
+            setPaused(true);
+          },
+          Math.max(0, delay) * 1000,
+        );
+        return;
+      }
+
+      if (packet.typeID === TYPE_ID.ResumeGameFromPause) {
+        /*
+         * Web `location.reload()` - trang mở lại, nối lại hub, gửi `HostResume`
+         * và server phát lại flow đang treo. App không mở trang: gỡ khung, nạp
+         * lại state, và gửi `HostResume` bằng đúng kết nối đang có. Người tới
+         * lượt nhờ đó nhận lại gói StartTurn mà server đã giữ suốt lúc dừng.
+         */
+        if (pauseDelay.current) {
+          clearTimeout(pauseDelay.current);
+          pauseDelay.current = null;
+        }
+        setPausePending(null);
+        setPaused(false);
+        void refresh();
+        void connection.current?.send(TYPE_ID.HostResume);
+        return;
+      }
+
+      /*
        * Chủ phòng cũ giao ghế cho MÌNH (gói 76 `ChangePlayerAsHost`). Server đã
        * đổi cờ `isHost` trong ván cũ; nạp lại state để `me.IsHost` đúng, và mở
        * cây hỏi từ câu thời lượng như `handleChangePlayerAsHost` của bản web.
@@ -1308,6 +1386,61 @@ export default function GameLandscapeScreen() {
   }, [connState, connection]);
 
   /*
+   * LƯỚI AN TOÀN cho tạm dừng - state là nguồn sự thật, gói tin chỉ là nhịp.
+   *
+   * Rớt mạng đúng lúc gói 80/81 bay, hoặc mở lại app giữa lúc ván đang dừng
+   * (web reload thì KHÔNG hiện gì cả - `HostResumeHandler` chặn khi
+   * `IsGamePause && IsPauseOnClient`), thì snapshot vẫn nói đúng.
+   *
+   * ⚠️ Cả hai chiều đều ĐỢI 3 GIÂY rồi mới tin state, vì snapshot có thể CŨ hơn
+   * gói tin: gói 80 tới thì `IsGamePause` trong snapshot của máy khách có khi
+   * vẫn là false (máy khách không nhận 82 nên chưa nạp lại). Gỡ khung ngay lúc
+   * đó là gỡ nhầm. Nạp lại rồi đợi: state đổi thì effect chạy lại và huỷ đồng
+   * hồ; không đổi thì state đúng là đã khác gói tin, làm theo state.
+   *
+   * Chỉ lo `paused`; `pausePending` do gói 82 (và tay bấm) quản, không suy từ
+   * state - xem `pauseWaiting`.
+   */
+  useEffect(() => {
+    const g = snapshot?.Game;
+    if (!g) return;
+    const stateSaysPaused = g.IsGamePause && g.IsPauseOnClient;
+
+    if (stateSaysPaused && !paused && !pauseDelay.current) {
+      const late = setTimeout(() => {
+        setPausePending(null);
+        setPaused(true);
+      }, 3000);
+      return () => clearTimeout(late);
+    }
+
+    if (!g.IsGamePause && paused) {
+      const late = setTimeout(() => {
+        setPaused(false);
+        void connection.current?.send(TYPE_ID.HostResume);
+      }, 3000);
+      void refresh();
+      return () => clearTimeout(late);
+    }
+    return undefined;
+  }, [snapshot?.Game?.IsGamePause, snapshot?.Game?.IsPauseOnClient, paused, connection, refresh]);
+
+  /**
+   * Nút của chủ phòng đang ở dạng "đã bấm, chờ tới đầu lượt kế".
+   *
+   * Gộp cả state vì mở lại app giữa lúc chờ thì không có gói 82 nào tới nữa -
+   * web sau reload cũng vẽ Resume `disabled` từ `Model.Game.IsGamePause`.
+   */
+  const pauseWaiting = !paused && (pausePending !== null || snapshot?.Game?.IsGamePause === true);
+
+  useEffect(
+    () => () => {
+      if (pauseDelay.current) clearTimeout(pauseDelay.current);
+    },
+    [],
+  );
+
+  /*
    * Đường CỨU: máy không nhận được gói 39 (rớt mạng đúng lúc, hoặc mở lại app vào
    * một ván đã xong) thì `IsGameOver` trong trạng thái vẫn nói đúng sự thật.
    *
@@ -1407,6 +1540,33 @@ export default function GameLandscapeScreen() {
   /** Tên người TỚI LƯỢT - ô 10-sec cần nó để hỏi "X có làm được không?". */
   const turnPlayerName =
     players.find((p) => p.Id === currentTurnPlayerId)?.NickName ?? '';
+
+  /*
+   * Chủ phòng bấm TẠM DỪNG / TIẾP TỤC. Web (`ClickToPauseGame`) đổi nút NGAY
+   * rồi mới gọi HTTP, không đợi trả lời; ở đây đặt `pausePending` trước với chữ
+   * tạm (server sẽ gửi 82 kèm tên người tới lượt đè lên). Bấm hụt thì trả lại.
+   */
+  const togglePause = useCallback(async () => {
+    if (!seat || pausing.current) return;
+    pausing.current = true;
+    try {
+      if (paused) {
+        const res = await resumeGame(seat.token);
+        if (!res.isSuccess) setNotice(apiErrorText(res, t));
+        /* Gỡ khung khi gói 81 tới, như mọi máy khác - đừng gỡ sớm hơn họ. */
+      } else if (!pauseWaiting) {
+        setPausePending(t('game.pausePending', { name: turnPlayerName || '…' }));
+        const res = await pauseGame(seat.token);
+        if (!res.isSuccess) {
+          setPausePending(null);
+          setNotice(apiErrorText(res, t));
+        }
+      }
+    } finally {
+      pausing.current = false;
+    }
+  }, [seat, paused, pauseWaiting, t, turnPlayerName]);
+
 
   /**
    * Đơn vị điểm theo bàn: CricTriv gọi là "runs", FootieTriv là "goals", còn lại
@@ -2488,6 +2648,22 @@ export default function GameLandscapeScreen() {
             ) : null}
 
             {/*
+              Chữ gói 82 - web đặt cạnh hai nút ở thanh trên; cột phải của app
+              không có chỗ cho một câu dài nên đặt ở đỉnh bàn cờ. Chỉ chủ phòng
+              nhận gói này nên chỉ máy chủ phòng thấy.
+            */}
+            {pausePending && !paused ? (
+              <View style={styles.pauseStrip} pointerEvents="none">
+                <Text style={styles.pauseStripText} numberOfLines={2}>
+                  {pausePending}
+                </Text>
+              </View>
+            ) : null}
+
+            {/* Ván dừng thật - đè lên mọi khung khác của cột này. */}
+            {paused && !gameOver ? <PauseOverlay isHost={me?.IsHost === true} /> : null}
+
+            {/*
               * Ghế bị mở ở máy khác: che kín và CHẶN chạm.
               *
               * Đây là khung DUY NHẤT cố ý chặn tương tác hoàn toàn — mọi nút bên dưới giờ
@@ -2540,11 +2716,11 @@ export default function GameLandscapeScreen() {
               {/*
                 ẨN / HIỆN BÀN CỜ (ca **UI-1**).
 
-                ⚠️ Đây là nút THẬT DUY NHẤT trong hàng này - hai cái bên phải
-                (tạm dừng, menu) mới chỉ là chỗ trống chưa có mã, cố ý để nguyên
-                `View`. Đừng chép kiểu dáng của chúng: nút này phải nhìn ra là
-                bấm được, nên viền xanh thay vì đỏ, và ĐỔI MÀU khi đang ẩn để
-                người chơi biết bàn cờ biến mất là do mình bấm, không phải lỗi.
+                ⚠️ Nút menu (ba chấm) bên phải cùng mới chỉ là chỗ trống chưa có
+                mã, cố ý để nguyên `View`. Đừng chép kiểu dáng của nó: nút này
+                phải nhìn ra là bấm được, nên viền xanh thay vì đỏ, và ĐỔI MÀU
+                khi đang ẩn để người chơi biết bàn cờ biến mất là do mình bấm,
+                không phải lỗi.
               */}
               <Pressable
                 onPress={() => setBoardHidden((hidden) => !hidden)}
@@ -2575,26 +2751,41 @@ export default function GameLandscapeScreen() {
                 {boardHidden ? <View style={styles.boardGlyphSlash} /> : null}
               </Pressable>
 
-              <View
-                style={styles.iconBtn}
-              >
-                <View
-                  style={
-                    styles.pauseBars
-                  }
+              {/*
+                TẠM DỪNG / TIẾP TỤC - CHỈ chủ phòng có, y như bản web chỉ vẽ
+                `#pauseSection` khi `Model.Player.isHost`. Ba dạng, chép theo
+                hai nút của web:
+
+                  đang chơi     -> hai gạch đỏ, bấm = tạm dừng
+                  đã bấm, chờ   -> tam giác XÁM, `disabled` (web: Resume
+                                   `disabled` + nền #7F7F7F cho tới gói 80)
+                  đã dừng thật  -> tam giác XANH (#00B050 bên web), bấm = tiếp tục
+              */}
+              {me?.IsHost ? (
+                <Pressable
+                  onPress={() => void togglePause()}
+                  disabled={pauseWaiting}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: pauseWaiting }}
+                  accessibilityLabel={paused || pauseWaiting ? t('game.resume') : t('game.pause')}
+                  hitSlop={8}
+                  style={({ pressed }) => [
+                    styles.iconBtn,
+                    paused && styles.resumeBtn,
+                    pauseWaiting && styles.resumeBtnWaiting,
+                    pressed && styles.iconBtnPressed,
+                  ]}
                 >
-                  <View
-                    style={
-                      styles.pauseBar
-                    }
-                  />
-                  <View
-                    style={
-                      styles.pauseBar
-                    }
-                  />
-                </View>
-              </View>
+                  {paused || pauseWaiting ? (
+                    <PlayIcon color={paused ? boardColors.green : 'rgba(198,212,240,0.45)'} />
+                  ) : (
+                    <View style={styles.pauseBars}>
+                      <View style={styles.pauseBar} />
+                      <View style={styles.pauseBar} />
+                    </View>
+                  )}
+                </Pressable>
+              ) : null}
 
               <View
                 style={styles.iconBtn}
@@ -3161,6 +3352,46 @@ const styles = StyleSheet.create({
 
     backgroundColor:
       boardColors.red,
+  },
+
+  /* Tam giác xanh = bấm được (web: #00B050). */
+  resumeBtn: {
+    borderColor: 'rgba(46,232,95,0.75)',
+    backgroundColor: 'rgba(6,40,18,0.8)',
+    boxShadow: '0 0 10px rgba(46,232,95,0.45)',
+  },
+  /* Tam giác xám = đã bấm, đang chờ tới đầu lượt kế (web: disabled, #7F7F7F). */
+  resumeBtnWaiting: {
+    borderColor: 'rgba(160,170,190,0.4)',
+    backgroundColor: 'rgba(30,32,44,0.75)',
+  },
+
+  /*
+   * Dải chữ "Game pause once X…" - đứng yên tới khi ván dừng thật.
+   *
+   * ⚠️ Ở ĐÁY cột bàn cờ, không ở đỉnh: đỉnh là nơi khung câu hỏi đặt nhãn chủ
+   * đề + đồng hồ + SUBMIT, và dải này sống xuyên qua cả lượt chơi (đo K49: nó
+   * đè mất đồng hồ và nút SUBMIT của chính chủ phòng).
+   */
+  pauseStrip: {
+    position: 'absolute',
+    bottom: 8,
+    left: 10,
+    right: 10,
+    zIndex: 29,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1.3,
+    borderColor: 'rgba(160,170,190,0.45)',
+    backgroundColor: 'rgba(22,24,40,0.94)',
+  },
+  pauseStripText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    color: 'rgba(226,232,255,0.9)',
+    textAlign: 'center',
   },
 
   dots: {

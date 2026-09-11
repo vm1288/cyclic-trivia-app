@@ -336,7 +336,14 @@ export type GameSnapshot = {
      * thúc thật đều hiện câu MẶC ĐỊNH vì app chỉ đọc từ gói 39.
      */
     GameOverMessage: string | null;
+    /**
+     * Chủ phòng ĐÃ BẤM tạm dừng. Ván chưa chắc đã dừng: nó chỉ dừng ở đầu lượt
+     * kế (`StartTurnHandler`), lúc đó `IsPauseOnClient` mới lên. Xem
+     * `GamePauseService` phía server.
+     */
     IsGamePause: boolean;
+    /** Ván đã dừng THẬT (đồng hồ đã ngưng, gói 80 đã bắn). */
+    IsPauseOnClient: boolean;
     /**
      * Ai đang tới lượt. `Guid.Empty` khi chưa xác định xong (vòng đua "ai đi
      * trước" chưa có kết quả).
@@ -817,6 +824,27 @@ export function startAgain(
   }>
 > {
   return postForm('/public/player/start-again', { playerId }, token);
+}
+
+/* ─── Tạm dừng ─────────────────────────────────────────────────────────── */
+
+/**
+ * Chủ phòng bấm TẠM DỪNG / TIẾP TỤC (gói 80 / 81 / 82).
+ *
+ * Bản web gọi `GET /game/pause-game/{GameId}` không token; app đi
+ * `/public/game/pause` bằng token ghế, server kiểm ghế có cờ `isHost`. Hai lối
+ * cùng một thân việc (`GamePauseService`).
+ *
+ * ⚠️ Bấm tạm dừng KHÔNG dừng ngay: server chỉ cắm cờ, rồi ván dừng ở đầu lượt
+ * kế. Trong lúc chờ, chủ phòng nhận gói 82 mang câu "Game pause once X finishes
+ * 3 turns or loses the dice." - hiện nguyên văn.
+ */
+export function pauseGame(token: string): Promise<ApiResult<{}>> {
+  return postForm('/public/game/pause', {}, token);
+}
+
+export function resumeGame(token: string): Promise<ApiResult<{}>> {
+  return postForm('/public/game/pause/resume', {}, token);
 }
 
 /* ─── Chọn hướng đi ────────────────────────────────────────────────────────── */

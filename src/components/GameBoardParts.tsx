@@ -86,6 +86,13 @@ export const ChatIcon = ({ size = 24, color = boardColors.blueSoft }: { size?: n
   </Svg>
 );
 
+/** Tam giác "play" - nút TIẾP TỤC sau khi tạm dừng (chủ phòng). */
+export const PlayIcon = ({ size = 12, color = boardColors.green }: { size?: number; color?: string }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+    <Path d="M6 4.5v15l13-7.5z" />
+  </Svg>
+);
+
 /** Vương miện - dấu hiệu chủ phòng, thay cho chữ "(HOST)". */
 export const CrownIcon = ({ size = 15, color = boardColors.amber }: { size?: number; color?: string }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>

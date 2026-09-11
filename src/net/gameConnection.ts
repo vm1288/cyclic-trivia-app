@@ -233,7 +233,24 @@ export const TYPE_ID = {
   AnsweredQuestionFornTurn: 68,
   Log: 77,
   CheckPlayerScreen: 79,
+  /**
+   * ============================================================
+   * TẠM DỪNG - ba gói, chỉ NHẬN (bấm thì gọi HTTP `pauseGame`/`resumeGame`)
+   * ============================================================
+   *
+   *   82 `{ pauseText }` -> CHỈ chủ phòng. Có chữ = đang chờ tới đầu lượt kế
+   *                         ("Game pause once X finishes 3 turns…"); rỗng = xoá.
+   *   80 `{ Delay, IsHost }` -> mọi người, khi ván dừng THẬT. Đợi `Delay` giây
+   *                         rồi mới hiện màn "Game paused" (bản web
+   *                         `handlePauseGame` làm đúng vậy). Chủ phòng lúc này
+   *                         mới bấm được TIẾP TỤC.
+   *   81 -> mọi người: chơi tiếp. Bản web `location.reload()`; app không mở
+   *         trang nên gửi lại `HostResume` để server phát lại flow đang treo
+   *         (người tới lượt nhận lại StartTurn).
+   */
   PauseGame: 80,
+  ResumeGameFromPause: 81,
+  PauseGameText: 82,
   /**
    * "Người chơi khác vừa dùng thẻ" - gói RIÊNG cho app, thêm 2026-08-28.
    *

@@ -155,7 +155,18 @@ export const en = {
 
   'game.title': 'IN GAME',
   'game.playerCount': '{count} players',
-  'game.pause': 'Pause Game',
+  /*
+   * TẠM DỪNG - chép nguyên văn bản web (`PlayerHomeScreen.cshtml`,
+   * `playerHandlers.js` handlePauseGame, `HomeController` PauseGame).
+   */
+  'game.pause': 'Pause game',
+  'game.resume': 'Resume game',
+  /** Gói 82 - server gửi, có tên người tới lượt: "Game pause once {name} finishes 3 turns or loses the dice." */
+  'game.pausePending': 'Game pause once {name} finishes 3 turns or loses the dice.',
+  'game.pausedHost':
+    'You’ve paused the game. As the host, you can resume the game by tapping the green button above - once everyone’s ready.',
+  'game.pausedGuest': 'Game paused by the host. Tap the resume button on the host’s phone to continue.',
+  'game.pausedTitle': 'GAME PAUSED',
   'game.yourCards': 'YOUR CARDS',
   'game.card.Joker': 'JOKER',
   'game.card.Skipper': 'SKIPPER',
@@ -520,6 +531,12 @@ const vi: Record<TranslationKey, string> = {
   'game.title': 'TRONG VÁN',
   'game.playerCount': '{count} người chơi',
   'game.pause': 'Tạm dừng',
+  'game.resume': 'Tiếp tục',
+  'game.pausePending': 'Ván sẽ tạm dừng khi {name} chơi xong 3 lượt hoặc mất xúc xắc.',
+  'game.pausedHost':
+    'Bạn đã tạm dừng ván. Là chủ phòng, bạn bấm nút xanh phía trên để chơi tiếp - khi mọi người đã sẵn sàng.',
+  'game.pausedGuest': 'Chủ phòng đã tạm dừng ván. Chạm nút tiếp tục trên máy chủ phòng để chơi tiếp.',
+  'game.pausedTitle': 'ĐANG TẠM DỪNG',
   'game.yourCards': 'BÀI CỦA BẠN',
   'game.card.Joker': 'JOKER',
   'game.card.Skipper': 'SKIPPER',
