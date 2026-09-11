@@ -540,9 +540,26 @@ export default function GameLandscapeScreen() {
    */
   const owesDoneRollDice = useRef(false);
 
+  /*
+   * Ghế dùng cho KẾT NỐI được đóng băng ở lần mount - đúng ghế màn này mở ra với.
+   *
+   * ⚠️ Đừng truyền `seat` sống vào `useGameState`. Sau gói 74 (chơi lại),
+   * `player.saveSeat(...)` đổi token ghế trong lúc màn này còn đứng 120 ms
+   * (đợi khung Game Over gỡ xong mới đổi màn). Token đổi là `useGameConnection`
+   * ngắt kết nối cũ và MỞ KẾT NỐI MỚI ngay tại đây, rồi màn unmount cắt nó giữa
+   * lúc negotiate - SignalR ghi *"Failed to start the connection: Error: The
+   * connection was stopped during negotiation."* và LogBox nổi toast. Đo K53:
+   * server thấy đúng ba lượt trong 1,4 giây (ngắt cũ → nối mới → ngắt mới) rồi
+   * `waiting.tsx` mới nối thật. Không rớt gói - chỉ là một kết nối thừa - nhưng
+   * toast làm tưởng có lỗi thật. Màn này không bao giờ cần đổi ghế khi đang
+   * mở: ghế đổi nghĩa là đang rời đi.
+   */
+  const connSeat = useRef<{ gameId: string; token: string } | null>(null);
+  if (!connSeat.current && seat) connSeat.current = { gameId: seat.gameId, token: seat.token };
+
   const { snapshot, board, connState, connection, refresh } = useGameState({
-    gameId: seat?.gameId ?? null,
-    token: seat?.token ?? null,
+    gameId: connSeat.current?.gameId ?? null,
+    token: connSeat.current?.token ?? null,
     includeBoard: true,
     asBoard: true,
     clientId,
