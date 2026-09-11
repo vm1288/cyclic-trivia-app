@@ -74,8 +74,11 @@ const FACE_SIZE = Math.round(SIZE * 0.866);
 export function DiceRollOverlay({
   /** `null` = vẫn đang lăn, chưa biết kết quả. */
   value,
+  /** Tên người tung nếu KHÔNG phải mình (K59) - nhãn đổi thành "{name} ROLLED". */
+  rolledBy,
 }: {
   value: number | null;
+  rolledBy?: string | null;
 }) {
   const t = useT();
 
@@ -217,7 +220,13 @@ export function DiceRollOverlay({
       </View>
 
       <View style={styles.result}>
-        <Text style={styles.label}>{settled ? t('dice.rolled') : t('dice.rolling')}</Text>
+        <Text style={styles.label}>
+          {settled
+            ? rolledBy
+              ? t('dice.rolledBy', { name: rolledBy.toUpperCase() })
+              : t('dice.rolled')
+            : t('dice.rolling')}
+        </Text>
         {settled ? <Text style={styles.value}>{value}</Text> : null}
       </View>
     </Animated.View>

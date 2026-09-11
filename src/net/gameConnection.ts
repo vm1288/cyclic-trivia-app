@@ -286,6 +286,12 @@ export const TYPE_ID = {
    */
   BattleDice: 91,
   /**
+   * Người tới lượt vừa tung - gửi cho MỌI ghế để ai cũng thấy xúc xắc lăn (K59).
+   * `{ PlayerId, NickName, DiceOne, IsChooseDirection, MoveDirection, CurrentTurnId }`.
+   * Máy của người tung bỏ qua (nó đã lăn từ lúc bấm).
+   */
+  DiceRolled: 92,
+  /**
    * "Ghế này vừa được mở ở một MÁY KHÁC" — gửi cho máy vừa BỊ ĐÁ khỏi slot.
    *
    * Mỗi người chơi chỉ có MỘT ô `ConnectionId` ở server và mọi gói tin đều đi qua

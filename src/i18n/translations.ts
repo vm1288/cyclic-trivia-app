@@ -265,6 +265,8 @@ export const en = {
 
   'dice.rolling': 'ROLLING…',
   'dice.rolled': 'YOU ROLLED',
+  /* K59: máy của người khác xem người tới lượt tung. */
+  'dice.rolledBy': '{name} ROLLED',
 
   /** Kết quả một câu trả lời, hiện giữa bàn cờ. */
   /*
@@ -651,6 +653,7 @@ const vi: Record<TranslationKey, string> = {
 
   'dice.rolling': 'ĐANG TUNG…',
   'dice.rolled': 'BẠN TUNG ĐƯỢC',
+  'dice.rolledBy': '{name} TUNG ĐƯỢC',
 
   'board.hide': 'Ẩn bàn cờ',
   'board.show': 'HIỆN BÀN CỜ',

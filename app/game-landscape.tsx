@@ -282,7 +282,7 @@ export default function GameLandscapeScreen() {
    * chơi (xem `GameSnapshot.Game.DiceOne`), nên giá trị tới muộn qua một lượt
    * nạp lại state - lăn trước, dừng sau.
    */
-  const [dice, setDice] = useState<{ value: number | null } | null>(null);
+  const [dice, setDice] = useState<{ value: number | null; rolledBy?: string | null } | null>(null);
 
   /** Thông báo thoáng qua: người khác vừa dùng thẻ gì. */
   const [notice, setNotice] = useState<string | null>(null);
@@ -1114,6 +1114,22 @@ export default function GameLandscapeScreen() {
        * giữa bàn cờ bằng `BoardMessage` (26), nhưng gói đó mang HTML nên app
        * không dùng được, và người THUA còn không nhận được gì.
        */
+      /*
+       * Người tới lượt vừa tung (gói 92, K59): máy KHÁC cũng cho xúc xắc lăn rồi
+       * dừng ở số server bốc, nhãn "{NAME} ROLLED". Máy của người tung bỏ qua -
+       * nó đã lăn từ lúc bấm và đọc số qua state (xem `rollDice`). Giữ 3 giây rồi
+       * tắt như mọi con xúc xắc khác; không nợ server gói nào.
+       */
+      if (packet.typeID === TYPE_ID.DiceRolled) {
+        if (packet.PlayerId === seat?.playerId) return;
+        const value = typeof packet.DiceOne === 'number' ? packet.DiceOne : 0;
+        const name = typeof packet.NickName === 'string' ? packet.NickName : '';
+        if (value <= 0) return;
+        setDice({ value: null, rolledBy: name });
+        setTimeout(() => setDice({ value, rolledBy: name }), 1200);
+        return;
+      }
+
       if (packet.typeID === TYPE_ID.CurveBall) {
         const type = typeof packet.Type === 'string' ? packet.Type : '';
         const message = typeof packet.Message === 'string' ? packet.Message : '';
@@ -3325,7 +3341,7 @@ export default function GameLandscapeScreen() {
         overlay khác: nó phải hiện giữa MÀN HÌNH. Khung bàn cờ chỉ chiếm nửa
         trái, đặt trong đó thì con xúc xắc lệch hẳn sang một bên.
       */}
-      {dice ? <DiceRollOverlay value={dice.value} /> : null}
+      {dice ? <DiceRollOverlay value={dice.value} rolledBy={dice.rolledBy} /> : null}
 
       {/*
         ⚠️ Ván đã kết thúc: ở GỐC MÀN HÌNH như con xúc xắc. Đặt trong khung bàn cờ
