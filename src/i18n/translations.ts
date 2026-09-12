@@ -552,6 +552,10 @@ export const en = {
   'purchase.cancelled': 'Purchase cancelled.',
   'purchase.nothingToRestore': 'No previous purchases found on this store account.',
   'purchase.devSimulate': 'SIMULATE PURCHASE (DEV)',
+  'purchase.afterTrial': 'per month after {days} days free',
+  'purchase.perMonthShort': 'per month',
+  'purchase.forDays': 'for {days} days',
+  'purchase.renews': 'Subscription renews monthly until cancelled. Manage or cancel it in {store}.',
 
   'error.network': 'Cannot reach the server. Check your connection and the server address.',
   'error.timeout': 'The server did not respond. Check your connection and try again.',
@@ -1005,6 +1009,10 @@ const vi: Record<TranslationKey, string> = {
   'purchase.cancelled': 'Đã huỷ mua.',
   'purchase.nothingToRestore': 'Không thấy giao dịch nào trước đó trên tài khoản store này.',
   'purchase.devSimulate': 'GIẢ LẬP MUA (DEV)',
+  'purchase.afterTrial': 'mỗi tháng sau {days} ngày thử',
+  'purchase.perMonthShort': 'mỗi tháng',
+  'purchase.forDays': 'cho {days} ngày',
+  'purchase.renews': 'Gói tự gia hạn hằng tháng tới khi huỷ. Quản lý hoặc huỷ trong {store}.',
 
   'error.network': 'Không kết nối được tới server. Kiểm tra mạng và địa chỉ server.',
   'error.timeout': 'Server không phản hồi. Kiểm tra kết nối rồi thử lại.',

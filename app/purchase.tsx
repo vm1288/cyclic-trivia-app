@@ -1,15 +1,18 @@
 import { useRouter } from 'expo-router';
 import { useIAP, type ProductSubscription, type Purchase } from 'expo-iap';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { assetUrl } from '../src/api/game';
 import { fetchStorePlans, submitStorePurchase, type StorePlan, type StorePurchaseResult } from '../src/api/store';
 import { apiErrorText } from '../src/i18n/apiError';
 import { FormScreen } from '../src/components/FormScreen';
 import { NeonButton } from '../src/components/NeonButton';
+import { StageBackground } from '../src/components/StageBackground';
 import { useT } from '../src/i18n/I18nProvider';
-import { innerGlow, neon, outerGlow, text } from '../src/theme/colors';
+import { bg, innerGlow, neon, outerGlow, text } from '../src/theme/colors';
 
 /**
  * PURCHASE - mua license bằng In-App Purchase của store, thay cho luồng web
@@ -224,101 +227,175 @@ export default function PurchaseScreen() {
     );
   }
 
+  /*
+   * Bố cục "C - hàng gọn" (Tony chọn 2026-09-12 sau bản phác): toàn bề ngang, mỗi bộ
+   * một hàng logo · tên + mô tả · giá · nút, ba bộ vừa màn ngang không cuộn. Không dùng
+   * `FormScreen` vì khuôn hai cột của nó chỉ chừa 60% bề ngang cho danh sách.
+   */
   return (
-    <FormScreen title={t('purchase.title')} subtitle={t('purchase.subtitle', { store: storeName })}>
-      {plans === null ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={neon.blue.stroke} />
-          <Text style={styles.muted}>{t('purchase.loading')}</Text>
-        </View>
-      ) : plans.length === 0 ? (
-        <Text style={styles.muted}>{loadError ?? t('purchase.noPlans')}</Text>
-      ) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
-          {!connected || storeBySku.size === 0 ? <Text style={styles.hint}>{t('purchase.storeOffline')}</Text> : null}
-          {plans.map((plan) => {
-            const sub = storeBySku.get(plan.productId);
-            const storePrice = sub?.displayPrice ?? null;
-            const price = storePrice ?? `${plan.currency} ${plan.price}`;
-            const canBuy = !!sub && connected && !busySku;
-            return (
-              <View key={plan.productId} style={styles.card}>
-                <View style={styles.cardHead}>
-                  {plan.sponsorIconUrl ? (
-                    <Image source={{ uri: assetUrl(plan.sponsorIconUrl) }} style={styles.icon} resizeMode="contain" accessibilityIgnoresInvertColors />
-                  ) : null}
-                  <View style={styles.cardText}>
-                    <Text style={styles.cardTitle}>{plan.title}</Text>
-                    {plan.isSubscription ? (
-                      <>
-                        {plan.trialDays > 0 ? <Text style={styles.cardTrial}>{t('purchase.trial', { days: plan.trialDays })}</Text> : null}
-                        <Text style={styles.cardPrice}>
-                          {t(plan.trialDays > 0 ? 'purchase.thenPerMonth' : 'purchase.perMonth', { price })}
-                        </Text>
-                      </>
-                    ) : (
-                      <Text style={styles.cardPrice}>{t('purchase.oneOff', { price, days: plan.durationDays })}</Text>
-                    )}
-                    <Text style={styles.cardMeta}>
-                      {t(plan.maxDevices === 1 ? 'purchase.devices' : 'purchase.devices_plural', { count: plan.maxDevices })}
-                    </Text>
-                  </View>
-                </View>
-                <NeonButton
-                  label={t(plan.trialDays > 0 ? 'purchase.buy' : 'purchase.buyNoTrial')}
-                  color={neon.orange}
-                  onPress={() => void buy(plan)}
-                  busy={busySku === plan.productId || verifying}
-                  disabled={!canBuy}
-                />
-                {__DEV__ ? (
-                  <Pressable onPress={() => void simulate(plan)} style={styles.devBtn} accessibilityRole="button">
-                    <Text style={styles.devText}>{t('purchase.devSimulate')}</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            );
-          })}
-
-          {notice ? <Text style={styles.notice}>{notice}</Text> : null}
-          {verifying ? <Text style={styles.muted}>{t('purchase.verifying')}</Text> : null}
-
-          <Pressable onPress={() => void restore()} disabled={!connected || !!busySku} style={styles.restore} accessibilityRole="button">
-            <Text style={[styles.restoreText, (!connected || !!busySku) && styles.dim]}>{t('purchase.restore')}</Text>
+    <View style={styles.root}>
+      <StageBackground />
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
+        <View style={styles.body}>
+          <Pressable
+            style={styles.back}
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back')}
+            hitSlop={12}
+          >
+            <Ionicons name="chevron-back" size={24} color={text.primary} />
+            <Text style={styles.backText}>{t('common.back')}</Text>
           </Pressable>
-        </ScrollView>
-      )}
-    </FormScreen>
+
+          <Text style={styles.title}>{t('purchase.title')}</Text>
+          <Text style={styles.subtitle}>
+            {!connected || storeBySku.size === 0 ? t('purchase.storeOffline') : t('purchase.subtitle', { store: storeName })}
+          </Text>
+
+          {plans === null ? (
+            <View style={styles.center}>
+              <ActivityIndicator color={neon.blue.stroke} />
+              <Text style={styles.muted}>{t('purchase.loading')}</Text>
+            </View>
+          ) : plans.length === 0 ? (
+            <Text style={styles.muted}>{loadError ?? t('purchase.noPlans')}</Text>
+          ) : (
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list} style={styles.scroll}>
+              {plans.map((plan) => {
+                const sub = storeBySku.get(plan.productId);
+                const price = sub?.displayPrice ?? `${plan.currency} ${plan.price}`;
+                const canBuy = !!sub && connected && !busySku;
+                const meta = [
+                  plan.trialDays > 0 ? t('purchase.trial', { days: plan.trialDays }) : null,
+                  t(plan.maxDevices === 1 ? 'purchase.devices' : 'purchase.devices_plural', { count: plan.maxDevices }),
+                ]
+                  .filter(Boolean)
+                  .join(' · ');
+                return (
+                  <View key={plan.productId} style={styles.row}>
+                    {plan.sponsorIconUrl ? (
+                      <Image source={{ uri: assetUrl(plan.sponsorIconUrl) }} style={styles.icon} resizeMode="contain" accessibilityIgnoresInvertColors />
+                    ) : (
+                      <View style={styles.icon} />
+                    )}
+                    <View style={styles.nameCol}>
+                      <Text style={styles.name} numberOfLines={1}>
+                        {plan.title}
+                      </Text>
+                      <Text style={styles.meta} numberOfLines={1}>
+                        {meta}
+                      </Text>
+                    </View>
+                    <View style={styles.priceCol}>
+                      <Text style={styles.price} numberOfLines={1}>
+                        {price}
+                      </Text>
+                      <Text style={styles.priceSub} numberOfLines={1}>
+                        {plan.isSubscription
+                          ? plan.trialDays > 0
+                            ? t('purchase.afterTrial', { days: plan.trialDays })
+                            : t('purchase.perMonthShort')
+                          : t('purchase.forDays', { days: plan.durationDays })}
+                      </Text>
+                    </View>
+                    <View style={styles.btnCol}>
+                      <NeonButton
+                        label={t(plan.trialDays > 0 ? 'purchase.buy' : 'purchase.buyNoTrial')}
+                        color={neon.orange}
+                        onPress={() => void buy(plan)}
+                        busy={busySku === plan.productId || verifying}
+                        disabled={!canBuy}
+                      />
+                      {__DEV__ ? (
+                        <Pressable onPress={() => void simulate(plan)} style={styles.devBtn} accessibilityRole="button">
+                          <Text style={styles.devText}>{t('purchase.devSimulate')}</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  </View>
+                );
+              })}
+              {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+              {verifying ? <Text style={styles.muted}>{t('purchase.verifying')}</Text> : null}
+            </ScrollView>
+          )}
+
+          <View style={styles.bottom}>
+            <Text style={styles.fine} numberOfLines={2}>
+              {t('purchase.renews', { store: storeName })}
+            </Text>
+            <Pressable onPress={() => void restore()} disabled={!connected || !!busySku} accessibilityRole="button" hitSlop={8}>
+              <Text style={[styles.restoreText, (!connected || !!busySku) && styles.dim]}>{t('purchase.restore')}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: bg.deep },
+  safe: { flex: 1 },
+  body: { flex: 1, paddingHorizontal: 20 },
+  back: {
+    position: 'absolute',
+    top: 8,
+    left: 12,
+    zIndex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingRight: 12,
+    gap: 2,
+  },
+  backText: { color: text.primary, fontSize: 16 },
+  title: {
+    marginTop: 10,
+    color: text.primary,
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+    textAlign: 'center',
+  },
+  subtitle: { color: text.muted, fontSize: 12.5, textAlign: 'center', marginTop: 2, marginBottom: 8 },
+
   center: { alignItems: 'center', gap: 10, paddingVertical: 20 },
   muted: { color: text.muted, fontSize: 13, textAlign: 'center' },
-  hint: { color: text.muted, fontSize: 12, textAlign: 'center', marginBottom: 2 },
-  list: { gap: 12, paddingBottom: 8 },
-  card: {
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: neon.blue.stroke,
+  scroll: { flex: 1 },
+  list: { gap: 8, paddingBottom: 4 },
+
+  /** Một hàng = một bộ: logo · tên + mô tả · giá · nút. */
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1.6,
+    borderColor: 'rgba(58,165,255,0.45)',
     backgroundColor: '#0A0810',
-    boxShadow: `${outerGlow(neon.blue)}, ${innerGlow(neon.blue)}`,
-    padding: 14,
-    gap: 12,
   },
-  cardHead: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  icon: { width: 64, height: 64 },
-  cardText: { flex: 1, gap: 2 },
-  cardTitle: { color: text.primary, fontSize: 18, fontWeight: '800', letterSpacing: 1 },
-  cardTrial: { color: '#FFE7A8', fontSize: 14, fontWeight: '700' },
-  cardPrice: { color: text.primary, fontSize: 14 },
-  cardMeta: { color: text.muted, fontSize: 12 },
-  devBtn: { alignSelf: 'center', paddingVertical: 4, paddingHorizontal: 10 },
-  devText: { color: '#FF3B52', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  icon: { width: 44, height: 44 },
+  nameCol: { flex: 1, minWidth: 0 },
+  name: { color: text.primary, fontSize: 17, fontWeight: '800', letterSpacing: 0.8 },
+  meta: { color: text.muted, fontSize: 12 },
+  priceCol: { alignItems: 'flex-end', minWidth: 96 },
+  price: { color: neon.orange.mid, fontSize: 20, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  priceSub: { color: text.muted, fontSize: 11 },
+  /** `alignItems` mặc định (stretch) - NeonButton lấy bề ngang từ cha, đặt `center` là nó co thành cục. */
+  btnCol: { width: 200 },
+  devBtn: { paddingTop: 2, alignSelf: 'center' },
+  devText: { color: '#FF3B52', fontSize: 10, fontWeight: '700', letterSpacing: 1 },
+
   notice: { color: '#FF8A9A', fontSize: 13, textAlign: 'center' },
-  restore: { alignSelf: 'center', paddingVertical: 8 },
-  restoreText: { color: neon.blue.stroke, fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' },
+  bottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 6, paddingBottom: 10 },
+  fine: { flex: 1, color: 'rgba(255,255,255,0.32)', fontSize: 11 },
+  restoreText: { color: neon.blue.stroke, fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' },
   dim: { opacity: 0.4 },
+
   doneCard: {
     borderRadius: 16,
     borderWidth: 2,
