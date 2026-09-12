@@ -571,6 +571,20 @@ export default function GameLandscapeScreen() {
    */
   const owesDoneRollDice = useRef(false);
 
+  /**
+   * "Được tung" là một QUYỀN DÙNG MỘT LẦN, không phải một trạng thái: server cấp
+   * bằng gói 16 `Action = 1` (`PlayerGetNextActionHandler` - "send rolldice to
+   * client"), cú bấm tiêu nó. `me.CurrentAction` thì đứng ở `RollDice` suốt phần
+   * còn lại của lượt (nước đi, battle, tấm kết quả) - xem ghi chú ở `rollAction`.
+   *
+   * Đo 2026-09-12 (K64): thua battle, tấm "Maya won the battle" còn trên màn mà
+   * nút sáng; bấm thì server tung THẬT lần hai ("YOU ROLLED 3", gói 92 cho cả
+   * phòng), rồi gói 51 của máy này rơi vào lượt của Maya thành 52 lạc. Server nay
+   * cũng chặn (khoá `RollDiceCountDown-{playerId}`), nhưng máy khách phải tự xám
+   * nút, như bản web gỡ nút khỏi màn khi không ở bước tung.
+   */
+  const [rollGranted, setRollGranted] = useState(false);
+
   /*
    * Ghế dùng cho KẾT NỐI được đóng băng ở lần mount - đúng ghế màn này mở ra với.
    *
@@ -773,6 +787,9 @@ export default function GameLandscapeScreen() {
         if (id) turnId.current = id;
 
         if (packet.IsPendingAction) return;
+
+        // Quyền tung dùng một lần - xem `rollGranted`.
+        setRollGranted(packet.Action === CASE_ACTION.RollDice);
 
         /*
          * ⚠️ DỌN SẠCH KHUNG CŨ TRƯỚC KHI MỞ KHUNG MỚI.
@@ -1980,7 +1997,7 @@ export default function GameLandscapeScreen() {
     (rollAction !== null &&
       connState === 'connected' &&
       !stepOverlayOpen &&
-      (rollAction !== TYPE_ID.RollDice || isMyTurn));
+      (rollAction !== TYPE_ID.RollDice || (isMyTurn && rollGranted)));
 
   /*
    * Chặn bấm dồn 2 giây, chép theo `canTriggerRollDice` của bản web.
@@ -2006,6 +2023,8 @@ export default function GameLandscapeScreen() {
     }
 
     if (rollAction === null) return;
+
+    if (rollAction === TYPE_ID.RollDice) setRollGranted(false);
 
     // `TurnId` là bắt buộc - thiếu là server không biết gói tin thuộc lượt nào.
     void connection.current?.send(rollAction, {
