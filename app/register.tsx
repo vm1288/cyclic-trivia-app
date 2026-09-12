@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 
@@ -17,7 +17,12 @@ export default function RegisterScreen() {
   const license = useLicense();
   const t = useT();
 
-  const [code, setCode] = useState('');
+  /*
+   * Mua qua store (K66) thì `purchase.tsx` chuyển sang đây với mã điền sẵn - người
+   * mua chỉ bấm ACTIVATE, cùng đường với người có mã từ web/email.
+   */
+  const params = useLocalSearchParams<{ code?: string }>();
+  const [code, setCode] = useState(typeof params.code === 'string' ? params.code : '');
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

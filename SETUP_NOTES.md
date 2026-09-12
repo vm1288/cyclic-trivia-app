@@ -412,3 +412,14 @@ Cũng nhớ: `Modal` nằm **ngoài** `SafeAreaView` của màn hình, nên ph�
 `<Text>` chữ nghiêng nằm trong `View` có `alignItems: 'center'` sẽ co lại vừa nội dung, mà Android **đo hụt bề rộng** của nét xiên rồi cắt phần thừa. Triệu chứng: "NEW GAME" hiện thành "NEW".
 
 Cách chữa: cho Text chiếm trọn bề ngang — `alignSelf: 'stretch'` + `textAlign: 'center'`. Cũng bỏ `letterSpacing` âm, nó cộng thêm vào sai số.
+
+## expo-iap (mua license qua store, K66)
+
+Native module → thêm là phải `scriptsuild-apk.ps1`. Trên dev-client cài bằng adb, Play
+Billing **nối được** (`initConnection result: true`) nhưng sản phẩm chưa có trên Play
+Console thì `fetchProducts` trả bản ghi rỗng `productStatusAndroid: "not-found"` — màn
+PURCHASE lọc chúng và rơi về giá niêm yết. Muốn thấy sheet mua thật: app phải lên
+**internal testing** với đúng chữ ký + sản phẩm subscription cùng id; máy test phải
+là license tester của tài khoản Play. Server xác minh cần `Store:Google:ServiceAccountJson`
+(xem `Services/StorePurchaseVerifier.cs`); dev thì `Store:TrustUnverified = true` trong
+`appsettings.Development.json`.

@@ -43,7 +43,8 @@
       ],
       "expo-secure-store",
       "expo-screen-orientation",
-      "expo-video"
+      "expo-video",
+      "expo-iap"
     ]
   }
 }
