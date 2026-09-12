@@ -45,9 +45,14 @@ export default function RegisterScreen() {
      */
     const previous = license.status === 'none' || license.status === 'loading' ? null : license.session;
 
+    /*
+     * K69: deviceId gửi kèm là của ĐÚNG MÃ NÀY nếu máy từng nhận (kể cả phiên đã
+     * bị gỡ vì hết hạn) - server trả lại host cũ, không tốn suất `MaxDevices`.
+     * Không có thì mới rơi về phiên đang dùng như trước (đổi license cùng máy).
+     */
     const result = await checkActivationCode(
       trimmed,
-      previous?.deviceId ?? null,
+      license.deviceIdFor(trimmed) ?? previous?.deviceId ?? null,
       previous?.token ?? null,
     );
 

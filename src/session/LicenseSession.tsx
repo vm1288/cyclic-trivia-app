@@ -113,7 +113,21 @@ export type ExpiredNotice = {
   at: string;
 };
 
-type Stored = { sessions: LicenseSession[]; activeHostId: string | null; expired?: ExpiredNotice | null };
+/**
+ * Mã license → deviceId của host mà máy này từng nhận (K69). SỐNG LÂU HƠN phiên:
+ * phiên bị gỡ (hết hạn, người dùng gỡ) nhưng host phía server vẫn còn và vẫn ăn
+ * một suất `MaxDevices`. Đăng ký lại cùng mã mà không gửi deviceId là server tạo
+ * host mới → "maximum number of allowed devices" với gói 1 máy (đo K68). Gửi
+ * deviceId cũ thì server trả lại đúng host đó, không tốn suất.
+ */
+type KnownDevices = Record<string, string>;
+
+type Stored = {
+  sessions: LicenseSession[];
+  activeHostId: string | null;
+  expired?: ExpiredNotice | null;
+  devices?: KnownDevices;
+};
 
 export type LicenseState =
   /** Chưa đọc xong SecureStore - đừng vẽ gì phụ thuộc vào license lúc này */
@@ -142,6 +156,8 @@ type LicenseContextValue = LicenseState & {
   /** License vừa bị server phán chết (hết hạn / khoá) - Home hiện khung "gia hạn". */
   expired: ExpiredNotice | null;
   dismissExpired: () => void;
+  /** deviceId máy này từng nhận cho mã đó (kể cả phiên đã bị gỡ) - gửi kèm khi đăng ký lại. */
+  deviceIdFor: (licenseCode: string) => string | null;
 };
 
 const LicenseContext = createContext<LicenseContextValue | null>(null);
@@ -166,7 +182,11 @@ function parseStored(raw: string | null): Stored {
         parsed.activeHostId && sessions.some((s) => s.hostId === parsed.activeHostId)
           ? parsed.activeHostId
           : (sessions[0]?.hostId ?? null);
-      return { sessions, activeHostId };
+      // ⚠️ `expired` và `devices` phải đi qua đây - parse dựng object mới, quên là
+      // mất sau mỗi lần mở app (đo 12:17 12/9: vết hết hạn hiện được vì đọc trong
+      // cùng phiên, còn `devices` thì luôn rỗng khi đăng ký lại).
+      const devices = parsed.devices && typeof parsed.devices === 'object' ? parsed.devices : undefined;
+      return { sessions, activeHostId, expired: parsed.expired ?? null, devices };
     }
 
     // Dạng cũ: một license nằm thẳng ở gốc.
@@ -233,8 +253,13 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
       const current = store ?? { sessions: [], activeHostId: null };
       // Kích hoạt lại cùng một license thì THAY THẾ chứ không thêm bản trùng.
       const others = current.sessions.filter((s) => s.hostId !== session.hostId);
-      // Có license mới là hết chuyện "cái cũ hết hạn".
-      persist({ sessions: [...others, session], activeHostId: session.hostId, expired: null });
+      // Có license mới là hết chuyện "cái cũ hết hạn". Ghi nhớ host theo mã (K69).
+      persist({
+        sessions: [...others, session],
+        activeHostId: session.hostId,
+        expired: null,
+        devices: { ...(current.devices ?? {}), [session.licenseCode.trim().toUpperCase()]: session.deviceId },
+      });
     },
     [store, persist],
   );
@@ -270,7 +295,8 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
       const activeHostId =
         store.activeHostId === hostId ? (rest[0]?.hostId ?? null) : store.activeHostId;
 
-      persist({ sessions: rest, activeHostId, expired: store.expired ?? null });
+      // `devices` giữ nguyên - host phía server chưa mất, xem `KnownDevices`.
+      persist({ ...store, sessions: rest, activeHostId });
 
       // Xoá file logo, nhưng chỉ khi không license nào còn dùng nó: hai license
       // cùng sponsor dùng chung một file.
@@ -430,6 +456,11 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store?.activeHostId, store?.sessions.find((s) => s.hostId === store?.activeHostId)?.expiresAt]);
 
+  const deviceIdFor = useCallback(
+    (licenseCode: string) => storeRef.current?.devices?.[licenseCode.trim().toUpperCase()] ?? null,
+    [],
+  );
+
   const dismissExpired = useCallback(() => {
     const cur = storeRef.current;
     if (cur?.expired) persist({ ...cur, expired: null });
@@ -448,8 +479,9 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
       clear,
       expired: store?.expired ?? null,
       dismissExpired,
+      deviceIdFor,
     };
-  }, [store, save, switchTo, remove, markActivated, setCurrentGame, clear, dismissExpired]);
+  }, [store, save, switchTo, remove, markActivated, setCurrentGame, clear, dismissExpired, deviceIdFor]);
 
   return <LicenseContext.Provider value={value}>{children}</LicenseContext.Provider>;
 }
