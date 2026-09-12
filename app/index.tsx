@@ -2,6 +2,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -34,7 +35,7 @@ import { SwitchGameSheet } from '../src/components/SwitchGameSheet';
 import { useT } from '../src/i18n/I18nProvider';
 import { useLicense } from '../src/session/LicenseSession';
 import { usePlayer } from '../src/session/PlayerSession';
-import { neon, tagline, text } from '../src/theme/colors';
+import { innerGlow, neon, outerGlow, tagline, text } from '../src/theme/colors';
 
 /**
  * Logo dùng MỘT file lockup (hình + chữ "Cyclic" + tagline), vì logo chính thức
@@ -284,7 +285,13 @@ export default function HomeScreen() {
    * Ở chiều ngang thì bề cao mới là thứ khan hiếm; buộc theo bề ngang cột trái
    * là logo cao quá khung và bị cắt đầu đuôi.
    */
-  const logoHeight = Math.min(height * 0.58, 230);
+  /*
+   * K68: license vừa bị server phán chết thì khung "hết hạn" chiếm chỗ dưới logo -
+   * logo co lại nhường chỗ. Hiện cả khi máy còn license khác (đang dùng cái đó rồi
+   * vẫn cần biết cái kia chết); "Để sau" thì cất.
+   */
+  const expired = license.expired;
+  const logoHeight = Math.min(height * (expired ? 0.34 : 0.58), expired ? 130 : 230);
 
   /**
    * Logo trôi lên xuống 6px, chu kỳ 6s - đúng keyframe `cyc-float` của bản
@@ -325,7 +332,34 @@ export default function HomeScreen() {
               />
             </Animated.View>
 
-            {showDefaultLockup && !LOCKUP_INCLUDES_TAGLINE && (
+            {expired ? (
+              <View style={styles.expiredCard}>
+                <Text style={styles.expiredTitle}>
+                  {t(expired.reason === 'license_expired' ? 'expired.title' : 'expired.titleInactive')}
+                </Text>
+                <Text style={styles.expiredBody}>
+                  {t(expired.reason === 'license_expired' ? 'expired.body' : 'expired.bodyInactive', {
+                    sponsor: expired.sponsorName ?? t('expired.sponsorFallback'),
+                    code: expired.licenseCode,
+                  })}{' '}
+                  {t('expired.bodyStore', { store: t(Platform.OS === 'ios' ? 'purchase.storeApple' : 'purchase.storeGoogle') })}
+                </Text>
+                <View style={styles.expiredRow}>
+                  <Pressable
+                    onPress={() => router.push('/purchase')}
+                    accessibilityRole="button"
+                    style={({ pressed }) => [styles.expiredBtn, pressed && styles.pressed]}
+                  >
+                    <Text style={styles.expiredBtnText}>{t('expired.renew')}</Text>
+                  </Pressable>
+                  <Pressable onPress={license.dismissExpired} accessibilityRole="button" hitSlop={8}>
+                    <Text style={styles.expiredDismiss}>{t('expired.dismiss')}</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+
+            {!expired && showDefaultLockup && !LOCKUP_INCLUDES_TAGLINE && (
               <View style={styles.tagline}>
                 <View style={styles.taglineRule} />
                 <Text style={[styles.taglineWord, { color: tagline.play }]}>PLAY</Text>
@@ -503,6 +537,37 @@ const styles = StyleSheet.create({
    * tỉ lệ khác vẫn không vỡ bố cục.
    */
   logoWrap: { alignSelf: 'stretch' },
+
+  /* Khung "license hết hạn" (K68) - viền đỏ, nút GIA HẠN cam như nút mua. */
+  expiredCard: {
+    alignSelf: 'stretch',
+    marginTop: 10,
+    borderRadius: 14,
+    borderWidth: 1.6,
+    borderColor: '#FF3B52',
+    backgroundColor: 'rgba(70,8,20,0.55)',
+    boxShadow: '0 0 12px rgba(255,59,82,0.35)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  expiredTitle: { color: '#FF8A9A', fontSize: 14, fontWeight: '800', letterSpacing: 1.2 },
+  expiredBody: { color: text.primary, fontSize: 12, lineHeight: 17 },
+  expiredRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 2 },
+  expiredBtn: {
+    height: 34,
+    paddingHorizontal: 22,
+    borderRadius: 17,
+    borderWidth: 2,
+    borderColor: neon.orange.stroke,
+    backgroundColor: '#0A0810',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: `${outerGlow(neon.orange)}, ${innerGlow(neon.orange)}`,
+  },
+  expiredBtnText: { color: text.primary, fontSize: 13, fontWeight: '800', letterSpacing: 1.5 },
+  expiredDismiss: { color: text.muted, fontSize: 13, textDecorationLine: 'underline' },
+  pressed: { transform: [{ scale: 0.97 }] },
   logo: { width: '100%' },
 
   tagline: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },

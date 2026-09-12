@@ -99,7 +99,21 @@ export type LicenseSession = {
   currentGameId?: string | null;
 };
 
-type Stored = { sessions: LicenseSession[]; activeHostId: string | null };
+/**
+ * Dấu vết license vừa bị gỡ vì server phán chết (K68): giữ lại để Home nói cho
+ * người dùng biết VÌ SAO nút REGISTER GAME đột nhiên quay lại, và dẫn họ đi mua
+ * lại / khôi phục. Trước K68 phiên bị xoá im lặng - máy trông như chưa đăng ký
+ * bao giờ. Xoá khi họ bấm bỏ qua hoặc khi một license mới được lưu.
+ */
+export type ExpiredNotice = {
+  licenseCode: string;
+  sponsorName: string | null;
+  /** Mã lỗi server: license_expired | license_inactive | license_not_found */
+  reason: string;
+  at: string;
+};
+
+type Stored = { sessions: LicenseSession[]; activeHostId: string | null; expired?: ExpiredNotice | null };
 
 export type LicenseState =
   /** Chưa đọc xong SecureStore - đừng vẽ gì phụ thuộc vào license lúc này */
@@ -125,6 +139,9 @@ type LicenseContextValue = LicenseState & {
   setCurrentGame: (gameId: string | null) => void;
   /** Xoá sạch mọi license khỏi máy. */
   clear: () => Promise<void>;
+  /** License vừa bị server phán chết (hết hạn / khoá) - Home hiện khung "gia hạn". */
+  expired: ExpiredNotice | null;
+  dismissExpired: () => void;
 };
 
 const LicenseContext = createContext<LicenseContextValue | null>(null);
@@ -201,6 +218,9 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
   const storeRef = useRef<Stored | null>(null);
   storeRef.current = store;
 
+  /** Phiên nào đã được hỏi server trong lần mở app này - xem effect làm mới. */
+  const checkedThisLaunch = useRef(new Set<string>());
+
   const persist = useCallback((next: Stored) => {
     storeRef.current = next;
     setStore(next);
@@ -213,7 +233,8 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
       const current = store ?? { sessions: [], activeHostId: null };
       // Kích hoạt lại cùng một license thì THAY THẾ chứ không thêm bản trùng.
       const others = current.sessions.filter((s) => s.hostId !== session.hostId);
-      persist({ sessions: [...others, session], activeHostId: session.hostId });
+      // Có license mới là hết chuyện "cái cũ hết hạn".
+      persist({ sessions: [...others, session], activeHostId: session.hostId, expired: null });
     },
     [store, persist],
   );
@@ -228,6 +249,12 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
 
   const remove = useCallback(
     async (hostId: string) => {
+      /*
+       * Đọc `storeRef` chứ không đọc `store` của closure: `refreshToken` vừa
+       * `persist` vết "hết hạn" (K68) rồi gọi `remove` ngay - closure còn store
+       * cũ, ghi đè là mất vết. Đo 11:37 12/9: khung hết hạn không hiện vì thế.
+       */
+      const store = storeRef.current;
       if (!store) return;
 
       const target = store.sessions.find((s) => s.hostId === hostId);
@@ -243,7 +270,7 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
       const activeHostId =
         store.activeHostId === hostId ? (rest[0]?.hostId ?? null) : store.activeHostId;
 
-      persist({ sessions: rest, activeHostId });
+      persist({ sessions: rest, activeHostId, expired: store.expired ?? null });
 
       // Xoá file logo, nhưng chỉ khi không license nào còn dùng nó: hai license
       // cùng sponsor dùng chung một file.
@@ -252,7 +279,7 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
         rest.map((s) => s.sponsorLogoUri),
       );
     },
-    [store, persist],
+    [persist],
   );
 
   const markActivated = useCallback(async () => {
@@ -336,6 +363,19 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
        * vì xoá license của người dùng chỉ vì họ đi qua chỗ mất sóng là hỏng.
        */
       if (result.kind === 'rejected' && result.errorCode && DEAD_LICENSE_CODES.includes(result.errorCode)) {
+        // Ghi vết TRƯỚC khi gỡ, để Home còn biết nói gì (K68).
+        const cur = storeRef.current;
+        if (cur) {
+          persist({
+            ...cur,
+            expired: {
+              licenseCode: target.licenseCode,
+              sponsorName: target.sponsorName ?? null,
+              reason: result.errorCode,
+              at: new Date().toISOString(),
+            },
+          });
+        }
         await remove(hostId);
       }
 
@@ -369,16 +409,31 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
     const active = store?.sessions.find((s) => s.hostId === store.activeHostId);
     if (!active) return;
 
+    /*
+     * K68: ngoài "sắp hết hạn", còn làm mới MỘT LẦN mỗi lần mở app cho phiên đang
+     * dùng. License mua qua store có thể bị store lùi hạn (huỷ, hoàn tiền - webhook
+     * K67) trong lúc token trên máy còn dài; không hỏi thì máy vẫn tưởng còn hạn tới
+     * khi ăn 401 giữa ván. Một request mỗi lần mở app, mất mạng thì bỏ qua.
+     */
     const due =
       !active.expiresAt ||
       Number.isNaN(Date.parse(active.expiresAt)) ||
-      Date.parse(active.expiresAt) - Date.now() < REFRESH_BEFORE_MS;
+      Date.parse(active.expiresAt) - Date.now() < REFRESH_BEFORE_MS ||
+      !checkedThisLaunch.current.has(active.hostId);
 
-    if (due) void refreshToken(active.hostId);
+    if (due) {
+      checkedThisLaunch.current.add(active.hostId);
+      void refreshToken(active.hostId);
+    }
     // Chỉ theo dõi phiên ĐANG DÙNG: đổi license thì kiểm lại, còn `store` đổi vì
     // lý do khác (ghi currentGameId chẳng hạn) thì không gọi lại server.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store?.activeHostId, store?.sessions.find((s) => s.hostId === store?.activeHostId)?.expiresAt]);
+
+  const dismissExpired = useCallback(() => {
+    const cur = storeRef.current;
+    if (cur?.expired) persist({ ...cur, expired: null });
+  }, [persist]);
 
   const value = useMemo<LicenseContextValue>(() => {
     const state: LicenseState = store === null ? { status: 'loading' } : toState(store);
@@ -391,8 +446,10 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
       markActivated,
       setCurrentGame,
       clear,
+      expired: store?.expired ?? null,
+      dismissExpired,
     };
-  }, [store, save, switchTo, remove, markActivated, setCurrentGame, clear]);
+  }, [store, save, switchTo, remove, markActivated, setCurrentGame, clear, dismissExpired]);
 
   return <LicenseContext.Provider value={value}>{children}</LicenseContext.Provider>;
 }
