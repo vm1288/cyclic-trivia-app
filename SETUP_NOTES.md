@@ -312,6 +312,19 @@ Cách đúng: đọc `adb devices` (lệnh này không bao giờ ghi stderr) đ�
 - **`-memory 4096` là bắt buộc.** Lần đầu tôi đặt 2048 → RAM cạn sạch (1858/2013MB), `graphics.composer` và `graphics.allocator` kẹt 100% CPU, emulator đứng hình.
 - **`-gpu host`** để dùng GPU thật. Không có nó, log báo `Failed to load opengl32sw` rồi rơi về render phần mềm rất chậm.
 
+### ⚠️ Emulator này KHÔNG phân giải được tên miền (đo 2026-09-12)
+
+`ping 8.8.8.8` được nhưng `logcat` đầy `resolv: too many resolution errors, ignoring
+server` — mọi thứ đi qua `adb reverse` (Metro, server) vẫn chạy bình thường nên rất lâu
+mới lộ: video battle lấy từ `cdn.fintechsolutions.vn` **đen 12 giây** rồi mới bỏ qua.
+Đó hoá ra là ca test tốt cho "CDN không tới, server LAN tới" (K63, `STALL_MS` trong
+`BattleVideoOverlay`), nên **đừng vội sửa**. Muốn sửa thì boot lại với
+`-dns-server 8.8.8.8` (thêm vào `start-emulator.ps1`), chưa thử.
+
+Emulator cũng **giữ APK cũ** qua nhiều ngày (còn bản 27/08 khi máy thật đã 11/09 với
+expo-video): trước khi đo, `adb -s emulator-5554 shell dumpsys package com.cyclictrivia.app
+| grep lastUpdateTime` rồi `install-apk-emulator.ps1` nếu lệch.
+
 **Chấm đen giữa mép trên màn hình** là punch-hole camera giả lập của skin AVD, **không phải lỗi app**. Đừng tắt vĩnh viễn — app cần chạy đúng trên máy có notch, đó là lý do `SafeAreaView` bọc nội dung.
 
 ---
