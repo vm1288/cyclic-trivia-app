@@ -97,8 +97,9 @@ Còn lại:
 | Sửa `app.json` mà không thấy đổi gì | phải `build-apk.ps1`, Metro không nạp được thay đổi này |
 | Mọi thứ khác | [SETUP_NOTES.md](SETUP_NOTES.md) |
 
-Đọc log server: `SELECT TOP 30 TimeStamp, Message FROM Logs ORDER BY Id DESC`
-(`VI-PC\SQLEXPRESS`, database `CyclicTrivia`). Serilog để `MinimumLevel.Error()`
-nên **mọi** log đều ghi ở mức `Error`, kể cả log thông tin. Thấy dòng
-`Client ... connected` là máy đã chạm tới server — lúc đó vấn đề không còn ở
-mạng nữa.
+Đọc log server (K71): file `E:\Projects\CyclicTrivia\logs\cyclic-YYYYMMDD.log`,
+mỗi dòng có `[GameId RoomCode]` — `grep <mã phòng>` là ra cả ván. Bảng SQL `Logs`
+chỉ còn Warning trở lên (sự cố). Thấy dòng `Client ... connected` là máy đã chạm
+tới server — lúc đó vấn đề không còn ở mạng nữa. Cần payload gói tin: đổi
+`Serilog:MinimumLevel:Default` → `Debug` trong `appsettings.Development.json`, không
+cần restart.
