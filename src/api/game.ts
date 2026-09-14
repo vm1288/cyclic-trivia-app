@@ -847,6 +847,16 @@ export function resumeGame(token: string): Promise<ApiResult<{}>> {
   return postForm('/public/game/pause/resume', {}, token);
 }
 
+/**
+ * Chủ phòng kết thúc ván SỚM (menu ba chấm, K74). Cùng điều kiện với pause: token
+ * ghế + cờ `isHost`. Server đi đúng đường ván hết giờ: đặt `IsGameOver`, ghi điểm,
+ * bắn gói 39 tới mọi ghế - app không tự vẽ GAME OVER, đợi 39 như mọi máy khác.
+ * Ván đang dừng hay giữa hai lượt vẫn kết thúc ngay.
+ */
+export function endGame(token: string): Promise<ApiResult<{ AlreadyOver?: boolean }>> {
+  return postForm('/public/game/end', {}, token);
+}
+
 /* ─── Chat ─────────────────────────────────────────────────────────────── */
 
 /**

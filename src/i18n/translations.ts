@@ -34,6 +34,9 @@ export const en = {
   // Ngắn gọn: tiêu đề hộp thoại đã nói rõ đang bỏ ván nào, nhãn nút không cần
   // nhắc lại. Nhãn dài sẽ xuống hai dòng trong nút bo tròn.
   'home.startAnotherConfirm': 'Start new',
+  /** Máy đang ngồi ghế khách trong ván của người khác (K74). */
+  'home.startAnotherBodyGuest':
+    'You will leave the game you joined. It keeps running for the others; you can rejoin later with its code.',
 
   /** Nhãn đổi theo số license: một cái thì chưa có gì để chuyển sang. */
   'home.switchGame': 'Switch Game',
@@ -161,6 +164,12 @@ export const en = {
    */
   'game.pause': 'Pause game',
   'game.resume': 'Resume game',
+  /** Menu ba chấm (K74) - chỉ chủ phòng. */
+  'game.menu': 'Game menu',
+  'game.endGame': 'End game',
+  'game.endGameTitle': 'End this game for everyone?',
+  'game.endGameBody': 'All players will see the final result now. Scores so far will be kept.',
+  'game.endGameConfirm': 'End game',
   /** Gói 82 - server gửi, có tên người tới lượt: "Game pause once {name} finishes 3 turns or loses the dice." */
   'game.pausePending': 'Game pause once {name} finishes 3 turns or loses the dice.',
   'game.pausedHost':
@@ -590,6 +599,8 @@ const vi: Record<TranslationKey, string> = {
   'home.startAnotherBody':
     'Ván đã dựng sẽ bị bỏ. Ai đang chờ trong đó sẽ bị văng ra.',
   'home.startAnotherConfirm': 'Tạo ván mới',
+  'home.startAnotherBodyGuest':
+    'Bạn sẽ rời ván đang tham gia. Ván vẫn tiếp tục với người khác; muốn vào lại thì nhập mã phòng.',
 
   'home.switchGame': 'Đổi game',
   'home.addGame': 'Thêm game khác',
@@ -712,6 +723,11 @@ const vi: Record<TranslationKey, string> = {
   'game.playerCount': '{count} người chơi',
   'game.pause': 'Tạm dừng',
   'game.resume': 'Tiếp tục',
+  'game.menu': 'Menu ván',
+  'game.endGame': 'Kết thúc ván',
+  'game.endGameTitle': 'Kết thúc ván cho tất cả?',
+  'game.endGameBody': 'Mọi người sẽ thấy kết quả ngay bây giờ. Điểm đã ghi được giữ nguyên.',
+  'game.endGameConfirm': 'Kết thúc',
   'game.pausePending': 'Ván sẽ tạm dừng khi {name} chơi xong 3 lượt hoặc mất xúc xắc.',
   'game.pausedHost':
     'Bạn đã tạm dừng ván. Là chủ phòng, bạn bấm nút xanh phía trên để chơi tiếp - khi mọi người đã sẵn sàng.',

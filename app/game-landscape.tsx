@@ -20,6 +20,7 @@ import {
   EMPTY_GUID,
   getChatHistory,
   pauseGame,
+  endGame,
   resumeGame,
   startAgain,
   submitAnswer,
@@ -52,6 +53,7 @@ import { RaceWinnerOverlay } from '../src/components/RaceWinnerOverlay';
 import { CurveBallOverlay } from '../src/components/CurveBallOverlay';
 import { GameOverOverlay } from '../src/components/GameOverOverlay';
 import { PauseOverlay } from '../src/components/PauseOverlay';
+import { GameMenuSheet } from '../src/components/GameMenuSheet';
 import { ChatPanel } from '../src/components/ChatPanel';
 import {
   TenSecondsChallengeOverlay,
@@ -1855,6 +1857,28 @@ export default function GameLandscapeScreen() {
     }
   }, [seat, paused, pauseWaiting, t, turnPlayerName]);
 
+  /**
+   * MENU BA CHẤM (K74, Tony chốt 09-14) - chỉ chủ phòng, một mục: END GAME. Hai
+   * lớp hỏi (menu rồi confirm đỏ) là cố ý: nút nằm cạnh chat/pause, dễ chạm nhầm.
+   * Bấm END GAME xong KHÔNG tự vẽ GAME OVER - server bắn gói 39 tới mọi ghế kể cả
+   * máy này, khung hiện như ván hết giờ (một màn kết thúc duy nhất).
+   */
+  const [menuOpen, setMenuOpen] = useState(false);
+  const endGameFromMenu = useCallback(async () => {
+    setMenuOpen(false);
+    if (!seat) return;
+    const ok = await confirm({
+      title: t('game.endGameTitle'),
+      message: t('game.endGameBody'),
+      cancelLabel: t('common.cancel').toUpperCase(),
+      confirmLabel: t('game.endGameConfirm').toUpperCase(),
+      destructive: true,
+    });
+    if (!ok) return;
+    const res = await endGame(seat.token);
+    if (!res.isSuccess) setNotice(apiErrorText(res, t));
+  }, [seat, confirm, t]);
+
 
   /**
    * Đơn vị điểm theo bàn: CricTriv gọi là "runs", FootieTriv là "goals", còn lại
@@ -3200,24 +3224,30 @@ export default function GameLandscapeScreen() {
                 </Pressable>
               ) : null}
 
-              <View
-                style={styles.iconBtn}
-              >
-                <View
-                  style={styles.dots}
+              {/* MENU BA CHẤM - chỉ chủ phòng (K74). Khách không có mục nào nên không vẽ nút. */}
+              {me?.IsHost && !gameOver ? (
+                <Pressable
+                  onPress={() => setMenuOpen(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('game.menu')}
+                  hitSlop={8}
+                  style={({ pressed }) => [styles.iconBtn, styles.menuBtn, pressed && styles.iconBtnPressed]}
                 >
-                  <View
-                    style={styles.dot}
-                  />
-                  <View
-                    style={styles.dot}
-                  />
-                  <View
-                    style={styles.dot}
-                  />
-                </View>
-              </View>
+                  <View style={styles.dots}>
+                    <View style={styles.dot} />
+                    <View style={styles.dot} />
+                    <View style={styles.dot} />
+                  </View>
+                </Pressable>
+              ) : null}
             </View>
+
+            <GameMenuSheet
+              visible={menuOpen}
+              onClose={() => setMenuOpen(false)}
+              onEndGame={() => void endGameFromMenu()}
+              labels={{ endGame: t('game.endGame'), cancel: t('common.cancel') }}
+            />
 
             {/* CURRENT PLAYER */}
 
@@ -3818,6 +3848,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     color: 'rgba(226,232,255,0.9)',
     textAlign: 'center',
+  },
+
+  /* Viền xanh nhạt như nút bàn cờ: nút này bấm được, không phải trang trí. */
+  menuBtn: {
+    borderColor: 'rgba(120,160,255,0.55)',
   },
 
   dots: {

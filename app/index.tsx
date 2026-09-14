@@ -208,16 +208,34 @@ export default function HomeScreen() {
     }, [player]),
   );
 
+  /**
+   * "Start a different game" - đường thoát khỏi ván đang mở, hai trường hợp:
+   *   - máy này LÀM CHỦ một ván chưa xong (`openGame`): bỏ con trỏ, ván cũ bị
+   *     ghi đè khi tạo ván mới. Chủ phòng cũng kết thúc được tử tế hơn từ trong
+   *     ván qua menu ba chấm → END GAME (K74).
+   *   - máy này đang NGỒI GHẾ KHÁCH trong ván của người khác chưa xong
+   *     (`liveSeatGameId`): trước 09-14 nút đầu là RESUME và KHÔNG có đường nào
+   *     tạo ván mới cho tới khi ván kia hết giờ (Tony gặp đúng ca này). Nay bỏ
+   *     ghế đã lưu rồi đi tạo ván - khách không có "Leave game" trong ván (Tony
+   *     chốt), lối này là đủ.
+   */
   async function confirmStartAnother() {
+    const guestSeat = !!liveSeatGameId && !openGame;
     const ok = await confirm({
       title: t('home.startAnotherTitle'),
-      message: t('home.startAnotherBody'),
+      message: t(guestSeat ? 'home.startAnotherBodyGuest' : 'home.startAnotherBody'),
       cancelLabel: t('common.cancel').toUpperCase(),
       confirmLabel: t('home.startAnotherConfirm').toUpperCase(),
       destructive: true,
     });
     if (!ok) return;
 
+    if (liveSeatGameId) {
+      // Ghế vẫn còn trên server; chỉ máy này quên nó đi. Ván kia chạy tiếp
+      // nhờ watchdog, chủ phòng của nó vẫn kết thúc được.
+      await player.clearSeat();
+      setLiveSeatGameId(null);
+    }
     // Ván cũ bị bỏ ngay khi tạo ván mới: `createGame` ghi đè
     // `Hosts.CurrentGameSessionId`. Ở đây chỉ cần buông con trỏ.
     license.setCurrentGame(null);
@@ -406,7 +424,7 @@ export default function HomeScreen() {
 
             {/* Luôn có đường thoát khi ván cũ bị treo - không bao giờ để máy
                 kẹt ở một ván không kết thúc được. */}
-            {openGame ? (
+            {openGame || (liveSeatGameId && activated) ? (
               <Pressable
                 onPress={confirmStartAnother}
                 accessibilityRole="button"
@@ -421,7 +439,7 @@ export default function HomeScreen() {
               tạo ván khác). Lúc chỉ có một nút thì không có nhóm nào để tách,
               vạch trở thành đường kẻ trang trí vô nghĩa giữa các nút cùng cấp.
             */}
-            {openGame ? <GlowDivider style={styles.groupDivider} /> : null}
+            {openGame || (liveSeatGameId && activated) ? <GlowDivider style={styles.groupDivider} /> : null}
 
             {MENU.map((item) => (
               <NeonButton
