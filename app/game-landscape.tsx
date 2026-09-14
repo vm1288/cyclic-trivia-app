@@ -2393,9 +2393,10 @@ export default function GameLandscapeScreen() {
     if (before) return { dimmed: !card.IsUsing, usable: false, active: card.IsUsing === true };
     /* 2. không phải chủ câu hỏi -> lá TRONG-câu-hỏi cũng không được */
     if (!question.isQuestionOwner) return { dimmed: true, usable: false, active: false };
-    /* 3. Eliminator chỉ một lần cho mỗi câu */
+    /* 3. Eliminator chỉ một lần cho mỗi câu. Đã dùng = hiệu ứng đã xong (đáp án đã mất),
+       nên MỜ chứ không sáng - sáng là cho lá còn đang chờ tác dụng (Joker/Changer). Tony 09-14, K85 */
     if (isElim && question.usedEliminator) {
-      return { dimmed: true, usable: false, active: true };
+      return { dimmed: true, usable: false, active: false };
     }
 
     const canUse = !card.IsUsed && card.Quantity > 0;
