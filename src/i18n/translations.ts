@@ -251,6 +251,9 @@ export const en = {
   'cards.usedBy': '{name} used {card}',
   /** Đủ 5 sao thì được thưởng một lá bài. */
   'cards.earned': '5 stars! You earned {card}',
+  /** Tấm thưởng thẻ giữa bàn cờ (K86). */
+  'cards.earnedTitle': 'FIVE STARS!',
+  'cards.earnedSub': 'A new card joins your hand',
   'cards.earnedAny': '5 stars! You earned a card',
 
   /**
@@ -799,6 +802,8 @@ const vi: Record<TranslationKey, string> = {
   'cards.body.Changer': 'Đổi sang chủ đề khác.',
   'cards.usedBy': '{name} dùng {card}',
   'cards.earned': 'Đủ 5 sao! Bạn được thưởng {card}',
+  'cards.earnedTitle': 'ĐỦ NĂM SAO!',
+  'cards.earnedSub': 'Bạn nhận thêm một lá bài',
   'cards.earnedAny': 'Đủ 5 sao! Bạn được thưởng một lá bài',
 
   'yourChoice.title': 'Bạn muốn chủ đề nào?',

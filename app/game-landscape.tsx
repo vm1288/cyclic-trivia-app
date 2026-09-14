@@ -43,6 +43,7 @@ import { CardChoiceOverlay } from '../src/components/CardChoiceOverlay';
 import { DiceRollOverlay } from '../src/components/DiceRollOverlay';
 import { MoveDirectionOverlay } from '../src/components/MoveDirectionOverlay';
 import { FlyingReward } from '../src/components/FlyingReward';
+import { CardEarnedOverlay } from '../src/components/CardEarnedOverlay';
 import { QuestionOverlay } from '../src/components/QuestionOverlay';
 import { BattleOverlay } from '../src/components/BattleOverlay';
 import { BattleResultOverlay } from '../src/components/BattleResultOverlay';
@@ -394,6 +395,8 @@ export default function GameLandscapeScreen() {
 
   /** Sao / thẻ đang bay từ giữa bàn cờ về chỗ của nó. */
   const [flying, setFlying] = useState<{ id: number; reward: 'star' | CardKey } | null>(null);
+  /** Tấm "đủ 5 sao, được thưởng {lá}" - hết tấm thì lá bay về ô của nó (K86). */
+  const [earnedCard, setEarnedCard] = useState<CardKey | null>(null);
 
   /**
    * Ai thắng vòng đua - hiện giữa bàn cờ vài giây rồi tắt.
@@ -1202,8 +1205,13 @@ export default function GameLandscapeScreen() {
        */
       if (packet.typeID === TYPE_ID.EnableCard) {
         if (!packet.isFromStars) return;
-        const card = me?.Cards.find((c) => c.Id === packet.selectedCardId)?.CardId;
-        setNotice(card ? t('cards.earned', { card }) : t('cards.earnedAny'));
+        /*
+         * Gói này tới TRƯỚC cả trả lời HTTP của submitAnswer (server bắn giữa lúc xử lý), lúc tấm
+         * kết quả chưa hiện - nên chỉ ghi vào hàng chờ; effect theo `turnResult` sẽ hiện tấm
+         * thưởng khi tấm kết quả tắt. Đường HTTP (`result.card`) ghi cùng chỗ, không hiện hai lần.
+         */
+        const card = me?.Cards.find((c) => c.Id === packet.selectedCardId)?.CardId as CardKey | undefined;
+        if (card) pendingEarnedCard.current = card;
         return;
       }
 
@@ -2293,10 +2301,10 @@ export default function GameLandscapeScreen() {
     if (!turnBanner) return;
     if (dice) { setTurnBanner(null); return; }
     /* Tấm kết quả câu hỏi / vòng đua đang hiện thì đợi nó tắt - MỘT tấm một lúc (Tony 09-14, K78). */
-    if (raceWinner || turnResult) return;
+    if (raceWinner || turnResult || earnedCard) return;
     const hide = setTimeout(() => setTurnBanner(null), 3500);
     return () => clearTimeout(hide);
-  }, [turnBanner, raceWinner, turnResult, dice]);
+  }, [turnBanner, raceWinner, turnResult, earnedCard, dice]);
 
   /*
    * Thông báo kết quả tự tắt sau 3.5 giây - đủ đọc, và vẫn kịp nhường chỗ cho
@@ -2492,9 +2500,44 @@ export default function GameLandscapeScreen() {
      * thưởng bài trong cùng một lượt, và hai vật bay chồng lên nhau thì rối.
      */
     if (earnedStar) fly('star');
+    /*
+     * Đủ 5 sao: sao bay xong → tấm "FIVE STARS! JOKER" giữa bàn cờ 2,6 s → lá bay về ô
+     * (K86, Tony: "phải có thông báo nhận thẻ rồi thẻ mới bay tới chỗ nó đứng"). Tấm kết
+     * quả câu hỏi (3,5 s) tắt trước khi lá bay nên hai thứ không đè nhau.
+     */
     const card = result.card as CardKey | '';
-    if (card) setTimeout(() => fly(card), 1500);
+    if (card) pendingEarnedCard.current = card;
   };
+
+  /**
+   * Lá thưởng chờ tấm kết quả tắt rồi mới hiện - MỘT tấm một lúc (K78). Lưới 4 s: gói 33 tới
+   * mà không có tấm kết quả nào (vd trả lời từ máy khác) thì vẫn hiện.
+   */
+  const pendingEarnedCard = useRef<CardKey | null>(null);
+  useEffect(() => {
+    if (turnResult || !pendingEarnedCard.current) return;
+    const card = pendingEarnedCard.current;
+    pendingEarnedCard.current = null;
+    setEarnedCard(card);
+  }, [turnResult]);
+  useEffect(() => {
+    const tick = setInterval(() => {
+      if (!pendingEarnedCard.current) return;
+      if (turnResultRef.current) return;
+      const card = pendingEarnedCard.current;
+      pendingEarnedCard.current = null;
+      setEarnedCard(card);
+    }, 4000);
+    return () => clearInterval(tick);
+  }, []);
+  const turnResultRef = useRef(turnResult);
+  turnResultRef.current = turnResult;
+
+  const earnedCardDone = useCallback(() => {
+    const card = earnedCard;
+    setEarnedCard(null);
+    if (card) fly(card);
+  }, [earnedCard]);
 
   /** Bắn một vật bay từ giữa bàn cờ về chỗ của nó. */
   const fly = (reward: 'star' | CardKey) => {
@@ -3205,7 +3248,7 @@ export default function GameLandscapeScreen() {
               <BattleDiceOverlay state={battleDice} meId={seat?.playerId ?? ''} />
             ) : null}
 
-            {turnBanner && !raceWinner && !turnResult && !dice && !gameOver ? (
+            {turnBanner && !raceWinner && !turnResult && !earnedCard && !dice && !gameOver ? (
               <View style={[styles.turnBanner, turnBanner.mine && styles.turnBannerMine]} pointerEvents="none">
                 <Text style={[styles.turnBannerText, turnBanner.mine && styles.turnBannerTextMine]} numberOfLines={2}>
                   {turnBanner.text}
@@ -3632,6 +3675,8 @@ export default function GameLandscapeScreen() {
         Vật bay cũng ở GỐC màn hình như xúc xắc: nó đi từ khung bàn cờ (cột
         trái) sang cột phải, nên phải nằm ngoài cả hai.
       */}
+      {earnedCard ? <CardEarnedOverlay card={earnedCard} ms={2600} onDone={earnedCardDone} /> : null}
+
       {flying && spot.current.board ? (
         <FlyingReward
           key={flying.id}
