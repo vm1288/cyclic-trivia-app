@@ -315,6 +315,8 @@ export type GamePlayer = {
   IsConnected: boolean;
   IsSetupNickName: boolean;
   IsHost: boolean;
+  /** Đã tung lần đầu chưa - bản web đổi câu chào đầu lượt theo cờ này (`BeforeRolldice.cshtml`). */
+  HasRolledFirstDice: boolean;
   Cards: GameCard[];
 };
 

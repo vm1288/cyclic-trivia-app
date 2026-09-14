@@ -607,6 +607,19 @@ function Characters({
    * tính độ lệch của từng con - một lượt duy nhất chỉ biết "đã gặp mấy con",
    * chưa biết còn bao nhiêu con nữa.
    */
+  /*
+   * Nước đi chỉ còn "diễn dở" khi snapshot CHƯA bắt kịp (người đó vẫn đứng ở ô xuất
+   * phát ghi trong gói 53). Snapshot đổi trước, `pendingMove` bị xoá SAU (effect ở
+   * màn ván chạy sau lượt vẽ) - có đúng một lượt vẽ hai thứ cùng tồn tại, và nếu vẫn
+   * cộng `steps` lên ô MỚI thì quân đi thêm một nước, rồi lúc `pendingMove` xoá lại
+   * đi tiếp cả vòng về ô đúng. Tony thấy 09-14: "bấm Skip thẻ thì nhân vật di chuyển
+   * tiếp" (K75) - đúng lúc state nạp lại sau HostActionDone.
+   */
+  const moving = (player: GamePlayer) =>
+    !!pendingMove &&
+    pendingMove.playerId === player.Id &&
+    (pendingMove.fromStepIndex < 0 || pendingMove.fromStepIndex === player.CurrentStepIndex);
+
   const targets = players.map((player) => {
     const isDemo = demoFrom !== null && player.Id === demoPlayerId;
     const home = order.indexOf(player.CurrentStepIndex);
@@ -620,9 +633,9 @@ function Characters({
      * Khi state nạp lại xong, `base` thành ô mới và `pendingMove` được xoá -
      * lúc đó hai giá trị bằng nhau nên không có cú nhảy thừa nào.
      */
-    if (pendingMove && pendingMove.playerId === player.Id) {
-      const sign = pendingMove.direction === 'anticlockwise' ? -1 : 1;
-      return base + sign * pendingMove.steps;
+    if (moving(player)) {
+      const sign = pendingMove!.direction === 'anticlockwise' ? -1 : 1;
+      return base + sign * pendingMove!.steps;
     }
     return base;
   });
@@ -653,7 +666,7 @@ function Characters({
             charHeight={charHeight * scale}
             scale={scale}
             isTurn={player.Id === currentTurnPlayerId}
-            walkSigned={!!pendingMove && pendingMove.playerId === player.Id}
+            walkSigned={moving(player)}
             lane={lane}
             laneCount={counts.get(key) ?? 1}
             aspect={characterInfo.get(player.CharacterId)?.Aspect ?? 0.8}

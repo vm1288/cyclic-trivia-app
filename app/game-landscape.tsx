@@ -587,6 +587,19 @@ export default function GameLandscapeScreen() {
    */
   const [rollGranted, setRollGranted] = useState(false);
 
+  /**
+   * Câu chào đầu lượt (K75, Tony 09-14: "không thông báo ai sẽ tung cho tất cả, và
+   * người được tung phải nhận câu khác người còn lại"). Bản web viết lên BÀN CỜ CHUNG
+   * (`BeforeRolldice.cshtml`: "{name}, it's your first roll please" / "So {name}, it's
+   * your go"); app không có bàn chung nên mỗi máy tự nói:
+   *   - người tới lượt: đúng hai câu của web, đặt lúc quyền tung về (gói 16 Action 1),
+   *     tức đúng lúc nút ROLL DICE sáng;
+   *   - người khác: "It's {name}'s go", đặt khi `CurrentTurnPlayerId` trong state đổi
+   *     (gói 85 ở NextTurn nạp lại state).
+   * Đứng sau tấm vòng đua nếu tấm đó đang hiện; tự tắt 3,5 s.
+   */
+  const [turnBanner, setTurnBanner] = useState<{ text: string; mine: boolean } | null>(null);
+
   /*
    * Ghế dùng cho KẾT NỐI được đóng băng ở lần mount - đúng ghế màn này mở ra với.
    *
@@ -792,6 +805,16 @@ export default function GameLandscapeScreen() {
 
         // Quyền tung dùng một lần - xem `rollGranted`.
         setRollGranted(packet.Action === CASE_ACTION.RollDice);
+        if (packet.Action === CASE_ACTION.RollDice && seat) {
+          const meNow = snapshot?.Players?.find((pl) => pl.Id === seat.playerId);
+          const name = meNow?.NickName ?? '';
+          if (name) {
+            setTurnBanner({
+              text: t(meNow?.HasRolledFirstDice ? 'turn.yourGoYou' : 'turn.firstRollYou', { name }),
+              mine: true,
+            });
+          }
+        }
 
         /*
          * ⚠️ DỌN SẠCH KHUNG CŨ TRƯỚC KHI MỞ KHUNG MỚI.
@@ -2174,6 +2197,25 @@ export default function GameLandscapeScreen() {
     return () => clearTimeout(hide);
   }, [raceWinner]);
 
+  /* Người KHÁC tới lượt: báo khi state đổi người. Lần nạp đầu (vào lại ván) thì không. */
+  const lastTurnPlayer = useRef<string | null>(null);
+  useEffect(() => {
+    if (!currentTurnPlayerId) return;
+    const prev = lastTurnPlayer.current;
+    lastTurnPlayer.current = currentTurnPlayerId;
+    if (prev === null || prev === currentTurnPlayerId) return;
+    if (me && currentTurnPlayerId === me.Id) return;
+    const name = players.find((p) => p.Id === currentTurnPlayerId)?.NickName ?? '';
+    if (name) setTurnBanner({ text: t('turn.othersGo', { name }), mine: false });
+  }, [currentTurnPlayerId, me, players, t]);
+
+  /* Tự tắt 3,5 s kể từ lúc THẤY được (tấm vòng đua che thì đếm từ lúc tấm đó tắt). */
+  useEffect(() => {
+    if (!turnBanner || raceWinner) return;
+    const hide = setTimeout(() => setTurnBanner(null), 3500);
+    return () => clearTimeout(hide);
+  }, [turnBanner, raceWinner]);
+
   /*
    * Thông báo kết quả tự tắt sau 3.5 giây - đủ đọc, và vẫn kịp nhường chỗ cho
    * bước sau của lượt (nhịp không có bàn cờ là 2 giây một bước, nhưng bước kế
@@ -3065,6 +3107,14 @@ export default function GameLandscapeScreen() {
 
             {battleDice && !battleResult && !dice ? (
               <BattleDiceOverlay state={battleDice} meId={seat?.playerId ?? ''} />
+            ) : null}
+
+            {turnBanner && !raceWinner && !gameOver ? (
+              <View style={[styles.turnBanner, turnBanner.mine && styles.turnBannerMine]} pointerEvents="none">
+                <Text style={[styles.turnBannerText, turnBanner.mine && styles.turnBannerTextMine]} numberOfLines={2}>
+                  {turnBanner.text}
+                </Text>
+              </View>
             ) : null}
 
             {notice ? (
@@ -4092,6 +4142,28 @@ const styles = StyleSheet.create({
     color: 'rgba(226,232,255,0.82)',
     textAlign: 'center',
   },
+
+  /* Câu chào đầu lượt - nổi giữa bàn cờ, to hơn `notice`; xanh lam cho người khác, xanh lá cho mình. */
+  turnBanner: {
+    position: 'absolute',
+    top: '38%',
+    alignSelf: 'center',
+    zIndex: 25,
+    maxWidth: '70%',
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(53,183,255,0.75)',
+    backgroundColor: 'rgba(6,12,34,0.92)',
+    boxShadow: '0 0 22px rgba(53,183,255,0.45)',
+  },
+  turnBannerMine: {
+    borderColor: 'rgba(46,232,95,0.8)',
+    boxShadow: '0 0 22px rgba(46,232,95,0.45)',
+  },
+  turnBannerText: { fontSize: 20, fontWeight: '800', letterSpacing: 0.4, color: '#9FD8FF', textAlign: 'center' },
+  turnBannerTextMine: { color: '#7CF59A' },
 
   notice: {
     position: 'absolute',

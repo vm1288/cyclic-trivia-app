@@ -219,6 +219,13 @@ export const en = {
   'card.confirmUse': 'USE',
   'card.confirmSkip': 'SKIP',
   'game.rollDice': 'ROLL DICE',
+  /**
+   * Câu chào đầu lượt (K75). Người tới lượt: chép nguyên văn `BeforeRolldice.cshtml`
+   * của bàn cờ web; người khác: bản web không có (họ nhìn bàn cờ chung), app phải nói.
+   */
+  'turn.firstRollYou': '{name}, it’s your first roll please',
+  'turn.yourGoYou': 'So {name}, it’s your go',
+  'turn.othersGo': 'It’s {name}’s go',
   'game.noSeat': 'You do not have a seat in this game.',
   /** Loại bàn cờ chưa có nhánh vẽ - thà nói ra còn hơn để bàn cờ trắng trơn. */
   'game.boardUnsupported': 'This board type is not supported yet.',
@@ -765,6 +772,9 @@ const vi: Record<TranslationKey, string> = {
   'card.confirmUse': 'DÙNG',
   'card.confirmSkip': 'BỎ QUA',
   'game.rollDice': 'TUNG XÚC XẮC',
+  'turn.firstRollYou': '{name}, mời bạn tung lần đầu',
+  'turn.yourGoYou': 'Nào {name}, tới lượt bạn',
+  'turn.othersGo': 'Tới lượt {name}',
   'game.noSeat': 'Bạn không có ghế trong ván này.',
   'game.boardUnsupported': 'Loại bàn cờ này chưa hỗ trợ.',
 
