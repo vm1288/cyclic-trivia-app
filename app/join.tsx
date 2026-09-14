@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 
 import {
@@ -105,16 +105,10 @@ export default function JoinScreen() {
   );
 
   /*
-   * Mở từ deep link thì gửi luôn, khỏi bắt bấm thêm một nút nữa.
-   * Ref chống chạy hai lần khi component render lại.
+   * Mở từ deep link (`cyclic://join?code=…`, trang /join/{code} của server - K89): mã ĐIỀN
+   * SẴN nhưng KHÔNG tự gửi - Tony chốt 09-14: người dùng tự bấm JOIN, hoặc không. Trước
+   * đây gửi luôn khi có `?code=`.
    */
-  const autoSubmitted = useRef(false);
-  useEffect(() => {
-    const fromLink = normaliseRoomCode(params.code ?? '');
-    if (autoSubmitted.current || !fromLink || player.status !== 'ready') return;
-    autoSubmitted.current = true;
-    void submit(fromLink);
-  }, [params.code, player.status, submit]);
 
   return (
     <FormScreen title={t('join.title')} subtitle={t('join.subtitle')}>

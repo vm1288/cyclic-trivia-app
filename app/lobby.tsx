@@ -19,7 +19,7 @@ import {
   ensureRoomCode,
   getGameState,
   markPlayersReady,
-  roomJoinUrl,
+  roomInviteUrl,
   startGame,
   type GameSnapshot,
   type RoomCode,
@@ -282,7 +282,8 @@ export default function LobbyScreen() {
     ),
   );
 
-  const joinUrl = room ? roomJoinUrl(room.SiteUrl, room.SessionId) : '';
+  /* K89: link về trang /join/{code} của server - mở app nếu có, không thì dẫn tải app. */
+  const joinUrl = room ? roomInviteUrl(room.SiteUrl, room.RoomCode) : '';
 
   /*
    * ─── Bắt đầu ván: HAI lượt gọi, cách nhau một nhịp đếm ngược ──────────────
@@ -362,15 +363,13 @@ export default function LobbyScreen() {
      * `Share` có sẵn trong RN, không cần thư viện: nó mở đúng bảng chia sẻ của
      * hệ điều hành, nên gửi được qua Zalo/WhatsApp/SMS/bất cứ app nào máy có.
      *
-     * Tin nhắn mang CẢ HAI đường vào, và mã phòng đứng trước:
-     *   - có app  -> đọc mã rồi gõ vào màn VÀO PHÒNG
-     *   - chưa có -> bấm link chơi trên trình duyệt như cũ
+     * Tin nhắn mang mã phòng và MỘT link https (K89, Tony 09-14 - trang người chơi web
+     * không còn): `{SiteUrl}join/{code}` là trang của server, thử mở app qua
+     * `cyclic://join?code=…` (có app → JOIN A GAME điền sẵn mã, người dùng tự bấm Join),
+     * không có app → mã phòng + nút tải Google Play / App Store.
      *
-     * ⚠️ ĐỪNG thay link web bằng deep link `cyclic://`. Người chưa cài app sẽ
-     * nhận một link chết, và phần lớn ứng dụng nhắn tin không biến chuỗi đó
-     * thành link bấm được - nhìn như tin nhắn hỏng. Muốn một link chạy cho cả
-     * hai thì phải là App Link thật (tên miền thật + assetlinks.json), mà
-     * `localhost:7025` lúc dev thì không làm được.
+     * ⚠️ ĐỪNG gửi thẳng `cyclic://`: người chưa cài nhận link chết, và app nhắn tin
+     * không biến chuỗi đó thành link bấm được. Link https qua server là cầu nối.
      *
      * Người dùng bấm huỷ không phải lỗi - `Share.share` trả về
      * `{action: 'dismissedAction'}` chứ không ném, nên không cần bắt gì thêm.

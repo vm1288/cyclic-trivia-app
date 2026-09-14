@@ -104,7 +104,7 @@ export const en = {
   'lobby.inviteCopy': 'Invite friends to join\nyour trivia game',
   'lobby.invite': 'INVITE PLAYERS',
   'lobby.inviteMessage':
-    'Join my Cyclic game!\n\nRoom code: {code}\n\nGot the app? Tap JOIN A GAME and type the code.\nNo app? Play in your browser: {url}',
+    'Join my Cyclic game!\n\nRoom code: {code}\n\nTap to join (or get the app): {url}',
   'lobby.inviteTitle': 'Join my Cyclic game',
   'lobby.seats': 'PLAYERS',
   'lobby.seatEmpty': 'Waiting…',
@@ -684,7 +684,7 @@ const vi: Record<TranslationKey, string> = {
   'lobby.inviteCopy': 'Mời bạn bè vào\nchơi cùng',
   'lobby.invite': 'MỜI NGƯỜI CHƠI',
   'lobby.inviteMessage':
-    'Vào chơi Cyclic với mình!\n\nMã phòng: {code}\n\nCó app rồi? Bấm VÀO PHÒNG rồi nhập mã.\nChưa có app? Chơi trên trình duyệt: {url}',
+    'Vào chơi Cyclic với mình!\n\nMã phòng: {code}\n\nBấm để vào (hoặc tải app): {url}',
   'lobby.inviteTitle': 'Vào chơi Cyclic với mình',
   'lobby.seats': 'NGƯỜI CHƠI',
   'lobby.seatEmpty': 'Đang chờ…',

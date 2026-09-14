@@ -747,6 +747,13 @@ export type RoomCode = {
 export const roomJoinUrl = (siteUrl: string, sessionId: string) =>
   `${siteUrl}player/join/${sessionId}`;
 
+/**
+ * Link mời vào phòng cho APP (K89): `{SiteUrl}join/{ROOMCODE}` - trang server thử mở
+ * `cyclic://join?code=…` (app đã cài → JOIN A GAME điền sẵn mã), không cài thì hiện mã + nút
+ * tải trên hai store. Thay `roomJoinUrl` (trang người chơi web, không phát triển nữa).
+ */
+export const roomInviteUrl = (siteUrl: string, roomCode: string) => `${siteUrl}join/${roomCode}`;
+
 export function ensureRoomCode(gameId: string, token: string): Promise<ApiResult<RoomCode>> {
   return postForm<RoomCode>(`/public/game/${gameId}/room-code`, {}, token);
 }
