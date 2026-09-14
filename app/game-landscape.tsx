@@ -2290,10 +2290,11 @@ export default function GameLandscapeScreen() {
   useEffect(() => {
     if (!turnBanner) return;
     if (dice) { setTurnBanner(null); return; }
-    if (raceWinner) return;
+    /* Tấm kết quả câu hỏi / vòng đua đang hiện thì đợi nó tắt - MỘT tấm một lúc (Tony 09-14, K78). */
+    if (raceWinner || turnResult) return;
     const hide = setTimeout(() => setTurnBanner(null), 3500);
     return () => clearTimeout(hide);
-  }, [turnBanner, raceWinner, dice]);
+  }, [turnBanner, raceWinner, turnResult, dice]);
 
   /*
    * Thông báo kết quả tự tắt sau 3.5 giây - đủ đọc, và vẫn kịp nhường chỗ cho
@@ -2385,8 +2386,9 @@ export default function GameLandscapeScreen() {
     const before = card.ShowBeforeQuestion === true;
     const isElim = key === 'Eliminator';
 
-    /* 1. câu hỏi đã hiện -> lá TRƯỚC-câu-hỏi hết cửa */
-    if (before) return { dimmed: true, usable: false, active: false };
+    /* 1. câu hỏi đã hiện -> lá TRƯỚC-câu-hỏi hết cửa; lá vừa dùng ở bước thẻ thì SÁNG để
+       người chơi biết nó đang có hiệu lực (Tony 09-14: "bấm Use Joker xong không thấy gì", K78) */
+    if (before) return { dimmed: !card.IsUsing, usable: false, active: card.IsUsing === true };
     /* 2. không phải chủ câu hỏi -> lá TRONG-câu-hỏi cũng không được */
     if (!question.isQuestionOwner) return { dimmed: true, usable: false, active: false };
     /* 3. Eliminator chỉ một lần cho mỗi câu */
@@ -3188,7 +3190,7 @@ export default function GameLandscapeScreen() {
               <BattleDiceOverlay state={battleDice} meId={seat?.playerId ?? ''} />
             ) : null}
 
-            {turnBanner && !raceWinner && !dice && !gameOver ? (
+            {turnBanner && !raceWinner && !turnResult && !dice && !gameOver ? (
               <View style={[styles.turnBanner, turnBanner.mine && styles.turnBannerMine]} pointerEvents="none">
                 <Text style={[styles.turnBannerText, turnBanner.mine && styles.turnBannerTextMine]} numberOfLines={2}>
                   {turnBanner.text}

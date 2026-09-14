@@ -280,6 +280,8 @@ export type GameCard = {
   Quantity: number;
   Ordering: number;
   IsUsed: boolean;
+  /** Đang có hiệu lực trong lượt này (Joker/Changer vừa dùng ở bước thẻ, K78) - tắt khi câu được trả lời. */
+  IsUsing?: boolean;
   /**
    * `true` = lá dùng TRƯỚC câu hỏi (Joker, Changer, gói 22).
    * `false` = lá dùng TRONG lúc câu hỏi đang hiện (Skipper, Eliminator, gói 25).
