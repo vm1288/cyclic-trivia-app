@@ -617,6 +617,51 @@ export default function GameLandscapeScreen() {
   const connSeat = useRef<{ gameId: string; token: string } | null>(null);
   if (!connSeat.current && seat) connSeat.current = { gameId: seat.gameId, token: seat.token };
 
+  /** Nước đi (gói 53) của chính mình đang chờ xúc xắc tắt - xem chỗ nhận gói 53. */
+  const deferredMove = useRef<{ moverId: string; steps: number; direction: string; owesDone: boolean; isMine: boolean } | null>(null);
+
+  /**
+   * Diễn một nước đi (gói 53): đặt `pendingMove` để `BoardCanvas` cho quân đi, và nếu là
+   * quân MÌNH mà server đang chờ thì gửi `HostActionDone` khi đi xong. Tách ra vì có hai
+   * lối gọi: ngay khi gói tới, hoặc sau khi xúc xắc tắt (nước đi ép hướng, K76).
+   * Đọc state qua `snapshotRef` vì hàm này được gọi từ closure cũ (setTimeout, onPacket).
+   */
+  const startMove = (m: { moverId: string; steps: number; direction: string; owesDone: boolean; isMine: boolean }) => {
+    const moverNow = snapshotRef.current?.Players?.find((pl) => pl.Id === m.moverId);
+    setPendingMove({
+      playerId: m.moverId,
+      steps: m.steps,
+      direction: m.direction,
+      fromStepIndex: moverNow?.CurrentStepIndex ?? -1,
+    });
+    /* Dư 400ms cho máy yếu; `HOP_MS` là thời gian đi MỘT ô. */
+    const walkMs = HOP_MS * m.steps + 400;
+    setTimeout(() => {
+      /*
+       * Ô đích là GIVE IT UP → mất lượt (GAME_RULES 10a). Web nói "You lose the go." /
+       * "{name} loses the go."; app chưa từng nói gì - lượt cứ thế sang người khác (hoặc
+       * quay lại chính mình ở ván 1 người) không lời giải thích (K76).
+       */
+      const from = moverNow?.CurrentStepIndex;
+      const squares = boardRef.current?.Squares ?? [];
+      const ring = squares.filter((sq) => sq.StepIndex > 0).map((sq) => sq.StepIndex).sort((a, b) => a - b);
+      if (typeof from === 'number' && ring.length > 0) {
+        const at = ring.indexOf(from);
+        const sign = m.direction === 'anticlockwise' ? -1 : 1;
+        const dest = ring[(((at < 0 ? 0 : at) + sign * m.steps) % ring.length + ring.length) % ring.length];
+        const code = squares.find((sq) => sq.StepIndex === dest)?.SquareCode;
+        if (code === 'giveitup') {
+          setNotice(m.isMine ? t('square.giveItUpYou') : t('square.giveItUpOther', { name: moverNow?.NickName ?? '' }));
+        }
+      }
+      if (m.isMine && m.owesDone) {
+        void connection.current?.send(TYPE_ID.HostActionDone, {
+          TurnId: turnId.current || snapshotRef.current?.Game.CurrentTurnId || '',
+        });
+      }
+    }, walkMs);
+  };
+
   const { snapshot, board, connState, connection, refresh } = useGameState({
     gameId: connSeat.current?.gameId ?? null,
     token: connSeat.current?.token ?? null,
@@ -745,34 +790,27 @@ export default function GameLandscapeScreen() {
         const dir = typeof packet.direction === 'string' ? packet.direction : 'clockwise';
         if (!moverId || steps <= 0) return;
 
-        const moverNow = snapshot?.Players?.find((pl) => pl.Id === moverId);
-        setPendingMove({
-          playerId: moverId,
-          steps,
-          direction: dir,
-          fromStepIndex: moverNow?.CurrentStepIndex ?? -1,
-        });
-
         /*
          * ⚠ `IsSendDone === false` thì DIỄN XONG LÀ THÔI, không báo ngược.
          *
-         * Chỉ có MỘT chỗ gửi cờ này: nước lùi của người THUA battle
-         * (`PlayerBattleWinnerHandler`). Nước đó nằm GIỮA lúc trận đấu đang khép, và
-         * cái đẩy ván đi tiếp là `BattleNext` chứ không phải `HostActionDone` - gửi
-         * thêm là chạy lại `HostActionDoneHandler` giữa chừng. Bàn cờ web đọc đúng
-         * cờ này ở `jumpCharacterThroughPath`. Xem GAME_RULES mục 7b.
+         * Hai chỗ gửi cờ này: nước lùi của người THUA battle (`PlayerBattleWinnerHandler`
+         * - cái đẩy ván đi tiếp là `BattleNext`, GAME_RULES 7b) và nước đi ÉP HƯỚNG (ô Give It
+         * Up trong tầm, K76) khi có bàn cờ web nối - bàn cờ tự đi và tự gửi HostActionDone.
          */
         const owesDone = packet.IsSendDone !== false;
         const isMine = !!seat && moverId.toLowerCase() === seat.playerId.toLowerCase();
-        /* Dư 400ms cho máy yếu; `HOP_MS` là thời gian đi MỘT ô. */
-        const walkMs = HOP_MS * steps + 400;
-        setTimeout(() => {
-          if (isMine && owesDone) {
-            void connection.current?.send(TYPE_ID.HostActionDone, {
-              TurnId: turnId.current || snapshot?.Game.CurrentTurnId || '',
-            });
-          }
-        }, walkMs);
+        const move = { moverId, steps, direction: dir, owesDone, isMine };
+
+        /*
+         * Nước đi ÉP HƯỚNG tới ngay lúc gói 14 (server không hỏi hướng) - xúc xắc trên máy
+         * mình còn đang lăn. Diễn ngay là quân đi dưới viên xúc xắc rồi HostActionDone bay
+         * đi trước khi người chơi thấy số. Để dành, xúc xắc tắt mới đi (effect dưới).
+         */
+        if (isMine && dice) {
+          deferredMove.current = move;
+          return;
+        }
+        startMove(move);
         return;
       }
 
@@ -1636,6 +1674,10 @@ export default function GameLandscapeScreen() {
       });
     },
   });
+  const snapshotRef = useRef(snapshot);
+  snapshotRef.current = snapshot;
+  const boardRef = useRef(board);
+  boardRef.current = board;
 
   /*
    * Nối xong thì xin server phát lại flow đang treo (`HostResume`, 21) - y như
@@ -2172,6 +2214,17 @@ export default function GameLandscapeScreen() {
    */
   useEffect(() => {
     if (dice) return;
+
+    /* Nước đi ép hướng để dành lúc xúc xắc còn lăn (K76): đi bây giờ, và không có 51 -
+       server không hỏi hướng nên không chờ gói đó (lưới là HostActionDone). */
+    if (deferredMove.current) {
+      const m = deferredMove.current;
+      deferredMove.current = null;
+      owesDoneRollDice.current = false;
+      startMove(m);
+      return;
+    }
+
     if (!owesDoneRollDice.current) return;
 
     owesDoneRollDice.current = false;

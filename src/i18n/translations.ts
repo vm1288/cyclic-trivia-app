@@ -226,6 +226,9 @@ export const en = {
   'turn.firstRollYou': '{name}, it’s your first roll please',
   'turn.yourGoYou': 'So {name}, it’s your go',
   'turn.othersGo': 'It’s {name}’s go',
+  /** Ô Give It Up - web `GiveItUpLoseTheGo.cshtml` "You lose the go." / `PreviousPlayerGiveItUp` "{name} loses the go." */
+  'square.giveItUpYou': 'GIVE IT UP — you lose the go',
+  'square.giveItUpOther': 'GIVE IT UP — {name} loses the go',
   'game.noSeat': 'You do not have a seat in this game.',
   /** Loại bàn cờ chưa có nhánh vẽ - thà nói ra còn hơn để bàn cờ trắng trơn. */
   'game.boardUnsupported': 'This board type is not supported yet.',
@@ -775,6 +778,8 @@ const vi: Record<TranslationKey, string> = {
   'turn.firstRollYou': '{name}, mời bạn tung lần đầu',
   'turn.yourGoYou': 'Nào {name}, tới lượt bạn',
   'turn.othersGo': 'Tới lượt {name}',
+  'square.giveItUpYou': 'GIVE IT UP — bạn mất lượt',
+  'square.giveItUpOther': 'GIVE IT UP — {name} mất lượt',
   'game.noSeat': 'Bạn không có ghế trong ván này.',
   'game.boardUnsupported': 'Loại bàn cờ này chưa hỗ trợ.',
 

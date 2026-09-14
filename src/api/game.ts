@@ -452,6 +452,8 @@ export type GameBoard = {
     StepIndex: number;
     StepNumber: number;
     Title: string;
+    /** `giveitup` / `challenge` / `yourchoice` / `potluck` / `start` / mã chủ đề. */
+    SquareCode: string;
     /** CSS gradient. Rỗng ở ô Start. */
     SquareColor: string;
     /** Màu đặc của mặt bên (khối 3D). */
