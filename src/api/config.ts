@@ -35,7 +35,12 @@
  * Cổng lấy từ `CyclicTrivia/Properties/launchSettings.json`, profile `https`
  * (mở cả 7025 HTTPS lẫn 5276 HTTP).
  */
-export const API_BASE_URL = 'http://localhost:5276';
+/*
+ * Bản RELEASE (K90): `scripts/build-apk.ps1 -Release -ServerUrl https://…` đặt
+ * `EXPO_PUBLIC_API_URL` lúc bundle - Expo nhúng thẳng giá trị vào JS, không đọc lúc chạy.
+ * Không đặt thì là dev: localhost qua adb reverse.
+ */
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:5276';
 
 /** Bỏ cuộc sau ngần này ms - tránh nút kẹt ở trạng thái quay vòng vô hạn. */
 export const API_TIMEOUT_MS = 15000;

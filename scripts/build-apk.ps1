@@ -11,6 +11,10 @@
 #
 # KHI NAO KHONG CAN: chi sua .ts/.tsx -> dung scripts\start-metro.ps1, Metro tu nap lai.
 #
+# BAN RELEASE de gui nguoi khac test (K90) - JS bundle nam trong APK, KHONG can Metro:
+#   powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1 -Release -ServerUrl https://trivia.cyclicdigital.com -NoInstall
+#   -> dist\CricTriv-<ngay>.apk (ky bang debug keystore: cai duoc qua file, KHONG dua len Play).
+#
 # ⚠️ `npx expo run:android` BO QUA prebuild khi thu muc android/ da ton tai, nen
 # thay doi trong app.json se im lang khong co tac dung - build van bao
 # SUCCESSFUL, app van cai duoc, nhung cau hinh y nhu cu. Do la ly do script nay
@@ -20,13 +24,24 @@
 param(
     [string]$Device,
     # Chi build, khong cai len may.
-    [switch]$NoInstall
+    [switch]$NoInstall,
+    # Build release: JS bundle trong APK, khong can Metro (K90).
+    [switch]$Release,
+    # Dia chi server cho ban release, vd https://trivia.cyclicdigital.com (bat buoc khi -Release).
+    [string]$ServerUrl
 )
 
 $ErrorActionPreference = 'Stop'
 
 $AppDir = 'E:\Projects\CyclicTriviaApp'
 $Apk    = Join-Path $AppDir 'android\app\build\outputs\apk\debug\app-debug.apk'
+if ($Release) {
+    if (-not $ServerUrl) { Write-Host 'Ban release can -ServerUrl https://...' -ForegroundColor Red; exit 1 }
+    $Apk = Join-Path $AppDir 'android\app\build\outputs\apk\release\app-release.apk'
+    # Expo nhung EXPO_PUBLIC_* vao JS luc bundle (src/api/config.ts doc no).
+    $env:EXPO_PUBLIC_API_URL = $ServerUrl.TrimEnd('/')
+    Write-Host "Release -> server $env:EXPO_PUBLIC_API_URL" -ForegroundColor Cyan
+}
 
 $env:ANDROID_HOME     = 'D:\AndroidSDK'
 $env:ANDROID_SDK_ROOT = 'D:\AndroidSDK'
@@ -67,10 +82,10 @@ try {
         exit 1
     }
 
-    Write-Host "`n[3/4] Build APK debug (vai phut)..." -ForegroundColor Cyan
+    Write-Host "`n[3/4] Build APK $(if ($Release) {'RELEASE'} else {'debug'}) (vai phut)..." -ForegroundColor Cyan
     Push-Location (Join-Path $AppDir 'android')
     try {
-        .\gradlew.bat assembleDebug
+        if ($Release) { .\gradlew.bat assembleRelease } else { .\gradlew.bat assembleDebug }
         $buildOk = ($LASTEXITCODE -eq 0)
     } finally {
         Pop-Location
@@ -81,6 +96,14 @@ try {
 
     $size = [Math]::Round((Get-Item $Apk).Length / 1MB, 1)
     Write-Host "`nAPK: $Apk ($size MB)" -ForegroundColor Green
+
+    if ($Release) {
+        $dist = Join-Path $AppDir 'dist'
+        New-Item -ItemType Directory -Force $dist | Out-Null
+        $out = Join-Path $dist ("CricTriv-" + (Get-Date -Format 'yyyyMMdd-HHmm') + ".apk")
+        Copy-Item $Apk $out -Force
+        Write-Host "Ban gui di: $out" -ForegroundColor Green
+    }
 
     if ($NoInstall) {
         Write-Host 'Bo qua buoc cai (-NoInstall).' -ForegroundColor Yellow
