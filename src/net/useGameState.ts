@@ -41,6 +41,7 @@ const REFRESH_ON = new Set<number>([
   15, // ActionDone
   16, // PlayerGetNextAction - server vừa đổi việc kế tiếp của mình (vd sang RollDice)
   22, // UseCard            - số lá bài của mình vừa đổi
+  25, // UseCardInQuestion  - Skipper/Eliminator vừa trừ một lá (K83): không nạp lại thì tile vẫn sáng khi đã hết
   13, // TurnComplete      - lượt vừa khép lại
   24, // PlayerRank        - điểm vừa đổi
   33, // EnableCard        - vừa được cấp/trả lại một lá bài

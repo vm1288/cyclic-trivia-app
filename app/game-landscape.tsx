@@ -2665,6 +2665,8 @@ export default function GameLandscapeScreen() {
     if (card.ShowBeforeQuestion === true) return false;
     if (card.IsUsed || card.Quantity <= 0) return false;
     if (card.CardId?.toLowerCase() === 'eliminator' && question.usedEliminator) return false;
+    /* Đang chờ câu mới của Skipper thì chưa được bấm tiếp (K79/K83). */
+    if (question.swapping) return false;
     return true;
   };
 
