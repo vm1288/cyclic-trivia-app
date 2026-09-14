@@ -2209,12 +2209,18 @@ export default function GameLandscapeScreen() {
     if (name) setTurnBanner({ text: t('turn.othersGo', { name }), mine: false });
   }, [currentTurnPlayerId, me, players, t]);
 
-  /* Tự tắt 3,5 s kể từ lúc THẤY được (tấm vòng đua che thì đếm từ lúc tấm đó tắt). */
+  /*
+   * Tự tắt 3,5 s kể từ lúc THẤY được (tấm vòng đua che thì đếm từ lúc tấm đó tắt).
+   * Xúc xắc đang lăn thì ẨN HẲN và bỏ luôn (Tony 09-14): "It's Maya's go" chồng lên
+   * "MAYA ROLLED 5" khi người tới lượt tung ngay - xúc xắc đã nói ai đang chơi rồi.
+   */
   useEffect(() => {
-    if (!turnBanner || raceWinner) return;
+    if (!turnBanner) return;
+    if (dice) { setTurnBanner(null); return; }
+    if (raceWinner) return;
     const hide = setTimeout(() => setTurnBanner(null), 3500);
     return () => clearTimeout(hide);
-  }, [turnBanner, raceWinner]);
+  }, [turnBanner, raceWinner, dice]);
 
   /*
    * Thông báo kết quả tự tắt sau 3.5 giây - đủ đọc, và vẫn kịp nhường chỗ cho
@@ -3109,7 +3115,7 @@ export default function GameLandscapeScreen() {
               <BattleDiceOverlay state={battleDice} meId={seat?.playerId ?? ''} />
             ) : null}
 
-            {turnBanner && !raceWinner && !gameOver ? (
+            {turnBanner && !raceWinner && !dice && !gameOver ? (
               <View style={[styles.turnBanner, turnBanner.mine && styles.turnBannerMine]} pointerEvents="none">
                 <Text style={[styles.turnBannerText, turnBanner.mine && styles.turnBannerTextMine]} numberOfLines={2}>
                   {turnBanner.text}
