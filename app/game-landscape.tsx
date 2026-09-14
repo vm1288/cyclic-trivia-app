@@ -203,6 +203,8 @@ type ActiveQuestion = {
    * tự reset theo.
    */
   usedEliminator: boolean;
+  /** Vừa dùng Skipper, đang chờ gói 25 mang câu mới - khoá khung (K79). */
+  swapping?: boolean;
   /**
    * Số thứ tự câu trong trận battle (0,1,2 là ba câu chính; từ 3 trở đi là
    * sudden death). Chỉ để vẽ nhãn; `undefined` với hai loại câu kia.
@@ -2676,6 +2678,15 @@ export default function GameLandscapeScreen() {
     });
     if (!ok) return;
 
+    /*
+     * Skipper: KHOÁ khung câu hỏi cho tới khi gói 25 mang câu mới về. Hộp xác nhận đóng
+     * đúng chỗ ngón tay đang đặt trên đáp án → cú chạm kế lọt vào câu CŨ (Tony 09-14, K79).
+     * Lưới 6 s: server không đổi câu thì mở khoá lại, người chơi vẫn trả lời được câu cũ.
+     */
+    if (card.CardId?.toLowerCase() === 'skipper') {
+      setQuestion((prev) => (prev ? { ...prev, swapping: true } : prev));
+      setTimeout(() => setQuestion((prev) => (prev?.swapping ? { ...prev, swapping: false } : prev)), 6000);
+    }
     void connection.current?.send(TYPE_ID.UseCardInQuestion, {
       selectedCardId: card.Id,
       countdown: Math.max(0, Math.round(secondsLeft)),
@@ -3165,6 +3176,7 @@ export default function GameLandscapeScreen() {
                 }
                 onAnswer={answerQuestion}
                 onTimeout={timeoutQuestion}
+                locked={question.swapping === true}
               />
             ) : null}
 

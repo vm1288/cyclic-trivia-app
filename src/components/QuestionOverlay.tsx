@@ -127,6 +127,7 @@ export function QuestionOverlay({
   banner,
   onAnswer,
   onTimeout,
+  locked,
 }: {
   question: GameQuestion;
   /**
@@ -143,6 +144,11 @@ export function QuestionOverlay({
   banner?: string | null;
   onAnswer: (answerId: string, answerContent: string) => void;
   onTimeout: () => void;
+  /**
+   * Khoá đáp án + SUBMIT trong lúc chờ câu mới (Skipper, K79). Hộp xác nhận của thẻ
+   * đóng lại đúng chỗ ngón tay đang đặt trên đáp án - không khoá là gửi nhầm câu cũ.
+   */
+  locked?: boolean;
 }) {
   const t = useT();
 
@@ -190,13 +196,13 @@ export function QuestionOverlay({
    * lỗi đỏ. Effect chạy SAU render nên an toàn.
    */
   useEffect(() => {
-    if (left > 0 || sent.current) return;
+    if (left > 0 || sent.current || locked) return;
     sent.current = true;
     timeout.current();
-  }, [left]);
+  }, [left, locked]);
 
   const submit = () => {
-    if (sent.current || !chosen) return;
+    if (sent.current || !chosen || locked) return;
     const answer = question.Answers.find((a) => a.Id === chosen);
     if (!answer) return;
     sent.current = true;
@@ -205,7 +211,7 @@ export function QuestionOverlay({
 
   const urgent = left <= 5;
   const clockColor = urgent ? '#FF6B78' : boardColors.purple;
-  const canSubmit = !!chosen && !sent.current;
+  const canSubmit = !!chosen && !sent.current && !locked;
 
   /*
    * Hai ô nhãn LUÔN là chủ đề, không phải chữ "QUESTION" chết cứng:
@@ -288,6 +294,7 @@ export function QuestionOverlay({
             ) : null}
 
             <Text style={styles.questionText}>{question.Title}</Text>
+            {locked ? <Text style={styles.swapping}>{t('question.swapping')}</Text> : null}
           </View>
 
           <View style={styles.divider} />
@@ -300,14 +307,14 @@ export function QuestionOverlay({
               return (
                 <Pressable
                   key={answer.Id}
-                  onPress={() => !sent.current && setChosen(answer.Id)}
-                  disabled={sent.current}
+                  onPress={() => !sent.current && !locked && setChosen(answer.Id)}
+                  disabled={sent.current || locked}
                   style={({ pressed }) => [
                     styles.option,
                     { borderColor: picked ? PICKED : ANSWER_BORDER },
-                    // Đã gửi rồi thì mờ hết đi, để rõ là không bấm được nữa.
-                    sent.current && !picked && styles.optionDim,
-                    pressed && !sent.current && styles.pressedSm,
+                    // Đã gửi rồi (hoặc đang chờ câu mới) thì mờ hết đi, để rõ là không bấm được nữa.
+                    (sent.current || locked) && !picked && styles.optionDim,
+                    pressed && !sent.current && !locked && styles.pressedSm,
                   ]}
                 >
                   <LinearGradient
@@ -351,6 +358,7 @@ export function QuestionOverlay({
 }
 
 const styles = StyleSheet.create({
+  swapping: { marginTop: 12, fontSize: 13, fontWeight: '700', letterSpacing: 0.4, color: '#35B7FF' },
   /*
    * Phủ kín VÙNG BÀN CỜ (component này là con của `boardCol`), và CHẶN chạm
    * xuống dưới.

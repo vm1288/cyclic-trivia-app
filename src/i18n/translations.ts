@@ -236,6 +236,8 @@ export const en = {
   /** Nhãn góc trên màn câu hỏi của vòng đua "ai đi trước". */
   'question.race': 'WHO GOES FIRST?',
   'question.submit': 'SUBMIT',
+  /** Vừa dùng Skipper, đang chờ server bốc câu khác - khoá đáp án kẻo gửi nhầm câu cũ (K79). */
+  'question.swapping': 'Skipper played — loading another question…',
 
   'cards.title': 'YOUR CARDS',
   'cards.prompt': 'Use a card before the question, or skip.',
@@ -785,6 +787,7 @@ const vi: Record<TranslationKey, string> = {
 
   'question.race': 'AI ĐI TRƯỚC?',
   'question.submit': 'GỬI',
+  'question.swapping': 'Đã dùng Skipper — đang lấy câu khác…',
 
   'cards.title': 'THẺ BÀI',
   'cards.prompt': 'Dùng một thẻ trước khi trả lời, hoặc bỏ qua.',
