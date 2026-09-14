@@ -24,6 +24,7 @@ export function GameClock({
   serverNow,
   fetchedAt,
   rollsLeft,
+  started,
 }: {
   /** Chiều cao thanh trạng thái (`insets.top`); dưới 18 thì không vẽ. */
   height: number;
@@ -35,6 +36,8 @@ export function GameClock({
   fetchedAt: number;
   /** Leaderboard Challenge (0 phút): số lượt tung còn lại. */
   rollsLeft: number | null;
+  /** Ván đã bắt đầu chơi (có người thắng vòng đua) chưa - chưa thì đứng ở đủ giờ (K88). */
+  started: boolean;
 }) {
   const t = useT();
   const [, tick] = useState(0);
@@ -51,7 +54,8 @@ export function GameClock({
   if (durationMinutes > 0 && startTime && serverNow) {
     const start = Date.parse(startTime);
     const now = pausedAt ? Date.parse(pausedAt) : Date.parse(serverNow) + (Date.now() - fetchedAt);
-    const left = Math.max(0, Math.round(durationMinutes * 60 - (now - start) / 1000));
+    /* Chưa có người thắng vòng đua: server chưa đặt StartTime của ván - đứng ở đủ giờ. */
+    const left = started ? Math.max(0, Math.round(durationMinutes * 60 - (now - start) / 1000)) : durationMinutes * 60;
     const m = Math.floor(left / 60);
     const s = left % 60;
     label = `${m}:${s < 10 ? '0' : ''}${s}`;

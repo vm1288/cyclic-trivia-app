@@ -177,8 +177,13 @@ export default function SeatScreen() {
             autoComplete="off"
             spellCheck={false}
             maxLength={NICKNAME_MAX}
-            returnKeyType="go"
-            onSubmitEditing={submit}
+            /*
+             * Phím Enter chỉ ĐÓNG bàn phím, không nhận ghế (Tony 09-14, K88): còn phải chọn
+             * giới tính / nhân vật, và gõ xong muốn sửa tên thì Enter đã gửi mất - nút I'M READY
+             * là nơi duy nhất nhận ghế.
+             */
+            returnKeyType="done"
+            blurOnSubmit
             editable={!busy}
           />
 

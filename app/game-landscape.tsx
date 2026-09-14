@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ackFlow,
   CASE_ACTION,
+  GAME_SETUP,
   categoryChain,
   characterImageUrl,
   EMPTY_GUID,
@@ -3687,6 +3688,7 @@ export default function GameLandscapeScreen() {
           serverNow={snapshot.Game.Timer?.ServerNow ?? null}
           fetchedAt={snapshot.fetchedAt ?? Date.now()}
           rollsLeft={snapshot.Game.TotalRollDice > 0 ? Math.max(0, snapshot.Game.TotalRollDice - snapshot.Game.CurrentCountRollDice) : null}
+          started={snapshot.Game.GameSetup === GAME_SETUP.Started}
         />
       ) : null}
 
