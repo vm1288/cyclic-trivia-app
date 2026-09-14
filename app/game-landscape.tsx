@@ -1217,10 +1217,22 @@ export default function GameLandscapeScreen() {
        * tắt như mọi con xúc xắc khác; không nợ server gói nào.
        */
       if (packet.typeID === TYPE_ID.DiceRolled) {
-        if (packet.PlayerId === seat?.playerId) return;
         const value = typeof packet.DiceOne === 'number' ? packet.DiceOne : 0;
         const name = typeof packet.NickName === 'string' ? packet.NickName : '';
         if (value <= 0) return;
+        /*
+         * Máy của người tung: gói này là NGUỒN SỐ CHÍNH (K77). Trước đây bỏ qua và đọc
+         * `Game.DiceOne` từ state - effect chạy ngay với snapshot CŨ còn số của lượt trước
+         * (Tony 09-14: hai lần "6", lần sau server tung 5, quân đi 5). Còn đang chờ số thì
+         * lấy ở đây; xúc xắc đã tắt (gói tới muộn) thì thôi.
+         */
+        if (packet.PlayerId === seat?.playerId) {
+          if (waitingDice.current) {
+            waitingDice.current = false;
+            setDice({ value });
+          }
+          return;
+        }
         setDice({ value: null, rolledBy: name });
         setTimeout(() => setDice({ value, rolledBy: name }), 1200);
         return;
@@ -2137,6 +2149,7 @@ export default function GameLandscapeScreen() {
      * lại 500ms sau chắc chắn đã thấy số mới.
      */
     waitingDice.current = true;
+    snapshotAtRoll.current = snapshotRef.current;
     setDice({ value: null });
 
     /*
@@ -2156,9 +2169,16 @@ export default function GameLandscapeScreen() {
    * `DiceOne` là một trường của cả ván nên nó vẫn giữ số của lượt TRƯỚC cho tới
    * khi server ghi số mới. Không chờ gói 52 thì xúc xắc dừng ngay ở số cũ.
    */
+  /*
+   * Dự phòng khi gói 92 rơi: đọc `Game.DiceOne` từ state - nhưng CHỈ từ một lần nạp SAU
+   * cú bấm (`snapshot` đổi đối tượng). Snapshot đang có lúc bấm còn mang số của lượt
+   * trước; cùng số hai lần liền (6 rồi 6) không phân biệt được bằng giá trị.
+   */
+  const snapshotAtRoll = useRef<typeof snapshot>(null);
   useEffect(() => {
     if (!dice || dice.value != null) return;
     if (!waitingDice.current) return;
+    if (snapshot === snapshotAtRoll.current) return;
 
     const rolled = snapshot?.Game.DiceOne ?? 0;
     if (rolled > 0) {
