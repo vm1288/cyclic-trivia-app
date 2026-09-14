@@ -249,7 +249,12 @@ export const CARD_STYLES = {
 
 export type CardKey = keyof typeof CARD_STYLES;
 
-export const CARD_ORDER: CardKey[] = ['Joker', 'Skipper', 'Eliminator', 'Changer'];
+/*
+ * Hàng trên = hai lá dùng TRƯỚC câu hỏi (Joker, Changer), hàng dưới = hai lá dùng TRONG câu hỏi
+ * (Skipper, Eliminator) - từng cặp đi chung, Tony chốt 2026-09-14 (K84). Trước đó xếp theo thứ tự
+ * lá của server, Skipper và Changer đứng chéo nhau.
+ */
+export const CARD_ORDER: CardKey[] = ['Joker', 'Changer', 'Skipper', 'Eliminator'];
 
 export const HandTile = ({
   cardKey,
