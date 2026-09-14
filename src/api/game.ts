@@ -323,6 +323,8 @@ export type GamePlayer = {
 };
 
 export type GameSnapshot = {
+  /** `Date.now()` lúc app nhận state - cho đồng hồ ván (K87). */
+  fetchedAt?: number;
   Game: {
     Id: string;
     HostId: string;
@@ -381,6 +383,8 @@ export type GameSnapshot = {
      */
     DiceOne: number;
     DiceTwo: number;
+    /** Đồng hồ ván (K87): hết giờ = StartTime + DurationMinutes; PausedAt khác null = đang dừng; ServerNow để không tin giờ máy. */
+    Timer?: { StartTime: string; PausedAt: string | null; ServerNow: string };
   };
   /**
    * Server tạo sẵn ĐỦ số ghế ngay lúc tạo ván, với nickname mặc định

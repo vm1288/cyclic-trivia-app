@@ -12,7 +12,7 @@ import { useT } from '../i18n/I18nProvider';
  * ở cột phải. Trước đây chỉ có một dòng `notice` nhỏ trên đỉnh, hiện 2,5 s trong lúc tấm
  * kết quả câu hỏi còn che - Tony không thấy.
  */
-export function CardEarnedOverlay({ card, ms, onDone }: { card: CardKey; ms: number; onDone: () => void }) {
+export function CardEarnedOverlay({ card, name, ms, onDone }: { card: CardKey; name: string; ms: number; onDone: () => void }) {
   const t = useT();
   const style = CARD_STYLES[card];
   const Icon = style.Icon;
@@ -42,11 +42,11 @@ export function CardEarnedOverlay({ card, ms, onDone }: { card: CardKey; ms: num
         />
         <Text style={styles.stars}>★ ★ ★ ★ ★</Text>
         <Text style={styles.title}>{t('cards.earnedTitle')}</Text>
+        <Text style={styles.sub}>{t('cards.earnedBody', { name })}</Text>
         <View style={styles.glyph}>
           <Icon size={44} />
         </View>
         <Text style={[styles.name, { color: style.accent }]}>{t(`game.card.${card}` as 'game.card.Joker').toUpperCase()}</Text>
-        <Text style={styles.sub}>{t('cards.earnedSub')}</Text>
       </Animated.View>
     </View>
   );
@@ -54,11 +54,11 @@ export function CardEarnedOverlay({ card, ms, onDone }: { card: CardKey; ms: num
 
 const styles = StyleSheet.create({
   root: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', zIndex: 40 },
-  card: { width: 250, paddingVertical: 18, paddingHorizontal: 20, alignItems: 'center', borderRadius: 20 },
+  card: { width: 300, paddingVertical: 18, paddingHorizontal: 22, alignItems: 'center', borderRadius: 20 },
   fill: { borderRadius: 20, borderWidth: 1.6 },
   stars: { color: '#FFC61E', fontSize: 16, letterSpacing: 4, marginBottom: 6 },
   title: { color: '#FFFFFF', fontSize: 15, fontWeight: '800', letterSpacing: 1.2 },
   glyph: { marginTop: 10, marginBottom: 8 },
   name: { fontSize: 22, fontWeight: '900', letterSpacing: 1.6 },
-  sub: { marginTop: 4, color: 'rgba(198,212,240,0.8)', fontSize: 12, fontWeight: '600', letterSpacing: 0.4 },
+  sub: { marginTop: 6, color: 'rgba(198,212,240,0.85)', fontSize: 13, lineHeight: 18, fontWeight: '600', textAlign: 'center' },
 });

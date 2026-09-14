@@ -44,6 +44,7 @@ import { DiceRollOverlay } from '../src/components/DiceRollOverlay';
 import { MoveDirectionOverlay } from '../src/components/MoveDirectionOverlay';
 import { FlyingReward } from '../src/components/FlyingReward';
 import { CardEarnedOverlay } from '../src/components/CardEarnedOverlay';
+import { GameClock } from '../src/components/GameClock';
 import { QuestionOverlay } from '../src/components/QuestionOverlay';
 import { BattleOverlay } from '../src/components/BattleOverlay';
 import { BattleResultOverlay } from '../src/components/BattleResultOverlay';
@@ -3675,7 +3676,19 @@ export default function GameLandscapeScreen() {
         Vật bay cũng ở GỐC màn hình như xúc xắc: nó đi từ khung bàn cờ (cột
         trái) sang cột phải, nên phải nằm ngoài cả hai.
       */}
-      {earnedCard ? <CardEarnedOverlay card={earnedCard} ms={2600} onDone={earnedCardDone} /> : null}
+      {earnedCard ? <CardEarnedOverlay card={earnedCard} name={me?.NickName ?? ''} ms={3200} onDone={earnedCardDone} /> : null}
+
+      {snapshot ? (
+        <GameClock
+          height={insets.top}
+          durationMinutes={snapshot.Game.DurationMinutes}
+          startTime={snapshot.Game.Timer?.StartTime ?? null}
+          pausedAt={snapshot.Game.Timer?.PausedAt ?? null}
+          serverNow={snapshot.Game.Timer?.ServerNow ?? null}
+          fetchedAt={snapshot.fetchedAt ?? Date.now()}
+          rollsLeft={snapshot.Game.TotalRollDice > 0 ? Math.max(0, snapshot.Game.TotalRollDice - snapshot.Game.CurrentCountRollDice) : null}
+        />
+      ) : null}
 
       {flying && spot.current.board ? (
         <FlyingReward
