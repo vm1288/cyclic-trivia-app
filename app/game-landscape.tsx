@@ -22,6 +22,7 @@ import {
   getChatHistory,
   pauseGame,
   endGame,
+  raceCountdownActive,
   resumeGame,
   startAgain,
   submitAnswer,
@@ -53,6 +54,7 @@ import { BattleDiceOverlay, type BattleDiceState } from '../src/components/Battl
 import { BattleVideoOverlay } from '../src/components/BattleVideoOverlay';
 import { TurnResultOverlay, type TurnResult } from '../src/components/TurnResultOverlay';
 import { RaceWinnerOverlay } from '../src/components/RaceWinnerOverlay';
+import { RaceCountdownOverlay } from '../src/components/RaceCountdownOverlay';
 import { CurveBallOverlay } from '../src/components/CurveBallOverlay';
 import { GameOverOverlay } from '../src/components/GameOverOverlay';
 import { PauseOverlay } from '../src/components/PauseOverlay';
@@ -343,6 +345,21 @@ export default function GameLandscapeScreen() {
    * hoặc gói `TimeoutQuestion` khi có người chốt câu trước mình.
    */
   const [turnResult, setTurnResult] = useState<TurnResult | null>(null);
+
+  /**
+   * Kết quả của NGƯỜI KHÁC (gói 93, K94) đang chờ tới lượt hiện - MỘT tấm một lúc
+   * (K78): tấm của mình / vòng đua / thẻ thưởng đang hiện thì xếp hàng, tắt rồi mới
+   * lên. Chỉ giữ tấm mới nhất; hai người trả lời đúng cùng câu là không có.
+   */
+  const pendingOtherResult = useRef<TurnResult | null>(null);
+
+  /**
+   * Người tới lượt vừa SAI / HẾT GIỜ (gói 93) -> nhãn trên câu tranh trả lời sắp tới:
+   * "TONY GOT IT WRONG — ANSWER NOW!" (web: `WrongAnswer.cshtml` trên bàn cờ). Không
+   * hiện tấm riêng vì câu 16 tới ngay sau (<1 s) và đè lên; nhãn ở ngay câu là đủ.
+   * Gói 16 giao việc khác thì xoá (xem chỗ dọn khung ở PlayerGetNextAction).
+   */
+  const [stealBanner, setStealBanner] = useState<string | null>(null);
 
   /**
    * ẨN BÀN CỜ (ca **UI-1**).
@@ -881,6 +898,7 @@ export default function GameLandscapeScreen() {
         setChallenge(null);
         setDirection(null);
         setCardStep(null);
+        if (packet.Action !== CASE_ACTION.OtherPlayersAnswering) setStealBanner(null);
 
         /*
          * Khung CÂU HỎI cũng phải dọn khi gói 16 giao một việc KHÔNG PHẢI câu hỏi
@@ -1679,6 +1697,48 @@ export default function GameLandscapeScreen() {
         const card = typeof packet.CardId === 'string' ? packet.CardId : '';
         if (!name || !card) return;
         setNotice(t('cards.usedBy', { name, card: card.toUpperCase() }));
+        return;
+      }
+
+      /*
+       * Người KHÁC vừa trả lời câu lượt thường (gói 93, K94 - Tony: "người không tới
+       * lượt phải thấy người kia trả lời đúng/sai"). Server không gửi cho chính người
+       * trả lời; lọc lại một lần nữa cho chắc vì tấm của mình đi đường HTTP.
+       *
+       *   đúng                 -> tấm "X got it right! +N runs" (sao ★ nếu là người tới lượt)
+       *   người tới lượt sai   -> nhãn trên câu tranh trả lời, không tấm riêng (xem `stealBanner`)
+       *   người tranh mà sai   -> server không gửi (web cũng chỉ báo riêng cho họ)
+       *
+       * Đang hiện tấm 'late' ("X got it right first") -> THAY bằng tấm này (có điểm),
+       * không xếp hàng: gói 45 tới trước gói 93 vài chục mili giây, hai tấm nối nhau
+       * 7 giây cho một sự kiện là thừa.
+       */
+      if (packet.typeID === TYPE_ID.TurnAnswerResult) {
+        const pid = typeof packet.PlayerId === 'string' ? packet.PlayerId : '';
+        if (!pid || (seat && same(pid, seat.playerId))) return;
+        const name = typeof packet.NickName === 'string' ? packet.NickName : '';
+        if (packet.IsCorrect !== true) {
+          if (packet.IsMainPlayer === true && name) {
+            setStealBanner(
+              t(packet.IsTimeout === true ? 'question.stealTimeout' : 'question.stealWrong', { name }),
+            );
+          }
+          return;
+        }
+        const result: TurnResult = {
+          kind: 'correct',
+          point: typeof packet.Point === 'number' ? packet.Point : 0,
+          earnedStar: packet.IsMainPlayer === true,
+          answerText: typeof packet.Answer === 'string' ? packet.Answer : '',
+          explain: typeof packet.AnswerExplain === 'string' ? packet.AnswerExplain : '',
+          name,
+        };
+        const showing = turnResultRef.current;
+        if (showing ? showing.kind !== 'late' : raceWinnerRef.current || earnedCardRef.current) {
+          pendingOtherResult.current = result;
+          return;
+        }
+        setTurnResult(result);
         return;
       }
 
@@ -2534,6 +2594,23 @@ export default function GameLandscapeScreen() {
   }, []);
   const turnResultRef = useRef(turnResult);
   turnResultRef.current = turnResult;
+  const raceWinnerRef = useRef(raceWinner);
+  raceWinnerRef.current = raceWinner;
+  const earnedCardRef = useRef(earnedCard);
+  earnedCardRef.current = earnedCard;
+
+  /*
+   * Tấm kết quả của NGƯỜI KHÁC lên khi chỗ giữa bàn cờ trống (K78). Xếp SAU tấm của
+   * mình nhưng TRƯỚC lá thưởng: effect này chạy cùng lượt với effect `pendingEarnedCard`
+   * ở trên; setTurnResult ở đây làm effect kia thấy `turnResult` khác null ở lượt sau
+   * -> lá thưởng đợi thêm 3,5 giây, đúng thứ tự "kết quả rồi mới thưởng".
+   */
+  useEffect(() => {
+    if (turnResult || raceWinner || earnedCard || !pendingOtherResult.current) return;
+    const next = pendingOtherResult.current;
+    pendingOtherResult.current = null;
+    setTurnResult(next);
+  }, [turnResult, raceWinner, earnedCard]);
 
   const earnedCardDone = useCallback(() => {
     const card = earnedCard;
@@ -3133,6 +3210,19 @@ export default function GameLandscapeScreen() {
               <RaceWinnerOverlay name={raceWinner.name} isMe={raceWinner.isMe} />
             ) : null}
 
+            {/*
+              "WHO GOES FIRST?" đếm tới mốc SERVER (K93) - từ lúc chủ phòng bấm START tới
+              lúc câu 67 tới. `question` lên là tấm này xuống, kể cả khi state chưa kịp
+              nạp lại `CurrentAction = QuestionForTurn`.
+            */}
+            {snapshot && !question && raceCountdownActive(snapshot.Game) && snapshot.Game.Timer?.RaceCountdownEndsAt ? (
+              <RaceCountdownOverlay
+                endsAt={snapshot.Game.Timer.RaceCountdownEndsAt}
+                serverNow={snapshot.Game.Timer.ServerNow}
+                fetchedAt={snapshot.fetchedAt ?? Date.now()}
+              />
+            ) : null}
+
             {curveBall ? (
               <CurveBallOverlay
                 boardGameId={boardGameId}
@@ -3151,8 +3241,8 @@ export default function GameLandscapeScreen() {
             {turnResult ? (
               <TurnResultOverlay
                 result={turnResult}
-                /* Bản web luôn nêu TÊN người vừa trả lời, không nói trống không. */
-                name={me?.NickName ?? ''}
+                /* Bản web luôn nêu TÊN người vừa trả lời, không nói trống không. Gói 93 mang tên người khác. */
+                name={turnResult.name ?? me?.NickName ?? ''}
                 unit={pointUnit}
                 /*
                  * Bàn cờ còn hiện thì khung phải gọn - nó đang nằm ĐÈ lên bàn cờ.
@@ -3213,6 +3303,11 @@ export default function GameLandscapeScreen() {
                  * người chơi không biết đang ở đâu. Từ câu thứ 4 trở đi là sudden
                  * death - luật đổi hẳn thành "ai đúng TRƯỚC", phải nói ra.
                  */
+                /*
+                 * Tranh trả lời (K94): nhãn "TONY GOT IT WRONG — ANSWER NOW!" thay chỗ chủ đề gốc,
+                 * như bàn cờ web hiện `WrongAnswer.cshtml` lúc điện thoại nhận câu. Không có gói 93
+                 * (vào lại giữa chừng) thì để trống như cũ.
+                 */
                 banner={
                   question.kind === 'race'
                     ? t('question.race')
@@ -3220,7 +3315,9 @@ export default function GameLandscapeScreen() {
                       ? (question.battleIndex ?? 0) >= 3
                         ? t('battle.tieBreaker')
                         : t('battle.question', { index: String((question.battleIndex ?? 0) + 1) })
-                      : null
+                      : question.kind === 'turn' && !question.isQuestionOwner
+                        ? stealBanner
+                        : null
                 }
                 onAnswer={answerQuestion}
                 onTimeout={timeoutQuestion}

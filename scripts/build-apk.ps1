@@ -12,7 +12,7 @@
 # KHI NAO KHONG CAN: chi sua .ts/.tsx -> dung scripts\start-metro.ps1, Metro tu nap lai.
 #
 # BAN RELEASE de gui nguoi khac test (K90) - JS bundle nam trong APK, KHONG can Metro:
-#   powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1 -Release -ServerUrl https://trivia.cyclicdigital.com -NoInstall
+#   powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1 -Release -ServerUrl https://trivia-asia.cyclicdigital.com -NoInstall
 #   -> dist\CricTriv-<ngay>.apk (ky bang debug keystore: cai duoc qua file, KHONG dua len Play).
 #
 # ⚠️ `npx expo run:android` BO QUA prebuild khi thu muc android/ da ton tai, nen
@@ -27,7 +27,7 @@ param(
     [switch]$NoInstall,
     # Build release: JS bundle trong APK, khong can Metro (K90).
     [switch]$Release,
-    # Dia chi server cho ban release, vd https://trivia.cyclicdigital.com (bat buoc khi -Release).
+    # Dia chi server cho ban release, vd https://trivia-asia.cyclicdigital.com (bat buoc khi -Release).
     [string]$ServerUrl
 )
 

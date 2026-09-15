@@ -383,8 +383,17 @@ export type GameSnapshot = {
      */
     DiceOne: number;
     DiceTwo: number;
-    /** Đồng hồ ván (K87): hết giờ = StartTime + DurationMinutes; PausedAt khác null = đang dừng; ServerNow để không tin giờ máy. */
-    Timer?: { StartTime: string; PausedAt: string | null; ServerNow: string };
+    /**
+     * Đồng hồ ván (K87): hết giờ = StartTime + DurationMinutes; PausedAt khác null = đang dừng; ServerNow để không tin giờ máy.
+     * `RaceCountdownEndsAt` (K93): mốc server nổ vòng đua "ai đi trước" - có từ lúc chủ phòng bấm START,
+     * sống 2 phút; mọi máy đếm ngược tới cùng mốc này (xem `raceCountdownActive`).
+     */
+    Timer?: {
+      StartTime: string;
+      PausedAt: string | null;
+      ServerNow: string;
+      RaceCountdownEndsAt?: string | null;
+    };
   };
   /**
    * Server tạo sẵn ĐỦ số ghế ngay lúc tạo ván, với nickname mặc định
@@ -551,6 +560,22 @@ export const GAME_SETUP = { Started: 0, Instruction: 1, SetNickname: 2 } as cons
  */
 export function isGameLive(game: { CurrentAction: number; GameSetup: number }): boolean {
   return game.CurrentAction === CASE_ACTION.QuestionForTurn || game.GameSetup === GAME_SETUP.Started;
+}
+
+/**
+ * K93: chủ phòng đã bấm START, server đang đếm tới lúc nổ vòng đua - ván CHƯA live
+ * nhưng mọi máy đã phải đứng ở bàn cờ với kết nối sống, để câu 67 tới cùng lúc.
+ *
+ * Mốc do server ghi (`RaceCountdown-{gameId}`, sống 2 phút) và phát trong state;
+ * app không tự đếm từ lúc nhận gói 50 nữa - đó chính là nguồn lệch cũ.
+ */
+export function raceCountdownActive(game: GameSnapshot['Game']): boolean {
+  return !!game.Timer?.RaceCountdownEndsAt && !isGameLive(game);
+}
+
+/** Ván đã bắt đầu HOẶC đang đếm ngược vòng đua - màn nào cũng nên ở bàn cờ. */
+export function shouldBeOnBoard(game: GameSnapshot['Game']): boolean {
+  return isGameLive(game) || raceCountdownActive(game);
 }
 
 /** `CaseAction` ở server (`Hubs/PacketType.cs`). Chỉ khai báo cái app đang dùng. */
@@ -759,33 +784,21 @@ export function ensureRoomCode(gameId: string, token: string): Promise<ApiResult
 }
 
 /**
- * BƯỚC 1 của nút START GAME: đẩy mọi điện thoại sang màn chờ.
+ * Nút START GAME: đẩy mọi điện thoại sang bàn cờ và hẹn server nổ vòng đua.
  *
- * ĐỪNG gộp hai bước này lại. Giữa chúng là 10 giây đếm ngược "WHO GOES FIRST?"
- * mà bản web cũng có - và khoảng nghỉ đó không phải trang trí: nó là lúc điện
- * thoại người chơi báo đã nhận `PlayerStart`, mà server lại cần cờ đó mới ghi
- * được câu hỏi vòng đua vào flow của họ. Gọi liền tay hai lệnh thì người mất
- * kết nối đúng lúc đó sẽ không lấy lại được câu hỏi.
+ * K93: chỉ còn MỘT lời gọi. Trước đây app chủ phòng đếm 10 giây rồi gọi thêm
+ * `/start`; nay `/ready` arm watchdog và server tự nổ đúng `countdownEndsAt` -
+ * mọi máy đếm tới cùng mốc đó, câu vòng đua tới cả phòng một lượt. 10 giây vẫn
+ * là lúc điện thoại ack `PlayerStart`, server cần cờ đó mới ghi được câu hỏi
+ * vào flow - đừng rút ngắn ở server.
+ *
+ * `/public/game/{id}/start` vẫn tồn tại ở server cho APK cũ, app không gọi nữa.
  */
-export function markPlayersReady(gameId: string, token: string): Promise<ApiResult<{}>> {
-  return postForm(`/public/game/${gameId}/ready`, {}, token);
-}
-
-/**
- * BƯỚC 2: nổ vòng đua "ai đi trước".
- *
- * Từ đây server tự chạy hết ván, không cần bàn cờ - người trả lời đúng đầu tiên
- * làm server sắp lại thứ tự lượt rồi tự phát `GameStart` và `WhosTurn`. App
- * KHÔNG cần gửi hai cái đó (xem GAME_RULES mục 8).
- *
- * `AlreadyRunning: true` = vòng đua đã chạy sẵn, không phải lỗi - coi như thành
- * công và đi tiếp.
- */
-export function startGame(
+export function markPlayersReady(
   gameId: string,
   token: string,
-): Promise<ApiResult<{ AlreadyRunning?: boolean }>> {
-  return postForm(`/public/game/${gameId}/start`, {}, token);
+): Promise<ApiResult<{ countdownEndsAt?: string | null; serverNow?: string }>> {
+  return postForm(`/public/game/${gameId}/ready`, {}, token);
 }
 
 /* ─── Ack flow ─────────────────────────────────────────────────────────────── */

@@ -43,8 +43,8 @@ import { text } from '../theme/colors';
  * sai.
  */
 
-export type TurnResult =
-  /** Mình trả lời đúng. */
+type TurnResultKind =
+  /** Mình (hoặc người khác - xem `name`) trả lời đúng. */
   | {
       kind: 'correct';
       point: number;
@@ -74,6 +74,12 @@ export type TurnResult =
   | { kind: 'timeout' }
   /** Có người chốt câu trước mình. */
   | { kind: 'late'; by?: string };
+
+/**
+ * `name`: tên người trả lời khi tấm là của NGƯỜI KHÁC (gói 93, K94). Bỏ trống =
+ * tấm của chính máy này, màn bàn cờ điền tên mình.
+ */
+export type TurnResult = TurnResultKind & { name?: string };
 
 export function TurnResultOverlay({
   result,

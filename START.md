@@ -52,7 +52,7 @@ Get-Process -Name CyclicTrivia -ErrorAction SilentlyContinue | Stop-Process -For
 | `.ts` / `.tsx` | không cần build, Metro tự nạp |
 | `app.json`, thêm native module | `scripts\build-apk.ps1` (nó chạy prebuild) |
 | thêm/bớt nhân vật | `CyclicTrivia\scripts\build-characters.ps1`, sửa `wwwroot\character-sets.json`, **restart server** |
-| **gửi cho người khác test** (không Metro, trỏ server thật) | `scripts\build-apk.ps1 -Release -ServerUrl https://trivia.cyclicdigital.com -NoInstall` → `dist\CricTriv-<ngày>.apk`. JS nằm trong APK; ký bằng debug keystore nên cài qua file được, **không** đưa lên Play (K90) |
+| **gửi cho người khác test** (không Metro, trỏ server thật) | `scripts\build-apk.ps1 -Release -ServerUrl https://trivia-asia.cyclicdigital.com -NoInstall` → `dist\CricTriv-<ngày>.apk`. JS nằm trong APK; ký bằng debug keystore nên cài qua file được, **không** đưa lên Play (K90) |
 
 > ⚠️ Sửa **animation** xong thì force-stop app rồi mở lại. Fast refresh không
 > nạp lại vòng animation đang chạy, đo sẽ ra kết quả sai hướng.

@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ackFlow, isGameLive } from '../src/api/game';
+import { ackFlow, shouldBeOnBoard } from '../src/api/game';
 import { TYPE_ID } from '../src/net/gameConnection';
 import { useGameState } from '../src/net/useGameState';
 import { lobbyColors, PlayerRow } from '../src/components/LobbyParts';
@@ -90,11 +90,19 @@ export default function WaitingScreen() {
   const joined = seats.filter((p) => p.IsSetupNickName).length;
   const total = snapshot?.Game.NumberOfPlayers ?? seats.length;
 
-  /* Phép thử "ván đã vào cuộc chưa" nằm ở `isGameLive` - màn Home dùng chung. */
-  const live = snapshot ? isGameLive(snapshot.Game) : false;
+  /*
+   * Phép thử "phải ở bàn cờ chưa" nằm ở `shouldBeOnBoard` - màn Home dùng chung.
+   *
+   * K93: KHÔNG đợi vòng đua nổ mới đi. Chủ phòng bấm START là state có
+   * `Timer.RaceCountdownEndsAt` (gói 50 làm nạp lại state) -> sang bàn cờ NGAY,
+   * ở đó tấm "WHO GOES FIRST?" đếm tới mốc server. Nhờ vậy lúc câu 67 phát, mọi
+   * máy đã đứng sẵn với kết nối sống và nhận cùng một lượt; trước đây mỗi máy
+   * đổi màn + nối lại + HostResume lúc khác nhau nên câu hiện lệch vài giây.
+   */
+  const live = snapshot ? shouldBeOnBoard(snapshot.Game) : false;
 
   /*
-   * Ván đã chạy -> sang màn bàn cờ.
+   * Ván đã chạy (hoặc đang đếm ngược vòng đua) -> sang màn bàn cờ.
    *
    * `replace` chứ không `push`: back từ bàn cờ phải về màn hình chính, không
    * quay lại phòng chờ của một ván đã bắt đầu.

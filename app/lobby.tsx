@@ -20,7 +20,6 @@ import {
   getGameState,
   markPlayersReady,
   roomInviteUrl,
-  startGame,
   type GameSnapshot,
   type RoomCode,
 } from '../src/api/game';
@@ -50,9 +49,6 @@ import { neon, text } from '../src/theme/colors';
  * đủ nhạy cho việc người chơi lần lượt nhận chỗ. Khi nối SignalR thì bỏ hẳn
  * vòng này - xem NEXT_STEPS.md.
  */
-/** Bằng đúng bản web (`beginCountdown` trong main.js). Đọc ghi chú ở `beginStart`. */
-const COUNTDOWN_SECONDS = 10;
-
 /**
  * Khoảng kẹp cho chiều cao một hàng ghế - xem `rowHeight` trong component.
  *
@@ -185,11 +181,11 @@ export default function LobbyScreen() {
     /*
      * ⚠️ ACK NGAY TẠI MÀN LOBBY, đừng để dành cho `waiting.tsx`.
      *
-     * `/ready` đặt mọi người sang `PlayerStart` rồi bắn gói 50, nhưng chủ phòng
-     * còn Ở ĐÂY suốt lúc đếm ngược - `fireStart` chỉ `router.replace('/waiting')`
-     * SAU khi đã gọi `/start`. Nếu chỉ `waiting.tsx` mới ack thì tới lúc
-     * `QuestionForTurnHandler` chạy, cờ `IsClientReceivedFlow` của chủ phòng vẫn
-     * là false, và điều kiện
+     * `/ready` đặt mọi người sang `PlayerStart` rồi bắn gói 50 TRƯỚC khi trả lời
+     * HTTP - lúc đó chủ phòng còn ở đây (K93: sang /waiting ngay sau khi /ready
+     * về, nhưng gói 50 đã tới trước rồi). Nếu chỉ `waiting.tsx` mới ack thì tới
+     * lúc `QuestionForTurnHandler` chạy, cờ `IsClientReceivedFlow` của chủ phòng
+     * vẫn là false, và điều kiện
      *
      *     player.CurrentFlow == PlayerStart && player.IsClientReceivedFlow
      *
@@ -197,8 +193,9 @@ export default function LobbyScreen() {
      * quét lại. Họ chỉ nhận được câu hỏi ở lượt phát lại, tức muộn khoảng 60 giây,
      * nên gần như không bao giờ thắng nổi vòng đua đầu.
      *
-     * ⚠️ Đây KHÔNG phải đua tin: nâng đếm ngược lên 40 giây cũng vô ích, vì chủ
-     * phòng không thể ack khi còn ở màn này. Đã đo đúng vậy 2026-09-08.
+     * ⚠️ Đây KHÔNG phải đua tin: nâng đếm ngược lên 40 giây cũng vô ích nếu
+     * màn này không ack. Đã đo đúng vậy 2026-09-08. Bàn cờ (`game-landscape`)
+     * cũng ack gói 50 phát lại qua HostResume - lưới thứ hai.
      *
      * Khách không dính vì họ đã ngồi ở `/waiting` từ lúc nhận ghế.
      *
@@ -286,26 +283,25 @@ export default function LobbyScreen() {
   const joinUrl = room ? roomInviteUrl(room.SiteUrl, room.RoomCode) : '';
 
   /*
-   * ─── Bắt đầu ván: HAI lượt gọi, cách nhau một nhịp đếm ngược ──────────────
+   * ─── Bắt đầu ván: MỘT lời gọi, server hẹn giờ nổ vòng đua (K93) ────────────
    *
-   *   /ready  -> đẩy mọi điện thoại sang màn chờ (GameState)
-   *   (10 giây "WHO GOES FIRST?")
-   *   /start  -> nổ vòng đua ai đi trước (QuestionForTurn)
+   *   /ready  -> mọi ghế nhận PlayerStart (50) kèm `CountdownEndsAt`, server arm
+   *              watchdog nổ vòng đua đúng mốc đó (10 giây, `RaceCountdownSeconds`)
+   *   app     -> chủ phòng cũng sang /waiting -> /game-landscape như khách, ở đó
+   *              tấm "WHO GOES FIRST?" đếm tới mốc SERVER (`RaceCountdownOverlay`)
    *
-   * ⚠️ ĐỪNG bỏ nhịp đếm ngược để "cho nhanh". Nó không phải trang trí: đó là
-   * lúc điện thoại người chơi báo đã nhận `PlayerStart`, mà server cần cờ đó
-   * mới ghi được câu hỏi vòng đua vào flow của họ. Gọi liền tay hai lệnh thì
-   * người mất kết nối đúng lúc đó sẽ không lấy lại được câu hỏi. Bản web cũng
-   * đúng 10 giây (`beginCountdown` trong main.js).
+   * Trước 09-15 chủ phòng đếm 10 giây ở ĐÂY rồi gọi /start, khách không đếm gì,
+   * và câu vòng đua tới mỗi máy lệch nhau (mỗi máy đổi màn + nối lại + HostResume
+   * lúc khác nhau). Nay mọi máy đứng sẵn ở bàn cờ với kết nối sống trước khi câu
+   * 67 phát, nên câu tới cùng lúc. App KHÔNG gọi /start nữa - route còn cho APK cũ.
    *
    * ⚠️ Dùng **token license** (`session.token`), KHÔNG phải token người chơi:
-   * hai route này kiểm `game.HostId` chứ không kiểm ghế.
+   * route này kiểm `game.HostId` chứ không kiểm ghế.
    *
    * App KHÔNG gửi `GameStart`/`WhosTurn` - server tự arm watchdog cho cả hai
    * sau khi vòng đua có người thắng (GAME_RULES mục 8).
    */
-  const [phase, setPhase] = useState<'idle' | 'readying' | 'countdown' | 'starting'>('idle');
-  const [seconds, setSeconds] = useState(COUNTDOWN_SECONDS);
+  const [phase, setPhase] = useState<'idle' | 'readying'>('idle');
   const [startError, setStartError] = useState<string | null>(null);
 
   async function beginStart() {
@@ -323,38 +319,9 @@ export default function LobbyScreen() {
       return;
     }
 
-    setSeconds(COUNTDOWN_SECONDS);
-    setPhase('countdown');
-  }
-
-  const fireStart = useCallback(async () => {
-    if (!gameId || !session) return;
-
-    setPhase('starting');
-
-    const result = await startGame(gameId, session.token);
-    if (!result.isSuccess) {
-      setPhase('idle');
-      setStartError(apiErrorText(result, t));
-      return;
-    }
-
     // Chủ phòng cũng là một người chơi, nên từ đây họ xem cùng màn với khách.
     router.replace('/waiting');
-  }, [gameId, session, router, t]);
-
-  useEffect(() => {
-    if (phase !== 'countdown') return;
-
-    if (seconds <= 0) {
-      void fireStart();
-      return;
-    }
-
-    const timer = setTimeout(() => setSeconds((value) => value - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [phase, seconds, fireStart]);
-
+  }
 
   async function invite() {
     if (!room) return;
@@ -606,7 +573,8 @@ export default function LobbyScreen() {
       </SafeAreaView>
 
       {/*
-        Màn đếm ngược "WHO GOES FIRST?".
+        Đang gọi /ready - vài trăm mili giây, rồi sang /waiting. Đếm ngược
+        "WHO GOES FIRST?" thật nằm ở bàn cờ (`RaceCountdownOverlay`, K93).
 
         Là một lớp phủ tuyệt đối, KHÔNG phải `Modal`: trên Android thứ tự lớp
         giữa các Modal không đoán trước được (xem SETUP_NOTES), mà app đã có
@@ -617,13 +585,9 @@ export default function LobbyScreen() {
         <View style={styles.overlay}>
           <Text style={styles.overlayTitle}>{t('lobby.whoGoesFirst')}</Text>
           <Text style={styles.overlayBody}>{t('lobby.whoGoesFirstBody')}</Text>
-          {phase === 'countdown' ? (
-            <Text style={styles.overlayCount}>{t('lobby.startingIn', { seconds })}</Text>
-          ) : (
-            <View style={styles.overlaySpinner}>
-              <ActivityIndicator color={lobbyColors.amber} size="large" />
-            </View>
-          )}
+          <View style={styles.overlaySpinner}>
+            <ActivityIndicator color={lobbyColors.amber} size="large" />
+          </View>
         </View>
       ) : null}
     </View>
@@ -816,14 +780,6 @@ const styles = StyleSheet.create({
     lineHeight: 23,
     color: lobbyColors.dim,
     textAlign: 'center',
-  },
-  overlayCount: {
-    fontSize: 44,
-    fontWeight: '800',
-    color: lobbyColors.amber,
-    textShadowColor: 'rgba(255,198,30,0.55)',
-    textShadowRadius: 18,
-    textShadowOffset: { width: 0, height: 0 },
   },
   overlaySpinner: { marginTop: 8 },
 });

@@ -238,6 +238,9 @@ export const en = {
   'question.submit': 'SUBMIT',
   /** Vừa dùng Skipper, đang chờ server bốc câu khác - khoá đáp án kẻo gửi nhầm câu cũ (K79). */
   'question.swapping': 'Skipper played — loading another question…',
+  /** Nhãn trên câu TRANH TRẢ LỜI khi người tới lượt vừa sai / hết giờ (gói 93, K94) - lời của `WrongAnswer.cshtml`. */
+  'question.stealWrong': '{name} got it wrong — answer now!',
+  'question.stealTimeout': "{name}'s out of time — answer now!",
 
   'cards.title': 'YOUR CARDS',
   'cards.prompt': 'Use a card before the question, or skip.',
@@ -793,6 +796,8 @@ const vi: Record<TranslationKey, string> = {
   'question.race': 'AI ĐI TRƯỚC?',
   'question.submit': 'GỬI',
   'question.swapping': 'Đã dùng Skipper — đang lấy câu khác…',
+  'question.stealWrong': '{name} trả lời sai — trả lời ngay!',
+  'question.stealTimeout': '{name} hết giờ — trả lời ngay!',
 
   'cards.title': 'THẺ BÀI',
   'cards.prompt': 'Dùng một thẻ trước khi trả lời, hoặc bỏ qua.',

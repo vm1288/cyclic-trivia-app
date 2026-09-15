@@ -292,6 +292,13 @@ export const TYPE_ID = {
    */
   DiceRolled: 92,
   /**
+   * Kết quả câu hỏi LƯỢT THƯỜNG của một người - gửi cho MỌI ghế KHÁC (K94):
+   * `{ PlayerId, NickName, IsCorrect, IsTimeout, IsMainPlayer, Point, Answer, AnswerExplain, CurrentTurnId }`.
+   * Người vừa trả lời không nhận (họ có HTTP response). Đúng -> tấm "X got it right! +N";
+   * người tới lượt sai/hết giờ -> nhãn trên câu tranh trả lời. Chỉ khi đúng mới có `Answer`.
+   */
+  TurnAnswerResult: 93,
+  /**
    * "Ghế này vừa được mở ở một MÁY KHÁC" — gửi cho máy vừa BỊ ĐÁ khỏi slot.
    *
    * Mỗi người chơi chỉ có MỘT ô `ConnectionId` ở server và mọi gói tin đều đi qua

@@ -19,7 +19,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { getCurrentGame, getGameState, isGameLive } from '../src/api/game';
+import { getCurrentGame, getGameState, shouldBeOnBoard } from '../src/api/game';
 import { useConfirm } from '../src/components/ConfirmDialog';
 import { GlowDivider } from '../src/components/GlowDivider';
 import { NeonButton } from '../src/components/NeonButton';
@@ -199,7 +199,8 @@ export default function HomeScreen() {
           return;
         }
 
-        setLiveSeatGameId(isGameLive(state.Game) ? seat.gameId : null);
+        /* K93: đang đếm ngược vòng đua cũng là "đang có ván" - mở lại app giữa 10 giây đó thì RESUME về bàn cờ. */
+        setLiveSeatGameId(shouldBeOnBoard(state.Game) ? seat.gameId : null);
       })();
 
       return () => {
