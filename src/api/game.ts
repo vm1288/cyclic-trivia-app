@@ -605,6 +605,12 @@ export const CASE_ACTION = {
   ShowSubCategoriesAndQuestions: 6,
   /** Cùng câu hỏi đó, nhưng gửi cho NHỮNG NGƯỜI CÒN LẠI để tranh trả lời. */
   OtherPlayersAnswering: 11,
+  /**
+   * "Lượt của bạn xong rồi, báo lại đi." Server đặt vào gói 16 sau khi đúng câu ở
+   * lượt thử cuối / đạt 10-sec challenge ở lượt thử cuối kèm thẻ. Máy khách phải
+   * gửi `Pub TurnComplete` như bản web (playerHandlers.js:594) - xem K96.
+   */
+  TurnComplete: 9,
   /** Vòng đua "ai đi trước" - cũng tung xúc xắc nhưng gói tin khác. */
   RollDiceForTurn: 13,
   QuestionForTurn: 20,

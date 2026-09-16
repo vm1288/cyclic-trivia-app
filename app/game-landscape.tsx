@@ -909,6 +909,18 @@ export default function GameLandscapeScreen() {
         if (packet.Action !== CASE_ACTION.OtherPlayersAnswering) setStealBanner(null);
 
         /*
+         * ⚠ MẮT XÍCH TREO VÁN (K96). Action 9 = "lượt xong, gửi lại `TurnComplete`
+         * đi" - bản web làm ở playerHandlers.js:594. Tới đây khi đúng câu ở lượt
+         * thử cuối rồi nhận thẻ 5 sao, hoặc đạt 10-sec challenge ở lượt thử cuối
+         * kèm thẻ. Trước 09-16 app im lặng; server nay có lưới `TurnCompleteCustom`
+         * chạy hộ, nhưng đáp ngay thì lượt sang tức thì thay vì đợi lưới.
+         */
+        if (packet.Action === CASE_ACTION.TurnComplete) {
+          void connection.current?.send(TYPE_ID.TurnComplete, { TurnId: id });
+          return;
+        }
+
+        /*
          * Khung CÂU HỎI cũng phải dọn khi gói 16 giao một việc KHÔNG PHẢI câu hỏi
          * (tung xúc xắc, chờ người khác, curve ball…) - tức câu đang mở đã khép ở
          * server mà máy này chưa được báo. Đo K56 (khoá màn 3 phút): đồng hồ JS

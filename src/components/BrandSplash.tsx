@@ -1,6 +1,6 @@
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 
 import { StageBackground } from './StageBackground';
@@ -15,29 +15,38 @@ import { bg } from '../theme/colors';
  * Android 12+ tự vẽ splash hệ thống lúc cold start - chỉ một icon giữa màu nền
  * đơn, không ảnh nền, không chữ - trong lúc tiến trình + bundle JS nạp. Mình
  * không chèn được gì vào đó; cái mình kiểm soát bắt đầu từ khung JS đầu tiên.
+ * Hơn nữa Android 12+ **cắt icon theo hình tròn**: đưa icon có chữ vào là chữ
+ * "Cyclic" bị xén (đo trên Zenfone Android 13, K95) - nên splash native giữ
+ * `splash-logo.png` (biểu tượng tròn, không chữ) như cũ.
  *
- * Tony chọn (09-16) cách "LIỀN MẠCH, không thêm giây nào": splash native dùng
- * CHÍNH icon này, cùng cỡ (`imageWidth: 240` trong app.json = `ICON_DP` ở đây)
- * và cùng chỗ (giữa màn). Lớp này lên là icon đứng yên đúng chỗ cũ, chỉ nền +
- * tagline mờ VÀO quanh nó, giữ `HOLD_MS` ngắn rồi cả lớp mờ RA lộ Home - mắt
- * thấy một màn duy nhất. Home dựng bên dưới song song nên lớp này không kéo
- * dài thời gian tải; phần nó thêm chỉ là `HOLD_MS`.
+ * Tony chốt (09-16, sau khi xem ảnh đo): "dùng splash-logo.png như cũ, chỉ khi
+ * chuyển sang JS mới đổi". Lớp này làm đúng thế:
+ *   1. Lớp NỀN vẽ lại y hệt splash native: nền `#070B1F` + `splash-logo.png`
+ *      `NATIVE_LOGO_DP` ở tâm màn → gọi `hideAsync()` ở `onLayout` là splash
+ *      native biến mất mà mắt không thấy gì đổi.
+ *   2. Lớp TRANG TRÍ (nền sân khấu + icon có chữ + tagline) mờ VÀO đè lên
+ *      (`FADE_IN_MS`), giữ `HOLD_MS`, rồi cả lớp mờ RA lộ Home.
+ * Home dựng bên dưới song song nên lớp này không kéo dài thời gian tải; phần
+ * nó thêm là `HOLD_MS` (3 s, Tony muốn người chơi kịp nhìn) + hai nhịp mờ.
  *
- * Nối hai nhịp cho khỏi lóe: `_layout.tsx` gọi `preventAutoHideAsync()` lúc
- * nạp module, lớp này gọi `hideAsync()` ở `onLayout` - splash native chỉ biến
- * mất khi lớp JS đã vẽ xong với cùng nền `#070B1F` + icon ở cùng chỗ.
+ * Đo trên Zenfone Max Pro M1 (Android 13, dev bundle): từ JS `main` tới khung
+ * đầu ~15 s là do bundle dev + máy yếu, không phải lớp này (TEST_CASES K95).
  */
+const NATIVE_LOGO = require('../../assets/splash-logo.png');
 const ICON = require('../../assets/android-icon-foreground.png');
 const TAGLINE = 'Games for family, friends and fun!';
 /** Bằng `imageWidth` của expo-splash-screen trong app.json - đổi một là đổi cả hai. */
+const NATIVE_LOGO_DP = 240;
+/** Icon có chữ ở lớp trang trí; không cần khớp native vì hai lớp crossfade. */
 const ICON_DP = 240;
 /**
- * Chữ "Cyclic" trong icon chạm đáy ở ~88 % chiều cao file (512 px, bbox tới 450)
- * → 0.88 × 240 − 120 = +91 dp dưới tâm. Tagline bắt đầu ngay dưới đó.
+ * Chữ "Cyclic" trong icon chạm đáy ở ~96 % chiều cao file (512 px, bbox tới 490)
+ * → 0.96 × 240 − 120 = +110 dp dưới tâm. Tagline bắt đầu ngay dưới đó.
  */
 const TAGLINE_TOP_DP = 100;
 const FADE_IN_MS = 350;
-const HOLD_MS = 600;
+/** Tony (09-16): giữ ít nhất 3 giây - chuyển nhanh quá thì splash vô nghĩa. */
+const HOLD_MS = 3000;
 const FADE_OUT_MS = 350;
 
 export function BrandSplash({ onDone }: { onDone: () => void }) {
@@ -66,15 +75,19 @@ export function BrandSplash({ onDone }: { onDone: () => void }) {
         void SplashScreen.hideAsync().catch(() => {});
       }}
     >
-      {/* Nền + tagline mờ VÀO; icon thì có sẵn từ đầu, đúng chỗ splash native để nó. */}
+      {/* 1. Bản sao của splash native: cùng nền, cùng logo, cùng cỡ, cùng chỗ. */}
+      <View style={styles.center}>
+        <Image source={NATIVE_LOGO} style={styles.nativeLogo} resizeMode="contain" />
+      </View>
+
+      {/* 2. Lớp trang trí mờ VÀO đè lên: nền sân khấu + icon có chữ + tagline. */}
       <Animated.View style={[styles.fill, dressing]}>
         <StageBackground />
+        <View style={styles.center}>
+          <Image source={ICON} style={styles.icon} resizeMode="contain" />
+          <Animated.Text style={styles.tagline}>{TAGLINE}</Animated.Text>
+        </View>
       </Animated.View>
-
-      <View style={styles.center}>
-        <Image source={ICON} style={styles.icon} resizeMode="contain" />
-        <Animated.Text style={[styles.tagline, dressing]}>{TAGLINE}</Animated.Text>
-      </View>
     </Animated.View>
   );
 }
@@ -83,8 +96,9 @@ const styles = StyleSheet.create({
   /* Phủ kín màn, TRÊN mọi thứ. Nền cùng màu splash native để lúc chuyển không đổi tông. */
   root: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100, elevation: 100, backgroundColor: bg.base },
   fill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  /* Icon đúng tâm màn - cùng chỗ với splash native (Android 12+ căn giữa icon). */
+  /* Đúng tâm màn - cùng chỗ với splash native (Android 12+ căn giữa icon). */
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  nativeLogo: { width: NATIVE_LOGO_DP, height: NATIVE_LOGO_DP },
   icon: { width: ICON_DP, height: ICON_DP },
   tagline: {
     position: 'absolute',

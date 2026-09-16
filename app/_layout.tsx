@@ -13,8 +13,8 @@ import { PlayerProvider } from '../src/session/PlayerSession';
 import { bg } from '../src/theme/colors';
 
 /*
- * Giữ splash native cho tới khi `BrandSplash` (lớp JS: nền Home + icon + tagline)
- * vẽ xong - không thì giữa hai nhịp lóe một khung Home. Gọi ở mức module, trước
+ * Giữ splash native cho tới khi `BrandSplash` (lớp JS: vẽ lại logo native rồi mờ
+ * nền Home + icon + tagline vào) vẽ xong - không thì giữa hai nhịp lóe một khung Home. Gọi ở mức module, trước
  * mọi render, đúng như expo-splash-screen yêu cầu. Nuốt lỗi: trên dev-client
  * hàm này có lúc báo "đã ẩn rồi" - vô hại.
  */
