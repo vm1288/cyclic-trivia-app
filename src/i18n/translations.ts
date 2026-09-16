@@ -241,6 +241,7 @@ export const en = {
   /** Nhãn trên câu TRANH TRẢ LỜI khi người tới lượt vừa sai / hết giờ (gói 93, K94) - lời của `WrongAnswer.cshtml`. */
   'question.stealWrong': '{name} got it wrong — answer now!',
   'question.stealTimeout': "{name}'s out of time — answer now!",
+  'question.watching': '{name} is answering…',
 
   'cards.title': 'YOUR CARDS',
   'cards.prompt': 'Use a card before the question, or skip.',
@@ -444,6 +445,8 @@ export const en = {
     'Only one device can play a seat at a time. Carry on there, or take a seat again from the home screen.',
 
   'direction.title': 'WHICH WAY WILL YOU GO?',
+  'direction.titleOther': 'WHICH WAY WILL {name} GO?',
+  'direction.chosen': '{name} goes {dir}: {category}',
   'direction.clockwise': 'CLOCKWISE',
   'direction.anticlockwise': 'ANTI-CLOCKWISE',
   'direction.category': 'CATEGORY',
@@ -804,6 +807,7 @@ const vi: Record<TranslationKey, string> = {
   'question.swapping': 'Đã dùng Skipper — đang lấy câu khác…',
   'question.stealWrong': '{name} trả lời sai — trả lời ngay!',
   'question.stealTimeout': '{name} hết giờ — trả lời ngay!',
+  'question.watching': '{name} đang trả lời…',
 
   'cards.title': 'THẺ BÀI',
   'cards.prompt': 'Dùng một thẻ trước khi trả lời, hoặc bỏ qua.',
@@ -945,6 +949,8 @@ const vi: Record<TranslationKey, string> = {
     'Mỗi ghế chỉ chơi được trên một máy. Chơi tiếp ở máy đó, hoặc quay về màn chính để nhận ghế lại.',
 
   'direction.title': 'BẠN ĐI HƯỚNG NÀO?',
+  'direction.titleOther': '{name} SẼ ĐI HƯỚNG NÀO?',
+  'direction.chosen': '{name} đi {dir}: {category}',
   'direction.clockwise': 'THUẬN CHIỀU',
   'direction.anticlockwise': 'NGƯỢC CHIỀU',
   'direction.category': 'CHỦ ĐỀ',

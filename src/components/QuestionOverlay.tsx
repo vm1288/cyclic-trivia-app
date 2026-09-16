@@ -128,6 +128,7 @@ export function QuestionOverlay({
   onAnswer,
   onTimeout,
   locked,
+  readOnly = false,
 }: {
   question: GameQuestion;
   /**
@@ -149,6 +150,13 @@ export function QuestionOverlay({
    * đóng lại đúng chỗ ngón tay đang đặt trên đáp án - không khoá là gửi nhầm câu cũ.
    */
   locked?: boolean;
+  /**
+   * GƯƠNG BÀN CỜ (K99): câu của NGƯỜI KHÁC - mình chỉ xem như nhìn bàn cờ. Đồng hồ
+   * chạy cho biết còn bao lâu, đáp án không chọn được, không SUBMIT, hết giờ KHÔNG
+   * bắn `onTimeout` (không phải câu của mình). Bàn cờ web y vậy:
+   * `MainShowSubCategoriesAndQuestions` không có nút nào.
+   */
+  readOnly?: boolean;
 }) {
   const t = useT();
 
@@ -196,13 +204,13 @@ export function QuestionOverlay({
    * lỗi đỏ. Effect chạy SAU render nên an toàn.
    */
   useEffect(() => {
-    if (left > 0 || sent.current || locked) return;
+    if (left > 0 || sent.current || locked || readOnly) return;
     sent.current = true;
     timeout.current();
-  }, [left, locked]);
+  }, [left, locked, readOnly]);
 
   const submit = () => {
-    if (sent.current || !chosen || locked) return;
+    if (sent.current || !chosen || locked || readOnly) return;
     const answer = question.Answers.find((a) => a.Id === chosen);
     if (!answer) return;
     sent.current = true;
@@ -211,7 +219,9 @@ export function QuestionOverlay({
 
   const urgent = left <= 5;
   const clockColor = urgent ? '#FF6B78' : boardColors.purple;
-  const canSubmit = !!chosen && !sent.current && !locked;
+  const canSubmit = !!chosen && !sent.current && !locked && !readOnly;
+  /* Chỉ xem: đáp án mờ và không bấm được, như lúc khoá chờ Skipper - nhưng không có chữ "đang đổi câu". */
+  const frozen = locked || readOnly;
 
   /*
    * Hai ô nhãn LUÔN là chủ đề, không phải chữ "QUESTION" chết cứng:
@@ -253,6 +263,7 @@ export function QuestionOverlay({
             <Text style={[styles.timerText, { color: clockColor }]}>{mmss(left)}</Text>
           </View>
 
+          {readOnly ? null : (
           <Pressable
             onPress={submit}
             disabled={!canSubmit}
@@ -267,6 +278,7 @@ export function QuestionOverlay({
             </Text>
             <ArrowIcon color={canSubmit ? '#FFFFFF' : 'rgba(255,255,255,0.45)'} />
           </Pressable>
+          )}
         </View>
 
         {/* ── hàng chính: câu hỏi — vạch dọc — đáp án ── */}
@@ -307,14 +319,14 @@ export function QuestionOverlay({
               return (
                 <Pressable
                   key={answer.Id}
-                  onPress={() => !sent.current && !locked && setChosen(answer.Id)}
-                  disabled={sent.current || locked}
+                  onPress={() => !sent.current && !frozen && setChosen(answer.Id)}
+                  disabled={sent.current || frozen}
                   style={({ pressed }) => [
                     styles.option,
                     { borderColor: picked ? PICKED : ANSWER_BORDER },
                     // Đã gửi rồi (hoặc đang chờ câu mới) thì mờ hết đi, để rõ là không bấm được nữa.
-                    (sent.current || locked) && !picked && styles.optionDim,
-                    pressed && !sent.current && !locked && styles.pressedSm,
+                    (sent.current || frozen) && !picked && styles.optionDim,
+                    pressed && !sent.current && !frozen && styles.pressedSm,
                   ]}
                 >
                   <LinearGradient

@@ -55,10 +55,15 @@ const mmss = (seconds: number) => {
 export function MoveDirectionOverlay({
   packet,
   onSelect,
+  readOnly = false,
+  ownerName = '',
 }: {
   packet: DirectionPacket;
   /** Gọi cả khi hết giờ, với `'random'`. */
   onSelect: (direction: MoveDirection) => void;
+  /** GƯƠNG BÀN CỜ (K99): hướng của NGƯỜI KHÁC - xem hai chủ đề, không có SELECT, hết giờ không chọn hộ. */
+  readOnly?: boolean;
+  ownerName?: string;
 }) {
   const t = useT();
 
@@ -86,13 +91,13 @@ export function MoveDirectionOverlay({
    * rendering a different component".
    */
   useEffect(() => {
-    if (left > 0 || sent.current) return;
+    if (left > 0 || sent.current || readOnly) return;
     sent.current = true;
     pick.current('random');
-  }, [left]);
+  }, [left, readOnly]);
 
   const choose = (direction: MoveDirection) => {
-    if (sent.current) return;
+    if (sent.current || readOnly) return;
     sent.current = true;
     onSelect(direction);
   };
@@ -130,10 +135,11 @@ export function MoveDirectionOverlay({
     return (
       <Pressable
         onPress={() => choose(which)}
+        disabled={readOnly}
         style={({ pressed }) => [
           styles.option,
           { borderColor: `${s.color}8c` },
-          pressed && styles.pressedSm,
+          pressed && !readOnly && styles.pressedSm,
         ]}
       >
         <LinearGradient
@@ -192,9 +198,11 @@ export function MoveDirectionOverlay({
           </>
         )}
 
+        {readOnly ? null : (
         <View style={[styles.selectBtn, { borderColor: s.color }]}>
           <Text style={[styles.selectText, { color: s.color }]}>{t('direction.select')}</Text>
         </View>
+        )}
       </Pressable>
     );
   };
@@ -211,7 +219,7 @@ export function MoveDirectionOverlay({
         <View style={styles.topBar}>
           <View style={styles.bannerTag}>
             <Text style={styles.bannerText} numberOfLines={1}>
-              {t('direction.title')}
+              {readOnly ? t('direction.titleOther', { name: ownerName }) : t('direction.title')}
             </Text>
           </View>
 

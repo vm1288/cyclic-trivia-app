@@ -210,6 +210,9 @@ type ActiveQuestion = {
   usedEliminator: boolean;
   /** Vừa dùng Skipper, đang chờ gói 25 mang câu mới - khoá khung (K79). */
   swapping?: boolean;
+  /** GƯƠNG BÀN CỜ (K99): câu của người khác, mình chỉ xem. `ownerName` = người đang trả lời. */
+  readOnly?: boolean;
+  ownerName?: string;
   /**
    * Số thứ tự câu trong trận battle (0,1,2 là ba câu chính; từ 3 trở đi là
    * sudden death). Chỉ để vẽ nhãn; `undefined` với hai loại câu kia.
@@ -264,7 +267,7 @@ export default function GameLandscapeScreen() {
    * Cùng loại ngoại lệ với gói 67: nó MANG SẴN dữ liệu (chủ đề mỗi hướng, thông
    * tin battle) mà `/api/game/{id}/state` không có.
    */
-  const [direction, setDirection] = useState<DirectionPacket | null>(null);
+  const [direction, setDirection] = useState<(DirectionPacket & { readOnly?: boolean; ownerName?: string }) | null>(null);
 
   /**
    * Nước đi ĐANG DIỄN của một người bất kỳ, tới qua gói 53.
@@ -653,6 +656,12 @@ export default function GameLandscapeScreen() {
 
   /** Nước đi (gói 53) của chính mình đang chờ xúc xắc tắt - xem chỗ nhận gói 53. */
   const deferredMove = useRef<{ moverId: string; steps: number; direction: string; owesDone: boolean; isMine: boolean } | null>(null);
+  /**
+   * Nhãn "X goes clockwise: CATEGORY" (K99) tới trong lúc xúc xắc của X còn lăn trên máy
+   * này (người chọn nhanh, hoặc bot) - tấm chào bị luật "xúc xắc đang lăn thì bỏ" nuốt mất.
+   * Để dành, xúc xắc tắt thì hiện.
+   */
+  const pendingDirectionBanner = useRef<string | null>(null);
 
   /**
    * Diễn một nước đi (gói 53): đặt `pendingMove` để `BoardCanvas` cho quân đi, và nếu là
@@ -823,6 +832,28 @@ export default function GameLandscapeScreen() {
         const steps = typeof packet.totalIndex === 'number' ? packet.totalIndex : 0;
         const dir = typeof packet.direction === 'string' ? packet.direction : 'clockwise';
         if (!moverId || steps <= 0) return;
+
+        /*
+         * GƯƠNG BÀN CỜ (K99): đang xem màn hướng của người khác thì đóng, và báo "X goes
+         * clockwise → CATEGORY" (Tony: chọn hướng nào cũng phải báo lên bàn cờ mọi người).
+         */
+        if (seat && !same(moverId, seat.playerId)) {
+          setDirection((prev) => {
+            if (prev?.readOnly) {
+              const isClock = dir !== 'anticlockwise';
+              const category = (isClock ? prev.ClockwiseCategory : prev.AntiClockwiseCategory) ?? '';
+              const text = t('direction.chosen', {
+                name: prev.ownerName ?? '',
+                dir: t(isClock ? 'direction.clockwise' : 'direction.anticlockwise'),
+                category,
+              });
+              if (dice) pendingDirectionBanner.current = text;
+              else setTurnBanner({ text, mine: false });
+              return null;
+            }
+            return prev;
+          });
+        }
 
         /*
          * ⚠ `IsSendDone === false` thì DIỄN XONG LÀ THÔI, không báo ngược.
@@ -1223,6 +1254,56 @@ export default function GameLandscapeScreen() {
               return;
             }
             setTurnResult(result);
+            return;
+          }
+
+          /*
+           * Câu hỏi lượt thường của NGƯỜI KHÁC (K99): bàn cờ chính hiện cho cả phòng xem,
+           * điện thoại cũng hiện - chỉ xem, không chọn, không SUBMIT. Người tới lượt sai/hết
+           * giờ → gói 93 đóng khung này + nhãn, rồi gói 16 (Action 11) mang câu tranh thật.
+           */
+          case 'MainShowSubCategoriesAndQuestions': {
+            if (seat && same(str('PlayerId'), seat.playerId)) return;
+            const payload = model.data as TurnQuestionPayload | undefined;
+            if (!payload?.question?.Id) return;
+            setQuestion({
+              kind: 'turn',
+              question: payload.question,
+              categories: categoryChain(payload.category),
+              duration: num('DurationInSeconds') || 20,
+              isQuestionOwner: false,
+              usedEliminator: false,
+              readOnly: true,
+              ownerName: str('Nickname'),
+            });
+            return;
+          }
+
+          /* Người tới lượt dùng Skipper (câu mới) / Eliminator (bớt đáp án) - cập nhật khung chỉ-xem. */
+          case 'UseCardInQuestion': {
+            if (seat && same(str('PlayerId'), seat.playerId)) return;
+            const payload = model.Payload as TurnQuestionPayload | undefined;
+            if (!payload?.question?.Id) return;
+            const dur = num('DurationInSeconds');
+            setQuestion((prev) =>
+              prev && prev.readOnly
+                ? {
+                    ...prev,
+                    question: payload.question,
+                    categories: prev.categories.length ? prev.categories : categoryChain(payload.category),
+                    duration: dur > 0 ? dur : prev.duration,
+                  }
+                : prev,
+            );
+            return;
+          }
+
+          /* "WHICH WAY WILL X GO?" cho người không tới lượt - xem hai chủ đề, không có SELECT. */
+          case 'AskMoveDirection': {
+            if (seat && same(str('PlayerId'), seat.playerId)) return;
+            const pk = model.Packet as DirectionPacket | undefined;
+            if (!pk) return;
+            setDirection({ ...pk, readOnly: true, ownerName: str('Nickname') });
             return;
           }
 
@@ -1838,6 +1919,8 @@ export default function GameLandscapeScreen() {
         const pid = typeof packet.PlayerId === 'string' ? packet.PlayerId : '';
         if (!pid || (seat && same(pid, seat.playerId))) return;
         const name = typeof packet.NickName === 'string' ? packet.NickName : '';
+        /* GƯƠNG BÀN CỜ (K99): khung chỉ-xem của câu này xong việc - đúng thì tấm kết quả, sai thì câu tranh tới ngay. */
+        setQuestion((prev) => (prev?.readOnly ? null : prev));
         if (packet.IsCorrect !== true) {
           if (packet.IsMainPlayer === true && name) {
             setStealBanner(
@@ -2428,6 +2511,12 @@ export default function GameLandscapeScreen() {
    */
   useEffect(() => {
     if (dice) return;
+
+    /* Nhãn "X goes clockwise…" để dành lúc xúc xắc còn lăn (K99). */
+    if (pendingDirectionBanner.current) {
+      setTurnBanner({ text: pendingDirectionBanner.current, mine: false });
+      pendingDirectionBanner.current = null;
+    }
 
     /* Nước đi ép hướng để dành lúc xúc xắc còn lăn (K76): đi bây giờ, và không có 51 -
        server không hỏi hướng nên không chờ gói đó (lưới là HostActionDone). */
@@ -3334,7 +3423,12 @@ export default function GameLandscapeScreen() {
               dính đúng vậy trên máy thật.
             */}
             {direction ? (
-              <MoveDirectionOverlay packet={direction} onSelect={chooseDirection} />
+              <MoveDirectionOverlay
+                packet={direction}
+                onSelect={chooseDirection}
+                readOnly={direction.readOnly === true}
+                ownerName={direction.ownerName ?? ''}
+              />
             ) : null}
 
             {raceWinner ? (
@@ -3447,13 +3541,16 @@ export default function GameLandscapeScreen() {
                       ? (question.battleIndex ?? 0) >= 3
                         ? t('battle.tieBreaker')
                         : t('battle.question', { index: String((question.battleIndex ?? 0) + 1) })
-                      : question.kind === 'turn' && !question.isQuestionOwner
-                        ? stealBanner
-                        : null
+                      : question.kind === 'turn' && question.readOnly
+                        ? t('question.watching', { name: question.ownerName ?? '' })
+                        : question.kind === 'turn' && !question.isQuestionOwner
+                          ? stealBanner
+                          : null
                 }
                 onAnswer={answerQuestion}
                 onTimeout={timeoutQuestion}
                 locked={question.swapping === true}
+                readOnly={question.readOnly === true}
               />
             ) : null}
 
