@@ -362,6 +362,14 @@ export default function GameLandscapeScreen() {
   const [stealBanner, setStealBanner] = useState<string | null>(null);
 
   /**
+   * Vòng đua ĐÃ NỔ trên máy này (gói 67 đã tới) - tấm "WHO GOES FIRST?" không được hiện
+   * lại nữa. Không suy từ state: gửi đáp án xong khung câu hỏi đóng, mà state chỉ nạp lại
+   * vài giây sau (`CurrentAction` cũ chưa phải QuestionForTurn) → tấm đếm ngược trồi lên ở
+   * trạng thái vòng xoay ~5 s. Tony bắt được trên máy khách 09-15 (K93b).
+   */
+  const [raceFired, setRaceFired] = useState(false);
+
+  /**
    * ẨN BÀN CỜ (ca **UI-1**).
    *
    * Bàn cờ chiếm nguyên cột trái, và mọi khung trong lượt - câu hỏi, kết quả,
@@ -1747,6 +1755,7 @@ export default function GameLandscapeScreen() {
       const data = packet as unknown as QuestionPacket;
       if (!data.Question?.Id) return;
 
+      setRaceFired(true);
       setQuestion({
         kind: 'race',
         question: data.Question,
@@ -3212,10 +3221,10 @@ export default function GameLandscapeScreen() {
 
             {/*
               "WHO GOES FIRST?" đếm tới mốc SERVER (K93) - từ lúc chủ phòng bấm START tới
-              lúc câu 67 tới. `question` lên là tấm này xuống, kể cả khi state chưa kịp
-              nạp lại `CurrentAction = QuestionForTurn`.
+              lúc câu 67 tới. `raceFired` chốt lại từ đó: state có thể còn cũ vài giây sau
+              khi gửi đáp án, không được để tấm này trồi lên lại (K93b).
             */}
-            {snapshot && !question && raceCountdownActive(snapshot.Game) && snapshot.Game.Timer?.RaceCountdownEndsAt ? (
+            {snapshot && !question && !raceFired && raceCountdownActive(snapshot.Game) && snapshot.Game.Timer?.RaceCountdownEndsAt ? (
               <RaceCountdownOverlay
                 endsAt={snapshot.Game.Timer.RaceCountdownEndsAt}
                 serverNow={snapshot.Game.Timer.ServerNow}

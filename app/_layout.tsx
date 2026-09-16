@@ -1,16 +1,30 @@
 import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as ScreenOrientation from 'expo-screen-orientation';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { BrandSplash } from '../src/components/BrandSplash';
 import { ConfirmProvider } from '../src/components/ConfirmDialog';
 import { I18nProvider } from '../src/i18n/I18nProvider';
 import { LicenseProvider } from '../src/session/LicenseSession';
 import { PlayerProvider } from '../src/session/PlayerSession';
 import { bg } from '../src/theme/colors';
 
+/*
+ * Giữ splash native cho tới khi `BrandSplash` (lớp JS: nền Home + icon + tagline)
+ * vẽ xong - không thì giữa hai nhịp lóe một khung Home. Gọi ở mức module, trước
+ * mọi render, đúng như expo-splash-screen yêu cầu. Nuốt lỗi: trên dev-client
+ * hàm này có lúc báo "đã ẩn rồi" - vô hại.
+ */
+void SplashScreen.preventAutoHideAsync().catch(() => {});
+
 export default function RootLayout() {
+  /* Lớp splash JS tự gỡ sau khi mờ dần (xem `BrandSplash`). */
+  const [splash, setSplash] = useState(true);
+  const splashDone = useCallback(() => setSplash(false), []);
+
   /*
    * KHOÁ NGANG cho TOÀN APP (2026-09-03).
    *
@@ -57,6 +71,7 @@ export default function RootLayout() {
           </I18nProvider>
         </PlayerProvider>
       </LicenseProvider>
+      {splash ? <BrandSplash onDone={splashDone} /> : null}
     </SafeAreaProvider>
   );
 }

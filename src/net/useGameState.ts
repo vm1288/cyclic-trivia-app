@@ -56,6 +56,7 @@ const REFRESH_ON = new Set<number>([
   58, // PlayerBattleWinner
   62, // GameState
   65, // ShowPlayersAtStart
+  67, // PlayerInstructionQuestion - vòng đua vừa nổ: CurrentAction = QuestionForTurn (K93b, mốc đếm ngược hết hiệu lực)
   71, // EndGame
   80, // PauseGame
   81, // ResumeGameFromPause
