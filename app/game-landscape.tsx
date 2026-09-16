@@ -1020,6 +1020,11 @@ export default function GameLandscapeScreen() {
         // Đã trả lời câu này rồi thì thôi - xem ghi chú ở `answered`.
         if (answered.current === payload.question.Id) return;
 
+        /* Câu tranh tới: tấm "X got it wrong - get ready" (K100) đã xong việc, nhường chỗ cho câu. */
+        if (packet.Action === CASE_ACTION.OtherPlayersAnswering) {
+          setTurnResult((prev) => (prev && (prev.kind === 'wrong' || prev.kind === 'timeout') && prev.name ? null : prev));
+        }
+
         setQuestion({
           kind: 'turn',
           question: payload.question,
@@ -1452,6 +1457,16 @@ export default function GameLandscapeScreen() {
         const value = typeof packet.DiceOne === 'number' ? packet.DiceOne : 0;
         const name = typeof packet.NickName === 'string' ? packet.NickName : '';
         if (value <= 0) return;
+        /*
+         * Ai đó tung xúc xắc = bước trước đã khép, dù máy này không nhận gói kết thúc của
+         * bước đó (K100): trọng tài không bấm Start → lưới 90 s BỎ QUA thử thách và chỉ gửi
+         * gói 16 cho người tới lượt, các máy khác (kể cả trọng tài chưa bấm Start) giữ khung
+         * "Waiting for X to start…" mãi (đo 6539YU 18:08). Dọn khung thử thách (trừ lúc đang
+         * chấm) và mọi khung CHỈ XEM; câu hỏi / hướng của chính mình không đụng.
+         */
+        setChallenge((prev) => (prev && prev.phase !== 'judge' ? null : prev));
+        setDirection((prev) => (prev?.readOnly ? null : prev));
+        setQuestion((prev) => (prev?.readOnly ? null : prev));
         /*
          * Máy của người tung: gói này là NGUỒN SỐ CHÍNH (K77). Trước đây bỏ qua và đọc
          * `Game.DiceOne` từ state - effect chạy ngay với snapshot CŨ còn số của lượt trước
@@ -1922,19 +1937,27 @@ export default function GameLandscapeScreen() {
         /* GƯƠNG BÀN CỜ (K99): khung chỉ-xem của câu này xong việc - đúng thì tấm kết quả, sai thì câu tranh tới ngay. */
         setQuestion((prev) => (prev?.readOnly ? null : prev));
         if (packet.IsCorrect !== true) {
-          if (packet.IsMainPlayer === true && name) {
-            setStealBanner(
-              t(packet.IsTimeout === true ? 'question.stealTimeout' : 'question.stealWrong', { name }),
-            );
-          }
+          if (packet.IsMainPlayer !== true || !name) return;
+          setStealBanner(
+            t(packet.IsTimeout === true ? 'question.stealTimeout' : 'question.stealWrong', { name }),
+          );
+          /*
+           * K100 (Tony): người khác phải được BÁO "X got it wrong / out of time - get ready to
+           * answer" trước khi câu tranh hiện, chứ không chỉ một nhãn trên câu. Tấm đỏ lên ngay;
+           * câu tranh (16, Action 11) tới ~2 s sau thì thay tấm (xem chỗ nhận gói 16).
+           */
+          setTurnResult({ kind: packet.IsTimeout === true ? 'timeout' : 'wrong', name });
           return;
         }
+        const tries = typeof packet.MaxTries === 'number' ? packet.MaxTries : 0;
         const result: TurnResult = {
           kind: 'correct',
           point: typeof packet.Point === 'number' ? packet.Point : 0,
           earnedStar: packet.IsMainPlayer === true,
           answerText: typeof packet.Answer === 'string' ? packet.Answer : '',
           explain: typeof packet.AnswerExplain === 'string' ? packet.AnswerExplain : '',
+          /* Người tới lượt còn lượt tung → "X's second/third roll" (K100). */
+          rollAgain: packet.IsMainPlayer === true ? (tries === 1 ? 2 : tries === 2 ? 3 : undefined) : undefined,
           name,
         };
         const showing = turnResultRef.current;
@@ -2560,6 +2583,10 @@ export default function GameLandscapeScreen() {
     const prev = lastTurnPlayer.current;
     lastTurnPlayer.current = currentTurnPlayerId;
     if (prev === null || prev === currentTurnPlayerId) return;
+    /* Đổi lượt = mọi khung chỉ-xem của lượt trước đã hết nghĩa (K100). */
+    setChallenge((prev) => (prev && prev.phase !== 'judge' ? null : prev));
+    setDirection((prev) => (prev?.readOnly ? null : prev));
+    setQuestion((prev) => (prev?.readOnly ? null : prev));
     if (me && currentTurnPlayerId === me.Id) return;
     const name = players.find((p) => p.Id === currentTurnPlayerId)?.NickName ?? '';
     if (name) setTurnBanner({ text: t('turn.othersGo', { name }), mine: false });
@@ -2573,8 +2600,19 @@ export default function GameLandscapeScreen() {
   useEffect(() => {
     if (!turnBanner) return;
     if (dice) { setTurnBanner(null); return; }
-    /* Tấm kết quả câu hỏi / vòng đua đang hiện thì đợi nó tắt - MỘT tấm một lúc (Tony 09-14, K78). */
-    if (raceWinner || turnResult || earnedCard) return;
+    /*
+     * K100: tấm kết quả đang hiện thì GẮN lời chào vào tấm (như bàn cờ web "Now it's the turn
+     * of X" dưới kết quả) thay vì xếp hàng - xếp hàng thì người kế tung xúc xắc trước khi tấm
+     * tắt và lời chào bị bỏ (luật xúc xắc ở trên), người khác không biết ai đi tiếp (Tony 09-16).
+     */
+    if (turnResult) {
+      const text = turnBanner.text;
+      setTurnResult((prev) => (prev ? { ...prev, nextTurnText: text } : prev));
+      setTurnBanner(null);
+      return;
+    }
+    /* Tấm vòng đua / thẻ thưởng đang hiện thì đợi nó tắt - MỘT tấm một lúc (Tony 09-14, K78). */
+    if (raceWinner || earnedCard) return;
     const hide = setTimeout(() => setTurnBanner(null), 3500);
     return () => clearTimeout(hide);
   }, [turnBanner, raceWinner, turnResult, earnedCard, dice]);
@@ -2592,7 +2630,9 @@ export default function GameLandscapeScreen() {
      * dưới vẫn bấm được; tấm chào lượt / thẻ thưởng xếp hàng sau (K78).
      */
     const hasExplain = turnResult.kind === 'correct' && !!turnResult.explain;
-    const hide = setTimeout(() => setTurnResult(null), hasExplain ? 6000 : 3500);
+    /* Lời chào lượt kế vừa gắn vào (K100) → tấm đã đổi object, đồng hồ chạy lại: 3 s nữa là đủ đọc. */
+    const ms = turnResult.nextTurnText ? 3000 : hasExplain ? 6000 : 3500;
+    const hide = setTimeout(() => setTurnResult(null), ms);
     return () => clearTimeout(hide);
   }, [turnResult]);
 

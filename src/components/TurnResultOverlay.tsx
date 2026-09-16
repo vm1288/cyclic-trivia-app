@@ -87,7 +87,15 @@ type TurnResultKind =
  * `name`: tên người trả lời khi tấm là của NGƯỜI KHÁC (gói 93, K94). Bỏ trống =
  * tấm của chính máy này, màn bàn cờ điền tên mình.
  */
-export type TurnResult = TurnResultKind & { name?: string };
+export type TurnResult = TurnResultKind & {
+  name?: string;
+  /**
+   * K100: lời chào lượt kế ("It's Maya's go" / "So Tony, it's your go") tới trong lúc tấm này
+   * đang hiện thì GẮN VÀO tấm - như bàn cờ web in "Now it's the turn of X" ngay dưới kết quả -
+   * thay vì xếp hàng rồi bị xúc xắc của người kế nuốt mất.
+   */
+  nextTurnText?: string;
+};
 
 export function TurnResultOverlay({
   result,
@@ -157,15 +165,21 @@ export function TurnResultOverlay({
     result.kind === 'correct' || result.kind === 'challengePass'
       ? t('result.earned', { point: result.point, unit })
       : result.kind === 'wrong' || result.kind === 'timeout'
-        ? t('result.wrongBody')
+        /* Tấm của NGƯỜI KHÁC sai/hết giờ (K100): người xem chính là người sắp tranh trả lời. */
+        ? t(result.name ? 'result.wrongBodyOthers' : 'result.wrongBody')
         : result.kind === 'challengeFail'
           ? ''
           : t('result.late');
 
-  /* Bản web hiện thêm dòng này khi người chơi còn lượt tung nữa. */
+  /*
+   * Bản web hiện thêm dòng này khi người chơi còn lượt tung nữa. Tấm của NGƯỜI KHÁC
+   * (`result.name`) thì nói về họ: "Maya's second roll" (K100).
+   */
   const extra =
     (result.kind === 'correct' || result.kind === 'challengePass') && result.rollAgain
-      ? t(result.rollAgain === 3 ? 'result.rollAgainThird' : 'result.rollAgainSecond')
+      ? result.name
+        ? t(result.rollAgain === 3 ? 'result.rollAgainThirdOther' : 'result.rollAgainSecondOther', { name })
+        : t(result.rollAgain === 3 ? 'result.rollAgainThird' : 'result.rollAgainSecond')
       : null;
 
   /*
@@ -243,6 +257,12 @@ export function TurnResultOverlay({
             {extra}
           </Text>
         ) : null}
+
+        {result.nextTurnText ? (
+          <Text style={[styles.extra, styles.nextTurn]} numberOfLines={1}>
+            {result.nextTurnText}
+          </Text>
+        ) : null}
       </Animated.View>
     </View>
   );
@@ -308,5 +328,7 @@ const styles = StyleSheet.create({
   bodyFull: { fontSize: 16 },
   /* Cùng vàng với hàng sao ở ô người chơi, để mắt nối được hai chỗ với nhau. */
   extra: { fontSize: 13, color: 'rgba(226,232,255,0.85)', textAlign: 'center', marginTop: 2 },
+  /* Lời chào lượt kế gắn vào tấm - cùng xanh lá với tấm chào lượt đứng riêng. */
+  nextTurn: { color: '#7CF29A', fontWeight: '700' },
   star: { fontSize: 20, lineHeight: 26, color: '#FFD23F' },
 });
