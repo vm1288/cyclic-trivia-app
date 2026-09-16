@@ -9,6 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { useT } from '../i18n/I18nProvider';
+import { htmlToText } from '../utils/htmlToText';
 import { boardColors, fill } from './GameBoardParts';
 import { text } from '../theme/colors';
 
@@ -219,7 +220,7 @@ export function TurnResultOverlay({
                   đầu - để mắt đọc một mạch "đáp án đúng" thay vì hai vật rời.
                 */}
                 <Text style={[styles.answerText, compact ? styles.answerTextCompact : null]} numberOfLines={3}>
-                  {answerBlock.answerText}
+                  {htmlToText(answerBlock.answerText)}
                 </Text>
                 <Text style={[styles.answerTick, { color: tone.line }]}>✓</Text>
               </View>
@@ -227,7 +228,7 @@ export function TurnResultOverlay({
 
             {answerBlock.explain ? (
               <Text style={[styles.explain, compact ? styles.explainCompact : null]} numberOfLines={compact ? 3 : 4}>
-                {answerBlock.explain}
+                {htmlToText(answerBlock.explain)}
               </Text>
             ) : null}
           </View>

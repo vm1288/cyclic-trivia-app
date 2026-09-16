@@ -12,6 +12,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 
 import type { GameQuestion } from '../api/game';
 import { useT } from '../i18n/I18nProvider';
+import { htmlToText } from '../utils/htmlToText';
 import { boardColors, fill } from './GameBoardParts';
 import { GlowDivider } from './GlowDivider';
 import { text } from '../theme/colors';
@@ -305,7 +306,7 @@ export function QuestionOverlay({
               </View>
             ) : null}
 
-            <Text style={styles.questionText}>{question.Title}</Text>
+            <Text style={styles.questionText}>{htmlToText(question.Title)}</Text>
             {locked ? <Text style={styles.swapping}>{t('question.swapping')}</Text> : null}
           </View>
 
@@ -357,7 +358,7 @@ export function QuestionOverlay({
                     style={[styles.optionText, picked && { color: PICKED }]}
                     numberOfLines={2}
                   >
-                    {answer.Content}
+                    {htmlToText(answer.Content)}
                   </Text>
                 </Pressable>
               );

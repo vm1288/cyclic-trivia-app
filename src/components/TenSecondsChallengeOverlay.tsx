@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
 import { useT } from '../i18n/I18nProvider';
+import { htmlToText } from '../utils/htmlToText';
 import { boardColors, fill } from './GameBoardParts';
 import { GlowDivider } from './GlowDivider';
 
@@ -70,19 +71,8 @@ const ordinal = (n: number) => {
   }
 };
 
-/**
- * Đề bài của nhánh tongue-twister được ghép chuỗi kèm `<br>` và `<strong>` ngay
- * trong C# (`Helper.cs`), nên tới app là HTML thật. Gỡ thẻ ra thành chữ thuần.
- */
-const stripHtml = (raw: string) =>
-  (raw || '')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .trim();
+/** Đề bài tongue-twister được ghép chuỗi kèm `<br>`/`<strong>` ngay trong C# (`Helper.cs`) - gỡ thẻ. */
+const stripHtml = htmlToText;
 
 export type ChallengePhase = 'assign' | 'run' | 'judge';
 

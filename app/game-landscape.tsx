@@ -1500,6 +1500,13 @@ export default function GameLandscapeScreen() {
       if (packet.typeID === TYPE_ID.RaceWinner) {
         const name = typeof packet.NickName === 'string' ? packet.NickName : '';
         if (!name) return;
+        /*
+         * Người THUA vòng đua nhận gói 45 `TimeoutQuestion` NGAY TRƯỚC gói này (cùng vòng lặp
+         * trong `submitAnswerForTurn`) → tấm "X got it right first!" đã lên và đè lên tấm này
+         * (Tony 09-16: "người thua hiện một lần 2 popup"). Gói 45 là của câu tranh lượt thường;
+         * ở vòng đua tấm "X is the fastest" nói đủ - bỏ tấm kia.
+         */
+        setTurnResult((prev) => (prev?.kind === 'late' ? null : prev));
         setRaceWinner({ name, isMe: packet.PlayerId === seat?.playerId });
         return;
       }
