@@ -2396,7 +2396,13 @@ export default function GameLandscapeScreen() {
    */
   useEffect(() => {
     if (!turnResult) return;
-    const hide = setTimeout(() => setTurnResult(null), 3500);
+    /*
+     * Có giải thích đáp án (K97) thì giữ 6 s - 3,5 s không đọc kịp hai-ba dòng.
+     * Bàn cờ web còn giữ tới bước kế tiếp. Tấm không chặn chạm nên ROLL DICE bên
+     * dưới vẫn bấm được; tấm chào lượt / thẻ thưởng xếp hàng sau (K78).
+     */
+    const hasExplain = turnResult.kind === 'correct' && !!turnResult.explain;
+    const hide = setTimeout(() => setTurnResult(null), hasExplain ? 6000 : 3500);
     return () => clearTimeout(hide);
   }, [turnResult]);
 

@@ -55,7 +55,7 @@ type TurnResultKind =
        *
        * Cùng chuỗi máy gửi lên trong `questionTitle` của `submitAnswer`, và cũng
        * chính là chuỗi bàn cờ web in to giữa màn (`Model.questionTitle` trong
-       * `CorrectAnswerV2.cshtml`). Chỉ dùng ở khổ đầy đủ.
+       * `CorrectAnswerV2.cshtml`). Cả hai khổ (K97).
        */
       answerText?: string;
       /**
@@ -154,17 +154,22 @@ export function TurnResultOverlay({
       : null;
 
   /*
-   * Khối "đáp án đúng + giải thích" - phần RIÊNG của khổ đầy đủ.
+   * Khối "đáp án đúng + giải thích" - ở CẢ HAI khổ.
    *
-   * ⚠️ Ba điều kiện, thiếu một là không hiện. Không phải phòng thủ thừa:
-   *   - `!compact`  : bàn cờ đang hiện thì không có chỗ, và bàn cờ web cũng chỉ
-   *                   in khối này ở bản mainboard
+   * Tony (09-16, K97): *"web có show câu giải thích đáp án"* - bàn cờ web in
+   * `CorrectAnswerV2.cshtml` (đáp án + giải thích) cho cả phòng xem, mà app là
+   * cả ghế lẫn bàn cờ, nên khổ gọn (trạng thái thường trực) cũng phải in. Trước
+   * 09-16 khối này chỉ có ở khổ đầy đủ vì tưởng "bàn cờ đang hiện thì không có
+   * chỗ" - thực ra tấm nằm đè lên bàn cờ, cao thêm vài dòng không sao. Khổ gọn
+   * dùng cỡ chữ nhỏ hơn (`answerTextCompact` / `explainCompact`).
+   *
+   * ⚠️ Hai điều kiện, thiếu một là không hiện:
    *   - `correct`   : sai thì người khác còn đang tranh trả lời câu đó
    *   - có nội dung : câu chưa nhập giải thích thì `explain` rỗng, mà một cái
    *                   khung rỗng lửng lơ trông như lỗi
    */
   const answerBlock =
-    !compact && result.kind === 'correct' && (result.answerText || result.explain)
+    result.kind === 'correct' && (result.answerText || result.explain)
       ? { answerText: result.answerText ?? '', explain: result.explain ?? '' }
       : null;
 
@@ -184,7 +189,7 @@ export function TurnResultOverlay({
                   mảng nền sáng, dấu ✓ đứng NGAY BÊN PHẢI chứ không phải trên
                   đầu - để mắt đọc một mạch "đáp án đúng" thay vì hai vật rời.
                 */}
-                <Text style={styles.answerText} numberOfLines={3}>
+                <Text style={[styles.answerText, compact ? styles.answerTextCompact : null]} numberOfLines={3}>
                   {answerBlock.answerText}
                 </Text>
                 <Text style={[styles.answerTick, { color: tone.line }]}>✓</Text>
@@ -192,7 +197,7 @@ export function TurnResultOverlay({
             ) : null}
 
             {answerBlock.explain ? (
-              <Text style={styles.explain} numberOfLines={4}>
+              <Text style={[styles.explain, compact ? styles.explainCompact : null]} numberOfLines={compact ? 3 : 4}>
                 {answerBlock.explain}
               </Text>
             ) : null}
@@ -270,6 +275,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     overflow: 'hidden',
   },
+  answerTextCompact: { fontSize: 16, lineHeight: 21 },
   answerTick: { fontSize: 22, fontWeight: '900' },
   explain: {
     fontSize: 13.5,
@@ -277,6 +283,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: 'rgba(226,232,255,0.9)',
   },
+  explainCompact: { fontSize: 12.5, lineHeight: 17 },
   title: { fontSize: 20, lineHeight: 25, fontWeight: '900', letterSpacing: 0.8, textAlign: 'center' },
   titleFull: { fontSize: 24, lineHeight: 30 },
   bodyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
