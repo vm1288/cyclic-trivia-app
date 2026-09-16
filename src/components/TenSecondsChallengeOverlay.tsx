@@ -252,7 +252,7 @@ export function TenSecondsChallengeOverlay({
                   {totalReaders > 1 ? t('challenge.readAloudTurn') : t('challenge.readAloud')}
                 </Text>
               </>
-            ) : (
+            ) : title ? null : (
               <View style={styles.spacer} />
             )}
 
@@ -409,8 +409,15 @@ const styles = StyleSheet.create({
 
   /* Đề bài - chỗ quan trọng nhất của nhịp `run`, cho chữ to. */
   challengedLine: { fontSize: 13, color: 'rgba(226,232,255,0.75)', textAlign: 'center' },
+  /*
+   * K102: hộp co theo nội dung (đề bài + danh sách tên có thể 5-6 dòng), tối đa ~62 % chiều
+   * cao khung rồi cuộn - trước đây `flex: 1` chia đôi với `spacer` nên hộp chỉ còn 4 dòng,
+   * dòng tên cuối bị cắt (ảnh Tony 19:08 16/9).
+   */
   titleBox: {
-    flex: 1,
+    flexGrow: 0,
+    flexShrink: 1,
+    maxHeight: '62%',
     borderRadius: 10,
     backgroundColor: '#F47B20',
     paddingHorizontal: 12,

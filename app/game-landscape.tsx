@@ -635,7 +635,13 @@ export default function GameLandscapeScreen() {
    *     (gói 85 ở NextTurn nạp lại state).
    * Đứng sau tấm vòng đua nếu tấm đó đang hiện; tự tắt 3,5 s.
    */
-  const [turnBanner, setTurnBanner] = useState<{ text: string; mine: boolean } | null>(null);
+  /**
+   * `kind` (K102): `'turn'` = lời chào lượt ("It's X's go") - được GẮN vào tấm kết quả đang
+   * hiện (K100); `'notice'` = lời nhắc nhất thời ("X, please indicate…", "X goes clockwise")
+   * - có tấm kết quả đang hiện thì BỎ, không gắn (Tony 09-16: tấm Fail kèm dòng "please
+   * indicate" đã hết nghĩa).
+   */
+  const [turnBanner, setTurnBanner] = useState<{ text: string; mine: boolean; kind?: 'turn' | 'notice' } | null>(null);
 
   /*
    * Ghế dùng cho KẾT NỐI được đóng băng ở lần mount - đúng ghế màn này mở ra với.
@@ -848,7 +854,7 @@ export default function GameLandscapeScreen() {
                 category,
               });
               if (dice) pendingDirectionBanner.current = text;
-              else setTurnBanner({ text, mine: false });
+              else setTurnBanner({ text, mine: false, kind: 'notice' });
               return null;
             }
             return prev;
@@ -1233,7 +1239,7 @@ export default function GameLandscapeScreen() {
           case 'TenSecondsChallengeFailOrPass':
             if (!seat || !same(str('JudgePlayerId'), seat.playerId)) {
               setChallenge(null);
-              setTurnBanner({ text: t('challenge.judging', { name: str('Nickname') }), mine: false });
+              setTurnBanner({ text: t('challenge.judging', { name: str('Nickname') }), mine: false, kind: 'notice' });
             }
             return;
 
@@ -1241,6 +1247,8 @@ export default function GameLandscapeScreen() {
           case 'MainTenSecondChallengePass':
           case 'TenSecondChallengeFail': {
             setChallenge(null);
+            /* Nhãn "X, please indicate…" còn chờ thì bỏ - đã chấm xong (K102). */
+            setTurnBanner((prev) => (prev?.kind === 'notice' ? null : prev));
             const tries = num('MaxTries');
             const result: TurnResult =
               viewName === 'MainTenSecondChallengePass'
@@ -1311,6 +1319,19 @@ export default function GameLandscapeScreen() {
             setDirection({ ...pk, readOnly: true, ownerName: str('Nickname') });
             return;
           }
+
+          /*
+           * Trọng tài không bấm Start, lưới 90 s bỏ qua thử thách (K102): đóng popup ở MỌI máy
+           * (trước đây chỉ người bị chấm nhận gói 16, trọng tài giữ nút Start mãi) + nhắc.
+           */
+          case 'TenSecondsChallengeSkipped':
+            setChallenge(null);
+            setTurnBanner({
+              text: t('challenge.skipped', { name: str('Nickname'), judge: str('JudgeNickname') }),
+              mine: false,
+              kind: 'notice',
+            });
+            return;
 
           default:
             console.warn('[BoardView] chưa có tấm native cho', viewName, model);
@@ -2544,7 +2565,7 @@ export default function GameLandscapeScreen() {
 
     /* Nhãn "X goes clockwise…" để dành lúc xúc xắc còn lăn (K99). */
     if (pendingDirectionBanner.current) {
-      setTurnBanner({ text: pendingDirectionBanner.current, mine: false });
+      setTurnBanner({ text: pendingDirectionBanner.current, mine: false, kind: 'notice' });
       pendingDirectionBanner.current = null;
     }
 
@@ -2613,6 +2634,7 @@ export default function GameLandscapeScreen() {
      * tắt và lời chào bị bỏ (luật xúc xắc ở trên), người khác không biết ai đi tiếp (Tony 09-16).
      */
     if (turnResult) {
+      if (turnBanner.kind === 'notice') { setTurnBanner(null); return; }
       const text = turnBanner.text;
       setTurnResult((prev) => (prev ? { ...prev, nextTurnText: text } : prev));
       setTurnBanner(null);
