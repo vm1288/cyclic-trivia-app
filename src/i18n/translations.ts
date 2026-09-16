@@ -284,6 +284,10 @@ export const en = {
   'challenge.waitJudge': 'Waiting for {name} to start the challenge…',
   /** Nhịp đếm ngược: đề bài + đồng hồ. Chép từ `TenSecondsChallenge.cshtml`. */
   'challenge.hereIsYours': '{name}, here is your 10-second Challenge',
+  'challenge.ofPlayer': "{name}'s 10-second Challenge",
+  'challenge.challengerWait': '{name} is the judge - the clock starts when they tap Start.',
+  'challenge.readerWait': 'Read your word when asked. {name} will tap Start when everyone is ready.',
+  'challenge.judging': '{name}, please indicate on your phone if the challenge was successfully achieved.',
   'challenge.checkPhones': 'All other players, please check your phones to view your assigned word.',
   'challenge.judgeLineMulti': "{name}, you are the judge. When ready to start, you should tap the 'Start' button on your phone.",
   'challenge.judgeLineTwo': '{name}, when ready to start, you should tap the "Start" button on your phone.',
@@ -317,6 +321,8 @@ export const en = {
   'board.hiddenBody': 'Questions and answers get the whole space. Tap to bring the board back.',
 
   'result.correct': '{name} got it right!',
+  'result.challengePass': '{name} passed Challenge!',
+  'result.challengeFail': '{name} failed Challenge!',
   /** `{unit}` là runs / goals / points tuỳ bàn. Dấu chấm cuối là của bản web. */
   'result.earned': '{point} {unit}.',
   /** Hiện thêm khi người chơi còn lượt tung nữa (`MaxTries < TurnMaxTries`). */
@@ -828,6 +834,10 @@ const vi: Record<TranslationKey, string> = {
   'challenge.start': 'Bắt đầu',
   'challenge.waitJudge': 'Đang chờ {name} bấm bắt đầu…',
   'challenge.hereIsYours': '{name}, đây là thử thách 10 giây của bạn',
+  'challenge.ofPlayer': 'Thử thách 10 giây của {name}',
+  'challenge.challengerWait': '{name} là trọng tài - đồng hồ chạy khi họ bấm Bắt đầu.',
+  'challenge.readerWait': 'Đọc lời của bạn khi được gọi. {name} sẽ bấm Bắt đầu khi mọi người sẵn sàng.',
+  'challenge.judging': '{name}, hãy chấm trên điện thoại xem thử thách có thành công không.',
   'challenge.checkPhones': 'Những người còn lại xem điện thoại để biết phần lời của mình.',
   'challenge.judgeLineMulti': '{name}, bạn là trọng tài. Sẵn sàng thì bấm nút "Bắt đầu" trên điện thoại.',
   'challenge.judgeLineTwo': '{name}, sẵn sàng thì bấm nút "Bắt đầu" trên điện thoại.',
@@ -846,6 +856,8 @@ const vi: Record<TranslationKey, string> = {
   'board.hiddenBody': 'Câu hỏi và kết quả được cả chỗ này. Chạm để hiện lại bàn cờ.',
 
   'result.correct': '{name} trả lời đúng!',
+  'result.challengePass': '{name} vượt qua thử thách!',
+  'result.challengeFail': '{name} không vượt qua thử thách!',
   'result.earned': '{point} {unit}.',
   'result.rollAgainSecond': 'Mời bạn tung lần hai',
   'result.rollAgainThird': 'Mời bạn tung lần ba',

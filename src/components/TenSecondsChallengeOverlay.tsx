@@ -90,6 +90,7 @@ export function TenSecondsChallengeOverlay({
   phase,
   words,
   isJudge,
+  isChallenger = false,
   readerNumber,
   totalReaders,
   title,
@@ -106,6 +107,8 @@ export function TenSecondsChallengeOverlay({
   phase: ChallengePhase;
   words: string[];
   isJudge: boolean;
+  /** Máy này là người BỊ CHẤM (gói 94, K98). Đổi lời dẫn: "đây là thử thách CỦA BẠN". */
+  isChallenger?: boolean;
   readerNumber: number;
   totalReaders: number;
   /** Đề bài (nhịp `run`). Có thể chứa HTML - đã gỡ thẻ trước khi hiện. */
@@ -207,6 +210,33 @@ export function TenSecondsChallengeOverlay({
         */}
         {phase === 'assign' ? (
           <>
+            {/*
+              K98 (Tony 09-16): ĐỀ BÀI phải hiện NGAY lúc vào ô, cho MỌI vai - trước
+              đây chỉ nhịp `run` (sau Start) mới có. Bản web đặt đề bài trên bàn cờ
+              (`TenSecondsChallenge.cshtml`) nên trang người chơi không cần; app không
+              có bàn cờ. Lời dẫn đổi theo người xem: người bị chấm đọc "đây là thử
+              thách CỦA BẠN", người khác đọc "thử thách của X". Gói 42 cũ (server chưa
+              lên K98) không có `title` thì khối này tự ẩn.
+            */}
+            {title ? (
+              <>
+                <Text style={styles.challengedLine} numberOfLines={2}>
+                  {isChallenger
+                    ? t('challenge.hereIsYours').replace('{name}', challengedName)
+                    : t('challenge.ofPlayer').replace('{name}', challengedName)}
+                </Text>
+                <ScrollView style={styles.titleBox} showsVerticalScrollIndicator={false}>
+                  <Text style={styles.titleText}>{stripHtml(title)}</Text>
+                  {studyText ? <Text style={styles.studyText}>{stripHtml(studyText)}</Text> : null}
+                </ScrollView>
+                {appendixType === 'B' && isChallenger ? (
+                  <Text style={styles.footNote} numberOfLines={2}>
+                    {t('challenge.checkPhones')}
+                  </Text>
+                ) : null}
+              </>
+            ) : null}
+
             {hasWords && totalReaders > 1 ? (
               <Text style={styles.role} numberOfLines={2}>
                 {t('challenge.reader').replace('{ordinal}', ordinal(readerNumber))}
@@ -238,8 +268,13 @@ export function TenSecondsChallengeOverlay({
 
             {isJudge ? (
               <>
-                <Text style={styles.footNote} numberOfLines={2}>
-                  {hasWords ? t('challenge.startAfterAll') : t('challenge.startWhenReady')}
+                <Text style={styles.footNote} numberOfLines={3}>
+                  {hasWords
+                    ? t('challenge.startAfterAll')
+                    : title
+                      /* Câu của bàn cờ web nói với trọng tài - ở đây trọng tài chính là người đọc. */
+                      ? t(totalPlayers > 2 ? 'challenge.judgeLineMulti' : 'challenge.judgeLineTwo').replace('{name}', judgeName)
+                      : t('challenge.startWhenReady')}
                 </Text>
 
                 <Pressable
@@ -250,9 +285,13 @@ export function TenSecondsChallengeOverlay({
                 </Pressable>
               </>
             ) : (
-              /* Người ĐỌC không có nút nào - đọc xong thì chờ trọng tài bấm Start. */
-              <Text style={styles.footNote} numberOfLines={2}>
-                {t('challenge.waitJudge').replace('{name}', judgeName)}
+              /* Không phải trọng tài thì không có nút: người bị chấm chờ đồng hồ, người ĐỌC (kiểu B) chờ tới lượt đọc. */
+              <Text style={styles.footNote} numberOfLines={3}>
+                {isChallenger
+                  ? t('challenge.challengerWait').replace('{name}', judgeName)
+                  : hasWords
+                    ? t('challenge.readerWait').replace('{name}', judgeName)
+                    : t('challenge.waitJudge').replace('{name}', judgeName)}
               </Text>
             )}
           </>
@@ -267,7 +306,9 @@ export function TenSecondsChallengeOverlay({
         {phase === 'run' ? (
           <>
             <Text style={styles.challengedLine} numberOfLines={2}>
-              {t('challenge.hereIsYours').replace('{name}', challengedName)}
+              {isChallenger
+                ? t('challenge.hereIsYours').replace('{name}', challengedName)
+                : t('challenge.ofPlayer').replace('{name}', challengedName)}
             </Text>
 
             <ScrollView style={styles.titleBox} showsVerticalScrollIndicator={false}>

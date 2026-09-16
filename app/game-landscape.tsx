@@ -396,6 +396,8 @@ export default function GameLandscapeScreen() {
     phase: ChallengePhase;
     words: string[];
     isJudge: boolean;
+    /** Máy này là người BỊ CHẤM - từ gói 94 (K98). */
+    isChallenger: boolean;
     readerNumber: number;
     totalReaders: number;
     /** Đề bài - chỉ có ở nhịp `run` (gói 30), và chỉ MÁY CHỦ PHÒNG nhận. */
@@ -1143,23 +1145,119 @@ export default function GameLandscapeScreen() {
         return;
       }
 
+      /*
+       * ============================================================
+       * GƯƠNG BÀN CỜ - gói 94 `BoardView` (K98, Tony chốt 09-16)
+       * ============================================================
+       *
+       * Mọi tấm mà BÀN CỜ CHÍNH nhận (HTML Razor / Vue `MainViewName`) thì máy này
+       * cũng nhận, dưới dạng `{ ViewName, Model, DurationSeconds }`, và vẽ NATIVE
+       * theo bảng dưới. Máy chỉ XEM: không tấm nào ở đây gửi gói ngược lại - bàn cờ
+       * / watchdog vẫn là người điều khiển ván.
+       *
+       * Thêm view mới = thêm một `case` (model đúng như view Razor nhận, xem
+       * `GameHubService.MirrorBoardViewAsync`). Tên chưa có thì `console.warn` để
+       * lộ ra ngay khi đo, không im lặng.
+       *
+       * ⚠️ View nào app đã tự vẽ từ đường khác (HTTP response, gói 93, 92, 33…)
+       * thì KHÔNG map ở đây nữa kẻo hiện đôi - khi đưa view đó qua gương thì bỏ
+       * đường cũ cùng lúc.
+       */
+      if (packet.typeID === TYPE_ID.BoardView) {
+        const viewName = typeof packet.ViewName === 'string' ? packet.ViewName : '';
+        const model = (packet.Model ?? {}) as Record<string, unknown>;
+        const str = (k: string) => (typeof model[k] === 'string' ? (model[k] as string) : '');
+        const num = (k: string) => (typeof model[k] === 'number' ? (model[k] as number) : 0);
+        const data = (model.Data ?? {}) as Record<string, unknown>;
+        const dstr = (k: string) => (typeof data[k] === 'string' ? (data[k] as string) : '');
+
+        switch (viewName) {
+          /* Vào ô 10 giây: đề bài cho cả phòng (`TenSecondsChallenge.cshtml`) + vai của máy này. */
+          case 'TenSecondsChallenge':
+            setChallenge({
+              phase: 'assign',
+              words: Array.isArray(model.Words) ? (model.Words as string[]) : [],
+              isJudge: model.IsJudge === true,
+              isChallenger: model.IsChallenger === true,
+              readerNumber: num('ReaderNumber'),
+              totalReaders: num('TotalReaders'),
+              title: dstr('Title'),
+              studyText: dstr('StudyText'),
+              appendixType: dstr('AppendixType'),
+              challengedName: str('Nickname'),
+              judgeName: str('ChoosedNickname'),
+              totalPlayers: num('totalPlayers'),
+              countdownSeconds: 10,
+              countdownPlayerId: '',
+              ownsCountdown: false,
+            });
+            return;
+
+          /* Hết 10 giây: "X, please indicate on your phone…" - trọng tài có nút (gói 43), người khác chỉ xem. */
+          case 'TenSecondsChallengeFailOrPass':
+            if (!seat || !same(str('JudgePlayerId'), seat.playerId)) {
+              setChallenge(null);
+              setTurnBanner({ text: t('challenge.judging', { name: str('Nickname') }), mine: false });
+            }
+            return;
+
+          /* Trọng tài chấm ĐẠT / TRƯỢT - tấm cho cả phòng, chép hai view của bàn cờ. */
+          case 'MainTenSecondChallengePass':
+          case 'TenSecondChallengeFail': {
+            setChallenge(null);
+            const tries = num('MaxTries');
+            const result: TurnResult =
+              viewName === 'MainTenSecondChallengePass'
+                ? {
+                    kind: 'challengePass',
+                    point: num('Point'),
+                    earnedStar: true,
+                    /* "Your second/third roll please" - chỉ khi còn lượt tung. */
+                    rollAgain: tries === 1 ? 2 : tries === 2 ? 3 : undefined,
+                    name: str('Nickname'),
+                  }
+                : { kind: 'challengeFail', name: str('Nickname') };
+            const showing = turnResultRef.current;
+            if (showing ? showing.kind !== 'late' : raceWinnerRef.current || earnedCardRef.current) {
+              pendingOtherResult.current = result;
+              return;
+            }
+            setTurnResult(result);
+            return;
+          }
+
+          default:
+            console.warn('[BoardView] chưa có tấm native cho', viewName, model);
+            return;
+        }
+      }
+
       if (packet.typeID === TYPE_ID.TenSecondsChallengeStart) {
-        setChallenge({
-          phase: 'assign',
+        const fromStart = {
           words: Array.isArray(packet.Words) ? (packet.Words as string[]) : [],
           isJudge: packet.IsJudge === true,
           readerNumber: typeof packet.ReaderNumber === 'number' ? packet.ReaderNumber : 0,
           totalReaders: typeof packet.TotalReaders === 'number' ? packet.TotalReaders : 0,
-          title: '',
-          studyText: '',
-          appendixType: '',
-          challengedName: '',
-          judgeName: '',
-          totalPlayers: 0,
-          countdownSeconds: 10,
-          countdownPlayerId: '',
-          ownsCountdown: false,
-        });
+        };
+        setChallenge((prev) =>
+          /* Đã có đề bài từ gương bàn cờ (`TenSecondsChallenge`) thì giữ, chỉ gộp vai (K98). */
+          prev && prev.phase === 'assign'
+            ? { ...prev, ...fromStart }
+            : {
+                phase: 'assign',
+                ...fromStart,
+                isChallenger: false,
+                title: '',
+                studyText: '',
+                appendixType: '',
+                challengedName: '',
+                judgeName: '',
+                totalPlayers: 0,
+                countdownSeconds: 10,
+                countdownPlayerId: '',
+                ownsCountdown: false,
+              },
+        );
         return;
       }
 
@@ -1176,8 +1274,10 @@ export default function GameLandscapeScreen() {
        */
       if (packet.typeID === TYPE_ID.TenSecondsChallenge) {
         const pid = typeof packet.PlayerId === 'string' ? packet.PlayerId : '';
-        setChallenge({
+        setChallenge((prev) => ({
           phase: 'run',
+          /* Vai "bị chấm" chỉ có ở gương bàn cờ - giữ lại để lời dẫn không đổi giữa hai nhịp (K98). */
+          isChallenger: prev?.isChallenger ?? false,
           /*
            * ⚠️ CHỈ MỘT máy được chạy đồng hồ và gửi gói 43: máy của TRỌNG TÀI,
            * tức máy có `seat.playerId` trùng `PlayerId` của gói này. Mọi máy khác
@@ -1200,7 +1300,7 @@ export default function GameLandscapeScreen() {
               ? packet.CountdownSeconds
               : 10,
           countdownPlayerId: pid,
-        });
+        }));
         return;
       }
 
@@ -1216,6 +1316,7 @@ export default function GameLandscapeScreen() {
                 phase: 'judge',
                 words: [],
                 isJudge: true,
+                isChallenger: false,
                 readerNumber: 0,
                 totalReaders: 0,
                 title: '',
@@ -2851,7 +2952,10 @@ export default function GameLandscapeScreen() {
   };
 
   const challengeStart = () => {
-    setChallenge(null);
+    /*
+     * K98: KHÔNG đóng khung ở đây - gói 30 (nhịp `run`) tới ngay sau và cần
+     * `isChallenger` từ state cũ. Nút Start tự khoá sau một lần bấm (`sent`).
+     */
     void connection.current?.send(TYPE_ID.TenSecondsChallengeStart);
   };
 
@@ -3299,6 +3403,7 @@ export default function GameLandscapeScreen() {
                 phase={challenge.phase}
                 words={challenge.words}
                 isJudge={challenge.isJudge}
+                isChallenger={challenge.isChallenger}
                 readerNumber={challenge.readerNumber}
                 totalReaders={challenge.totalReaders}
                 title={challenge.title}

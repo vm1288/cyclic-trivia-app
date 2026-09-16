@@ -299,6 +299,13 @@ export const TYPE_ID = {
    */
   TurnAnswerResult: 93,
   /**
+   * GƯƠNG BÀN CỜ (K98): mọi tấm bàn cờ chính nhận thì máy này cũng nhận -
+   * `{ ViewName, Model, DurationSeconds }`. `ViewName` = tên view Razor / `MainViewName`
+   * Vue; `Model` đúng model của view (+ trường riêng cho người xem nếu cần). Máy chỉ XEM.
+   * Bảng `ViewName -> tấm` nằm ở `game-landscape.tsx` (tìm "GƯƠNG BÀN CỜ").
+   */
+  BoardView: 94,
+  /**
    * "Ghế này vừa được mở ở một MÁY KHÁC" — gửi cho máy vừa BỊ ĐÁ khỏi slot.
    *
    * Mỗi người chơi chỉ có MỘT ô `ConnectionId` ở server và mọi gói tin đều đi qua

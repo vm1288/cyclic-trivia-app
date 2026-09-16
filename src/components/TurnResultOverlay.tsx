@@ -68,6 +68,14 @@ type TurnResultKind =
        */
       explain?: string;
     }
+  /**
+   * Ô 10 giây - trọng tài chấm ĐẠT (gói 95, K98). Tên ở `name`. Chép
+   * `MainTenSecondChallengePass.cshtml`: "{name} passed Challenge!" / "{point} runs." ★ /
+   * "Your second roll please".
+   */
+  | { kind: 'challengePass'; point: number; earnedStar: boolean; rollAgain?: 2 | 3 }
+  /** Ô 10 giây - trọng tài chấm TRƯỢT (gói 95). `TenSecondChallengeFail.cshtml`: "{name} failed Challenge!". */
+  | { kind: 'challengeFail' }
   /** Mình trả lời sai. */
   | { kind: 'wrong' }
   /** Mình hết giờ, không kịp trả lời. */
@@ -115,9 +123,9 @@ export function TurnResultOverlay({
   }));
 
   const tone =
-    result.kind === 'correct'
+    result.kind === 'correct' || result.kind === 'challengePass'
       ? { line: boardColors.green, tint: 'rgba(6,54,22,0.96)' }
-      : result.kind === 'wrong' || result.kind === 'timeout'
+      : result.kind === 'wrong' || result.kind === 'timeout' || result.kind === 'challengeFail'
         ? { line: boardColors.red, tint: 'rgba(58,8,16,0.96)' }
         : { line: boardColors.amber, tint: 'rgba(52,40,4,0.96)' };
 
@@ -134,22 +142,29 @@ export function TurnResultOverlay({
   const title =
     result.kind === 'correct'
       ? t('result.correct', { name })
-      : result.kind === 'wrong'
-        ? t('result.wrong', { name })
-        : result.kind === 'timeout'
-          ? t('result.timeout', { name })
-          : t('result.lateBy', { name: result.by ?? '' });
+      : result.kind === 'challengePass'
+        ? t('result.challengePass', { name })
+        : result.kind === 'challengeFail'
+          ? t('result.challengeFail', { name })
+          : result.kind === 'wrong'
+            ? t('result.wrong', { name })
+            : result.kind === 'timeout'
+              ? t('result.timeout', { name })
+              : t('result.lateBy', { name: result.by ?? '' });
 
+  /* Trượt thử thách: web chỉ có một dòng tên + "Y It's your go" - dòng sau là tấm chào lượt lo. */
   const body =
-    result.kind === 'correct'
+    result.kind === 'correct' || result.kind === 'challengePass'
       ? t('result.earned', { point: result.point, unit })
       : result.kind === 'wrong' || result.kind === 'timeout'
         ? t('result.wrongBody')
-        : t('result.late');
+        : result.kind === 'challengeFail'
+          ? ''
+          : t('result.late');
 
   /* Bản web hiện thêm dòng này khi người chơi còn lượt tung nữa. */
   const extra =
-    result.kind === 'correct' && result.rollAgain
+    (result.kind === 'correct' || result.kind === 'challengePass') && result.rollAgain
       ? t(result.rollAgain === 3 ? 'result.rollAgainThird' : 'result.rollAgainSecond')
       : null;
 
@@ -211,15 +226,17 @@ export function TurnResultOverlay({
           {title}
         </Text>
 
+        {body ? (
         <View style={styles.bodyRow}>
           <Text style={[styles.body, compact ? null : styles.bodyFull]} numberOfLines={2}>
             {body}
           </Text>
           {/* Sao chỉ hiện khi thật sự được cộng - xem `earnedStar`. */}
-          {result.kind === 'correct' && result.earnedStar ? (
+          {(result.kind === 'correct' || result.kind === 'challengePass') && result.earnedStar ? (
             <Text style={styles.star}>★</Text>
           ) : null}
         </View>
+        ) : null}
 
         {extra ? (
           <Text style={styles.extra} numberOfLines={1}>
