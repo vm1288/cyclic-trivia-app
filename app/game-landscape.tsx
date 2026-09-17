@@ -53,6 +53,7 @@ import { BattleResultOverlay } from '../src/components/BattleResultOverlay';
 import { BattleDiceOverlay, type BattleDiceState } from '../src/components/BattleDiceOverlay';
 import { BattleVideoOverlay } from '../src/components/BattleVideoOverlay';
 import { TurnResultOverlay, type TurnResult } from '../src/components/TurnResultOverlay';
+import { RaceNobodyOverlay } from '../src/components/RaceNobodyOverlay';
 import { RaceWinnerOverlay } from '../src/components/RaceWinnerOverlay';
 import { RaceCountdownOverlay } from '../src/components/RaceCountdownOverlay';
 import { CurveBallOverlay } from '../src/components/CurveBallOverlay';
@@ -437,6 +438,14 @@ export default function GameLandscapeScreen() {
    * người thắng.
    */
   const [raceWinner, setRaceWinner] = useState<{ name: string; isMe: boolean } | null>(null);
+  /** Vòng đua không ai đúng - "OOPS! Nobody got it right… / Next question is coming! (Ns)" (K103). */
+  const [raceNobody, setRaceNobody] = useState<{ seconds: number } | null>(null);
+  /**
+   * Số lần MÌNH đã tung trong lượt này (K103) - đổi lời chào: lần 2 "X, your second roll
+   * please", lần 3 "…third…". Đếm tại máy vì gói 16 tới trước khi state nạp lại `MaxTries`.
+   * Về 0 khi đổi lượt.
+   */
+  const myRollsThisTurn = useRef(0);
 
   /**
    * CURVE BALL vừa áp (gói 90) - hiện tấm Googly cho tới khi server đi tiếp
@@ -917,10 +926,18 @@ export default function GameLandscapeScreen() {
         if (packet.Action === CASE_ACTION.RollDice && seat) {
           const meNow = snapshot?.Players?.find((pl) => pl.Id === seat.playerId);
           const name = meNow?.NickName ?? '';
+          const rolls = myRollsThisTurn.current;
+          myRollsThisTurn.current = rolls + 1;
           if (name) {
             setTurnBanner({
-              text: t(meNow?.HasRolledFirstDice ? 'turn.yourGoYou' : 'turn.firstRollYou', { name }),
+              text:
+                rolls >= 2
+                  ? t('turn.rollAgainThirdYou', { name })
+                  : rolls === 1
+                    ? t('turn.rollAgainSecondYou', { name })
+                    : t(meNow?.HasRolledFirstDice ? 'turn.yourGoYou' : 'turn.firstRollYou', { name }),
               mine: true,
+              kind: 'turn',
             });
           }
         }
@@ -1319,6 +1336,13 @@ export default function GameLandscapeScreen() {
             setDirection({ ...pk, readOnly: true, ownerName: str('Nickname') });
             return;
           }
+
+          /* Vòng đua không ai đúng (K103): tấm chung + đếm lùi tới câu mới. */
+          case 'WrongAnswerForTurn':
+            setQuestion((prev) => (prev?.kind === 'race' ? null : prev));
+            setTurnResult((prev) => (prev && (prev.kind === 'timeout' || prev.kind === 'wrong' || prev.kind === 'late') ? null : prev));
+            setRaceNobody({ seconds: num('Seconds') || 10 });
+            return;
 
           /*
            * Trọng tài không bấm Start, lưới 90 s bỏ qua thử thách (K102): đóng popup ở MỌI máy
@@ -2003,6 +2027,7 @@ export default function GameLandscapeScreen() {
       if (!data.Question?.Id) return;
 
       setRaceFired(true);
+      setRaceNobody(null);
       setQuestion({
         kind: 'race',
         question: data.Question,
@@ -2611,6 +2636,7 @@ export default function GameLandscapeScreen() {
     const prev = lastTurnPlayer.current;
     lastTurnPlayer.current = currentTurnPlayerId;
     if (prev === null || prev === currentTurnPlayerId) return;
+    myRollsThisTurn.current = 0;
     /* Đổi lượt = mọi khung chỉ-xem của lượt trước đã hết nghĩa (K100). */
     setChallenge((prev) => (prev && prev.phase !== 'judge' ? null : prev));
     setDirection((prev) => (prev?.readOnly ? null : prev));
@@ -2635,6 +2661,8 @@ export default function GameLandscapeScreen() {
      */
     if (turnResult) {
       if (turnBanner.kind === 'notice') { setTurnBanner(null); return; }
+      /* Tấm của MÌNH đã có dòng "Your second roll please" → lời chào chờ tấm tắt rồi mới lên (K103). */
+      if ((turnResult.kind === 'correct' || turnResult.kind === 'challengePass') && turnResult.rollAgain && !turnResult.name) return;
       const text = turnBanner.text;
       setTurnResult((prev) => (prev ? { ...prev, nextTurnText: text } : prev));
       setTurnBanner(null);
@@ -2823,7 +2851,8 @@ export default function GameLandscapeScreen() {
     if (typeof result.isCorrect !== 'boolean') return;
 
     if (!result.isCorrect) {
-      setTurnResult({ kind: 'wrong' });
+      /* Người TRANH sai thì không có dòng "The others are racing…" (K103). */
+      setTurnResult({ kind: 'wrong', main: isMyTurn });
       return;
     }
 
@@ -3151,8 +3180,12 @@ export default function GameLandscapeScreen() {
 
     answered.current = current.question.Id;
 
-    /* Bản web có màn riêng cho hết giờ (`PlayerTimeoutAnswer.cshtml`). */
-    setTurnResult({ kind: 'timeout' });
+    /*
+     * Bản web có màn riêng cho hết giờ (`PlayerTimeoutAnswer.cshtml`). Vòng đua thì KHÔNG:
+     * cả phòng nhận chung "OOPS! Nobody got it right…" qua gương (K103), không phải mỗi máy
+     * một câu "X, you're out of time!".
+     */
+    if (current.kind !== 'race') setTurnResult({ kind: 'timeout', main: isMyTurn });
 
     void sendFor(current.kind)(
       { questionId: current.question.Id, answerId: EMPTY_GUID, isTimeout: true },
@@ -3503,6 +3536,8 @@ export default function GameLandscapeScreen() {
             {raceWinner ? (
               <RaceWinnerOverlay name={raceWinner.name} isMe={raceWinner.isMe} />
             ) : null}
+
+            {raceNobody ? <RaceNobodyOverlay seconds={raceNobody.seconds} /> : null}
 
             {/*
               "WHO GOES FIRST?" đếm tới mốc SERVER (K93) - từ lúc chủ phòng bấm START tới
@@ -4064,6 +4099,8 @@ export default function GameLandscapeScreen() {
            * chẳng có gì để xếp hạng.
            */
           isLeaderboard={(snapshot?.Game?.TotalRollDice ?? 0) > 0}
+          players={snapshot?.Players ?? []}
+          unit={pointUnit}
           onLeave={leaveToHome}
         />
       ) : null}

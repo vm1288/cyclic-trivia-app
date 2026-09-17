@@ -224,8 +224,10 @@ export const en = {
    * của bàn cờ web; người khác: bản web không có (họ nhìn bàn cờ chung), app phải nói.
    */
   'turn.firstRollYou': '{name}, it’s your first roll please',
-  'turn.yourGoYou': 'So {name}, it’s your go',
+  'turn.yourGoYou': '{name}, it’s your go',
   'turn.othersGo': 'It’s {name}’s go',
+  'turn.rollAgainSecondYou': '{name}, your second roll please',
+  'turn.rollAgainThirdYou': '{name}, your third roll please',
   /** Ô Give It Up - web `GiveItUpLoseTheGo.cshtml` "You lose the go." / `PreviousPlayerGiveItUp` "{name} loses the go." */
   'square.giveItUpYou': 'GIVE IT UP — you lose the go',
   'square.giveItUpOther': 'GIVE IT UP — {name} loses the go',
@@ -330,8 +332,8 @@ export const en = {
   /** Hiện thêm khi người chơi còn lượt tung nữa (`MaxTries < TurnMaxTries`). */
   'result.rollAgainSecond': 'Your second roll please',
   'result.rollAgainThird': 'Your third roll please',
-  'result.rollAgainSecondOther': "{name}'s second roll",
-  'result.rollAgainThirdOther': "{name}'s third roll",
+  'result.rollAgainSecondOther': "It's {name}'s second roll",
+  'result.rollAgainThirdOther': "It's {name}'s third roll",
   'result.wrong': '{name} got it wrong!',
   'result.wrongBody': 'The others are racing to answer correctly',
   'result.wrongBodyOthers': 'Get ready — you answer next!',
@@ -343,6 +345,8 @@ export const en = {
   'race.winner': '{name} is the fastest!',
   'race.winnerYou': 'You are the fastest!',
   'race.first': 'They take the first turn!',
+  'race.nobody': 'OOPS! Nobody got it right...',
+  'race.nextQuestion': 'Next question is coming! ({seconds}s)',
   'race.firstYou': 'You take the first turn',
 
   /*
@@ -801,6 +805,8 @@ const vi: Record<TranslationKey, string> = {
   'turn.firstRollYou': '{name}, mời bạn tung lần đầu',
   'turn.yourGoYou': 'Nào {name}, tới lượt bạn',
   'turn.othersGo': 'Tới lượt {name}',
+  'turn.rollAgainSecondYou': '{name}, mời bạn tung lần hai',
+  'turn.rollAgainThirdYou': '{name}, mời bạn tung lần ba',
   'square.giveItUpYou': 'GIVE IT UP — bạn mất lượt',
   'square.giveItUpOther': 'GIVE IT UP — {name} mất lượt',
   'game.noSeat': 'Bạn không có ghế trong ván này.',
@@ -870,8 +876,8 @@ const vi: Record<TranslationKey, string> = {
   'result.earned': '{point} {unit}.',
   'result.rollAgainSecond': 'Mời bạn tung lần hai',
   'result.rollAgainThird': 'Mời bạn tung lần ba',
-  'result.rollAgainSecondOther': '{name} tung lần hai',
-  'result.rollAgainThirdOther': '{name} tung lần ba',
+  'result.rollAgainSecondOther': 'Tới lượt tung lần hai của {name}',
+  'result.rollAgainThirdOther': 'Tới lượt tung lần ba của {name}',
   'result.wrong': '{name} trả lời sai!',
   'result.wrongBody': 'Những người khác đang tranh trả lời',
   'result.wrongBodyOthers': 'Sẵn sàng — tới lượt bạn trả lời!',
@@ -882,6 +888,8 @@ const vi: Record<TranslationKey, string> = {
   'race.winner': '{name} nhanh nhất!',
   'race.winnerYou': 'Bạn nhanh nhất!',
   'race.first': 'Người đó đi trước',
+  'race.nobody': 'ÔI! Không ai trả lời đúng...',
+  'race.nextQuestion': 'Câu tiếp theo sắp tới! ({seconds}s)',
   'race.firstYou': 'Bạn đi trước',
 
   'battle.title': 'ĐẤU',

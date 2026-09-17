@@ -58,6 +58,8 @@ export function GameOverOverlay({
   meId,
   message,
   isLeaderboard,
+  players,
+  unit = '',
   onLeave,
 }: {
   gameId: string | null;
@@ -73,6 +75,14 @@ export function GameOverOverlay({
    * tung), nhưng `TotalRollDice` mới là thứ cả server lẫn bàn cờ đọc.
    */
   isLeaderboard: boolean;
+  /**
+   * Người chơi của VÁN NÀY (K104, Tony 09-17): ván thường (tính giờ) không có bảng xếp hạng
+   * toàn cục, nhưng vẫn phải thấy ai nhất ván - "Current Match Result" xếp điểm cao → thấp,
+   * chỉ người trong phiên, không hạng leaderboard.
+   */
+  players?: { Id: string; NickName: string; Point: number }[];
+  /** "runs" / "goals" / "points" tuỳ bàn. */
+  unit?: string;
   onLeave: () => void;
 }) {
   const t = useT();
@@ -163,6 +173,27 @@ export function GameOverOverlay({
         <Text style={styles.title}>{t('gameOver.title')}</Text>
         <Text style={styles.message}>{message || t('gameOver.defaultMessage')}</Text>
 
+        {/* Ván thường: kết quả ván này ngay dưới câu ngẫu nhiên (K104). Leaderboard Challenge có màn riêng. */}
+        {!isLeaderboard && players && players.length > 0 ? (
+          <View style={styles.matchBox}>
+            <Text style={styles.matchTitle}>{t('gameOver.currentMatch')}</Text>
+            {[...players]
+              .sort((a, b) => b.Point - a.Point)
+              .map((p, i) => (
+                <View key={p.Id} style={styles.matchRow}>
+                  <Text style={[styles.matchRank, i === 0 && styles.matchFirst]}>{i + 1}</Text>
+                  <Text style={[styles.matchName, i === 0 && styles.matchFirst]} numberOfLines={1}>
+                    {p.NickName}
+                    {p.Id === meId ? t('gameOver.youSuffix') : ''}
+                  </Text>
+                  <Text style={[styles.matchPoint, i === 0 && styles.matchFirst]}>
+                    {p.Point} {unit}
+                  </Text>
+                </View>
+              ))}
+          </View>
+        ) : null}
+
         {/*
           Khung này là khung Game Over CHUNG cho mọi thể thức: "Game Over" + câu
           ngẫu nhiên. Thể thức Leaderboard Challenge có thêm nút LEADERBOARD -
@@ -233,6 +264,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#FDE68A',
   },
+  matchBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,255,0.3)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 4,
+  },
+  matchTitle: { fontSize: 11, fontWeight: '800', letterSpacing: 1.2, color: '#C7D2FE', textAlign: 'center', marginBottom: 2 },
+  matchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  matchRank: { width: 18, fontSize: 13, fontWeight: '800', color: 'rgba(226,232,255,0.7)', textAlign: 'center' },
+  matchName: { flex: 1, fontSize: 13.5, fontWeight: '700', color: '#F2F6FF' },
+  matchPoint: { fontSize: 13.5, fontWeight: '800', color: '#F2F6FF' },
+  matchFirst: { color: '#FDE68A' },
   message: {
     fontSize: 12.5,
     lineHeight: 17,

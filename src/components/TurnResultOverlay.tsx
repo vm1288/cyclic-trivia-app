@@ -77,10 +77,14 @@ type TurnResultKind =
   | { kind: 'challengePass'; point: number; earnedStar: boolean; rollAgain?: 2 | 3 }
   /** Ô 10 giây - trọng tài chấm TRƯỢT (gói 95). `TenSecondChallengeFail.cshtml`: "{name} failed Challenge!". */
   | { kind: 'challengeFail' }
-  /** Mình trả lời sai. */
-  | { kind: 'wrong' }
-  /** Mình hết giờ, không kịp trả lời. */
-  | { kind: 'timeout' }
+  /**
+   * Mình trả lời sai. `main` (K103): mình là NGƯỜI TỚI LƯỢT thì có dòng "The others are
+   * racing to answer correctly" (`PlayerWrongAnswer.cshtml`); mình chỉ TRANH trả lời thì
+   * không (`OtherPlayerWrongAnswer.cshtml` chỉ "You got it wrong!") - Tony 09-17.
+   */
+  | { kind: 'wrong'; main?: boolean }
+  /** Mình hết giờ, không kịp trả lời. `main` như trên. */
+  | { kind: 'timeout'; main?: boolean }
   /** Có người chốt câu trước mình. */
   | { kind: 'late'; by?: string };
 
@@ -166,8 +170,13 @@ export function TurnResultOverlay({
     result.kind === 'correct' || result.kind === 'challengePass'
       ? t('result.earned', { point: result.point, unit })
       : result.kind === 'wrong' || result.kind === 'timeout'
-        /* Tấm của NGƯỜI KHÁC sai/hết giờ (K100): người xem chính là người sắp tranh trả lời. */
-        ? t(result.name ? 'result.wrongBodyOthers' : 'result.wrongBody')
+        /* Tấm của NGƯỜI KHÁC sai/hết giờ (K100): người xem chính là người sắp tranh trả lời.
+           Mình sai mà chỉ là người TRANH (K103): không có dòng dưới. */
+        ? result.name
+          ? t('result.wrongBodyOthers')
+          : result.main === false
+            ? ''
+            : t('result.wrongBody')
         : result.kind === 'challengeFail'
           ? ''
           : t('result.late');
