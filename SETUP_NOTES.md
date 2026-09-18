@@ -423,3 +423,19 @@ PURCHASE lọc chúng và rơi về giá niêm yết. Muốn thấy sheet mua th
 là license tester của tài khoản Play. Server xác minh cần `Store:Google:ServiceAccountJson`
 (xem `Services/StorePurchaseVerifier.cs`); dev thì `Store:TrustUnverified = true` trong
 `appsettings.Development.json`.
+
+---
+
+## Google Cast (K107, `react-native-google-cast`) — module NATIVE, đổi gì cũng phải build lại
+
+- `app.json` → plugin `["react-native-google-cast", { "receiverAppId": "…", "expandedController": false }]`.
+  Prebuild ghi ID vào `AndroidManifest.xml` (`com.reactnative.googlecast.RECEIVER_APPLICATION_ID`) và
+  `castFrameworkVersion = "+"` vào `android/build.gradle`. **Đổi ID = prebuild + build lại APK.**
+- `CC1AD845` là Default Media Receiver của Google: quét thấy mọi Chromecast nhưng KHÔNG mở được URL.
+  ID thật lấy ở https://cast.google.com/publish (Custom Receiver → `https://<server>/cast-receiver.html`).
+- Cần Google Play Services trên máy (A17 có; LDPlayer có thể không → danh sách trống, không vỡ).
+- `src/cast/bigScreen.ts` `require` module trong try/catch: APK cũ chưa có module thì hộp Go big!
+  báo "Casting is not available…" và vẫn có SHARE LINK.
+- Cài package bằng `npm install react-native-google-cast --legacy-peer-deps`; lần cài 18/9 npm đã
+  dọn hai package `peer: true` không ai dùng (`@react-native/babel-preset`, `@react-native/metro-config`)
+  — Metro vẫn chạy (Expo dùng `babel-preset-expo` / `@expo/metro-config`).

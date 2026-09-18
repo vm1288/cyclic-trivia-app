@@ -44,7 +44,14 @@
       "expo-secure-store",
       "expo-screen-orientation",
       "expo-video",
-      "expo-iap"
+      "expo-iap",
+      [
+        "react-native-google-cast",
+        {
+          "receiverAppId": "CC1AD845",
+          "expandedController": false
+        }
+      ]
     ]
   }
 }

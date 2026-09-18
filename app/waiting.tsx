@@ -86,8 +86,9 @@ export default function WaitingScreen() {
     void connection.current?.send(TYPE_ID.HostResume);
   }, [connState, connection]);
 
-  const seats = snapshot?.Players ?? [];
-  const joined = seats.filter((p) => p.IsSetupNickName).length;
+  // K107: chỉ hiện ghế đã có người - ghế trống sẽ bị xoá lúc chủ phòng bấm START MATCH.
+  const seats = (snapshot?.Players ?? []).filter((p) => p.IsSetupNickName);
+  const joined = seats.length;
   const total = snapshot?.Game.NumberOfPlayers ?? seats.length;
 
   /*

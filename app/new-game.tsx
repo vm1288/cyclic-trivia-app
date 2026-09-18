@@ -16,7 +16,7 @@ import {
   getGameConfig,
   hostSeat,
   openRoom,
-  playersForDuration,
+  playerRange,
   stripGamePrefix,
   type GameConfig,
 } from '../src/api/game';
@@ -70,7 +70,8 @@ export default function NewGameScreen() {
      */
     const firstDuration = result.data.Durations[0]?.Id ?? null;
     setDuration(firstDuration);
-    setPlayers(playersForDuration(result.data, firstDuration)[0]?.NumberOfPlayers ?? null);
+    // K107: ván mở với SỐ GHẾ TỐI ĐA của thể thức; START MATCH cắt ghế trống.
+    setPlayers(playerRange(result.data, firstDuration).max);
     setDice(result.data.DiceOptions[0]?.key ?? null);
   }, [t]);
 
@@ -89,11 +90,8 @@ export default function NewGameScreen() {
   function selectDuration(next: string) {
     setDuration(next);
     if (!config) return;
-
-    const allowed = playersForDuration(config, next);
-    if (!allowed.some((p) => p.NumberOfPlayers === players)) {
-      setPlayers(allowed[allowed.length - 1]?.NumberOfPlayers ?? null);
-    }
+    // K107: luôn là trần của thể thức (6, Leaderboard 4) - không còn chọn tay.
+    setPlayers(playerRange(config, next).max);
   }
 
   async function submit() {
@@ -300,40 +298,13 @@ export default function NewGameScreen() {
                 <View style={styles.col}>
               <SectionHeader title={t('newGame.players')} />
 
-              <View style={styles.chipRow}>
-                {playersForDuration(config, duration).map((p) => {
-                  const selected = p.NumberOfPlayers === players;
-                  const variant: CellVariant = selected ? cell.orange : cell.idle;
-
-                  return (
-                    <Pressable
-                      key={p.Id}
-                      onPress={() => setPlayers(p.NumberOfPlayers)}
-                      disabled={busy}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected, disabled: busy }}
-                      style={({ pressed }) => [styles.chipCell, pressed && styles.pressedChip]}
-                    >
-                      <View
-                        style={[
-                          styles.chip,
-                          { borderColor: variant.line, boxShadow: cellGlow(variant) },
-                        ]}
-                      >
-                        <LinearGradient colors={[...variant.fill]} style={styles.fill} />
-                        <Text
-                          style={[
-                            styles.chipText,
-                            { color: variant.label, textShadowColor: variant.line },
-                          ]}
-                        >
-                          {p.NumberOfPlayers}
-                        </Text>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
+              {/*
+                K107 (Tony 18/9): số người chơi KHÔNG chọn nữa - ván mở với số ghế tối đa của
+                thể thức, ai vào được thì vào, START MATCH chốt danh sách (server xoá ghế trống).
+              */}
+              <Text style={styles.playersNote}>
+                {t('newGame.playersRange', playerRange(config, duration))}
+              </Text>
                 </View>
               </View>
 
@@ -474,6 +445,7 @@ const styles = StyleSheet.create({
   cardDots: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 96 },
   cardLabel: { flex: 1, fontSize: 12.5, lineHeight: 15, fontWeight: '700', letterSpacing: 0.9 },
 
+  playersNote: { marginTop: 14, fontSize: 14, lineHeight: 21, color: 'rgba(206,222,245,0.9)' },
   chipRow: { marginTop: 12, flexDirection: 'row', gap: 8 },
   chipCell: { flex: 1, aspectRatio: 1 },
   chip: {

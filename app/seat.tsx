@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { assetUrl, getGameState, type GameCharacter } from '../src/api/game';
 import { submitNickname } from '../src/api/room';
@@ -57,6 +57,8 @@ export default function SeatScreen() {
    */
   const [characters, setCharacters] = useState<GameCharacter[]>([]);
   const [characterId, setCharacterId] = useState<string>('');
+  /** K107: giữ ngón tay trên một ô → phóng to nhân vật đó giữa màn hình; thả / chạm ngoài để đóng. */
+  const [preview, setPreview] = useState<GameCharacter | null>(null);
   const [gender, setGender] = useState<'male' | 'female'>('male');
   const [taken, setTaken] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -219,8 +221,10 @@ export default function SeatScreen() {
           return (
             <Pressable
               key={character.Id}
-              onPress={() => setCharacterId(character.Id)}
-              disabled={isTaken || busy}
+              onPress={() => { if (!isTaken) setCharacterId(character.Id); }}
+              onLongPress={() => setPreview(character)}
+              delayLongPress={280}
+              disabled={busy}
               accessibilityRole="radio"
               accessibilityState={{ selected: active, disabled: isTaken }}
               style={[
@@ -255,7 +259,19 @@ export default function SeatScreen() {
         })}
       </View>
 
+      <Text style={styles.holdHint}>{t('seat.holdHint')}</Text>
       <NeonButton label={t('seat.submit')} color={neon.green} onPress={submit} busy={busy} />
+
+      <Modal visible={preview !== null} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setPreview(null)}>
+        <Pressable style={styles.previewBackdrop} onPress={() => setPreview(null)} accessibilityRole="button">
+          {preview ? (
+            <View style={[styles.previewCard, { borderColor: preview.Color, boxShadow: `0 0 40px ${preview.Color}` }]}>
+              <Image source={{ uri: assetUrl(preview.Image) }} style={styles.previewImage} resizeMode="contain" />
+              <Text style={[styles.previewName, { color: preview.Color }]}>{preview.Name}</Text>
+            </View>
+          ) : null}
+        </Pressable>
+      </Modal>
     </FormScreen>
   );
 }
@@ -310,6 +326,21 @@ const styles = StyleSheet.create({
   // Mờ hẳn chứ không ẩn đi: giữ nguyên vị trí lưới để danh sách không nhảy
   // chỗ mỗi khi có người nhận nhân vật.
   characterTaken: { opacity: 0.28 },
+  holdHint: { fontSize: 11.5, lineHeight: 15, color: text.muted, textAlign: 'center', marginTop: -6 },
+  previewBackdrop: { flex: 1, backgroundColor: 'rgba(3,3,14,0.8)', alignItems: 'center', justifyContent: 'center' },
+  previewCard: {
+    width: 300,
+    height: 300,
+    borderRadius: 24,
+    borderWidth: 3,
+    backgroundColor: 'rgba(10,13,34,0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 14,
+    gap: 6,
+  },
+  previewImage: { width: 230, height: 230 },
+  previewName: { fontSize: 17, fontWeight: '800', letterSpacing: 0.6 },
   characterImage: { width: '100%', height: '100%' },
   tick: {
     position: 'absolute',

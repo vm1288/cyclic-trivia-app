@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   ackFlow,
+  castLink,
   ensureRoomCode,
   getGameState,
   markPlayersReady,
@@ -30,6 +31,7 @@ import {
   PeopleIcon,
   PlayerRow,
 } from '../src/components/LobbyParts';
+import { BigScreenDialog } from '../src/components/BigScreenDialog';
 import { NeonButton } from '../src/components/NeonButton';
 import { ArrowLeftIcon } from '../src/components/NeonIcons';
 import { SectionHeader } from '../src/components/SectionHeader';
@@ -212,18 +214,25 @@ export default function LobbyScreen() {
     },
   });
 
-  const seats = snapshot?.Players ?? [];
-  const joined = seats.filter((p) => p.IsSetupNickName).length;
-  const total = snapshot?.Game.NumberOfPlayers ?? seats.length;
-
   /*
-   * Chỉ bắt đầu khi ĐỦ người, không phải "từ 2 người trở lên" như bản thiết kế.
-   *
-   * Server tạo sẵn đúng `NumberOfPlayers` ghế ngay lúc tạo ván. Bắt đầu khi còn
-   * ghế trống nghĩa là ván vẫn có những người chơi mang nickname mặc định và
-   * VẪN ĐẾN LƯỢT họ - bàn cờ sẽ đứng chờ một người không tồn tại.
+   * K107 (Tony 18/9): chỉ hiện ghế ĐÃ CÓ NGƯỜI. Ván mở với số ghế tối đa (6, Leaderboard 4)
+   * và "After you tap START MATCH, only the players shown here can play" - ghế trống không
+   * còn nghĩa gì để hiện. START sáng từ 2 người (chủ phòng + 1); server xoá ghế trống lúc
+   * /ready và khoá phòng (ai vào sau bị `game_started`).
    */
-  const everyoneIn = total > 0 && joined >= total;
+  const seats = (snapshot?.Players ?? []).filter((p) => p.IsSetupNickName);
+  const joined = seats.length;
+  const total = snapshot?.Game.NumberOfPlayers ?? seats.length;
+  const everyoneIn = joined >= 2;
+
+  /* "Play on the Big screen" (K107): hộp Go big! → quét thiết bị Cast / chia sẻ link. */
+  const [bigScreen, setBigScreen] = useState(false);
+  const getCastUrl = useCallback(async () => {
+    if (!gameId || !session) return { error: t('bigScreen.linkError') };
+    const r = await castLink(gameId, session.token);
+    if (!r.isSuccess) return { error: apiErrorText(r, t) || t('bigScreen.linkError') };
+    return { url: r.Url };
+  }, [gameId, session, t]);
 
   /*
    * ─── Chiều cao mỗi hàng ghế: TÍNH RA, không đặt cứng ──────────────────────
@@ -386,6 +395,7 @@ export default function LobbyScreen() {
           <View style={styles.header}>
             <Text style={styles.title}>{t('lobby.title')}</Text>
           </View>
+          <Text style={styles.lockNote}>{t('lobby.lockNote')}</Text>
 
           {!gameId || !session ? (
             <View style={styles.centerBlock}>
@@ -414,7 +424,19 @@ export default function LobbyScreen() {
                 phải chừa đủ chỗ cho SÁU hàng ghế mà không cuộn.
               */}
               <View style={styles.col}>
-              <SectionHeader title={t('lobby.roomCode')} />
+              <SectionHeader
+                title={t('lobby.roomCode')}
+                right={
+                  <Pressable
+                    onPress={() => setBigScreen(true)}
+                    accessibilityRole="button"
+                    hitSlop={6}
+                    style={({ pressed }) => [styles.bigScreenBtn, pressed && styles.pressed]}
+                  >
+                    <Text style={styles.bigScreenText}>{t('lobby.bigScreen')}</Text>
+                  </Pressable>
+                }
+              />
 
               {/*
                 Mã phòng + QR CUỘN ĐƯỢC, nút START thì không - nó nằm ngoài
@@ -581,6 +603,8 @@ export default function LobbyScreen() {
         ConfirmDialog cũng là Modal. Lớp phủ thường thì không bao giờ chui
         xuống dưới.
       */}
+      <BigScreenDialog visible={bigScreen} getUrl={getCastUrl} onClose={() => setBigScreen(false)} />
+
       {phase !== 'idle' ? (
         <View style={styles.overlay}>
           <Text style={styles.overlayTitle}>{t('lobby.whoGoesFirst')}</Text>
@@ -609,6 +633,18 @@ const styles = StyleSheet.create({
 
   /** Cao đúng bằng nút back để tiêu đề nằm ngang hàng với nó. */
   header: { height: 44, justifyContent: 'center' },
+  /** K107: một dòng nhỏ dưới tiêu đề - ai không có tên ở đây thì không chơi. */
+  lockNote: { textAlign: 'center', fontSize: 12, lineHeight: 15, color: 'rgba(198,212,240,0.75)', marginTop: -4 },
+  /** K107: nút nhỏ cùng hàng ROOM CODE, bên phải. */
+  bigScreenBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(63,224,255,0.7)',
+    backgroundColor: 'rgba(10,12,40,0.85)',
+  },
+  bigScreenText: { fontSize: 11.5, fontWeight: '700', color: '#DCF6FF', letterSpacing: 0.3 },
 
   /** Mời người vào + START bên trái | danh sách ghế bên phải. */
   middle: { flex: 1, flexDirection: 'row', gap: 22, paddingTop: 4 },

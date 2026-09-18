@@ -1,4 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
+import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { section } from '../theme/colors';
@@ -13,6 +14,7 @@ import { section } from '../theme/colors';
 export function SectionHeader({
   title,
   trailing,
+  right,
 }: {
   title: string;
   /**
@@ -23,6 +25,8 @@ export function SectionHeader({
    * đề, và không phải cấp cho nó một dòng riêng trong khi bề cao đang khan.
    */
   trailing?: string;
+  /** Một nút nhỏ ở góc phải (K107: "Play on the Big screen" cạnh ROOM CODE). Ưu tiên hơn `trailing`. */
+  right?: ReactNode;
 }) {
   return (
     <View style={styles.row}>
@@ -34,7 +38,9 @@ export function SectionHeader({
         end={{ x: 1, y: 0.5 }}
         style={styles.rule}
       />
-      {trailing ? (
+      {right ? (
+        right
+      ) : trailing ? (
         <Text style={styles.trailing}>{trailing}</Text>
       ) : (
         <Text style={[styles.diamond, styles.diamondTrailing]}>◇</Text>

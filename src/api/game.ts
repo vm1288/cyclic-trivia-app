@@ -800,6 +800,21 @@ export function ensureRoomCode(gameId: string, token: string): Promise<ApiResult
  *
  * `/public/game/{id}/start` vẫn tồn tại ở server cho APK cũ, app không gọi nữa.
  */
+/**
+ * K107 "Play on the Big screen": xin vé mở bàn cờ web cho TV. Token LICENSE (route kiểm
+ * `game.HostId`). `Url` = `{SiteUrl}cast/{ticket}`, sống 30 phút.
+ */
+export function castLink(gameId: string, token: string): Promise<ApiResult<{ Url: string; ExpiresInSeconds: number }>> {
+  return postForm(`/public/game/${gameId}/cast-link`, {}, token);
+}
+
+/** Số người chơi tối thiểu / tối đa của một mốc thời lượng (K107). */
+export function playerRange(config: GameConfig, durationId: string | null): { min: number; max: number } {
+  const allowed = playersForDuration(config, durationId).map((p) => p.NumberOfPlayers);
+  const max = allowed.length ? Math.max(...allowed) : 6;
+  return { min: 2, max: Math.max(2, max) };
+}
+
 export function markPlayersReady(
   gameId: string,
   token: string,
