@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 
+import { NeonSheet, SheetButton } from './NeonSheet';
 import { assetUrl } from '../api/game';
 import { useT } from '../i18n/I18nProvider';
 
@@ -49,15 +50,11 @@ export function FreeTrialDialog({
         : t('trial.periodDays', { days: info.durationDays });
 
   return (
-    <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button">
-        <Pressable style={styles.card} onPress={() => {}}>
+    <NeonSheet visible onClose={onClose} maxWidth={720}>
           {step.value === 1 ? (
             <>
               <Text style={styles.body}>{t('trial.usedAll', { total, game: info.gameName, days: info.days })}</Text>
-              <Pressable onPress={() => step.set(2)} accessibilityRole="button" style={({ pressed }) => [styles.btn, pressed && styles.pressed]}>
-                <Text style={styles.btnText}>{t('trial.cta', { days: info.days })}</Text>
-              </Pressable>
+              <SheetButton label={t('trial.cta', { days: info.days })} onPress={() => step.set(2)} />
             </>
           ) : (
             <View style={styles.row}>
@@ -71,15 +68,11 @@ export function FreeTrialDialog({
                 <Text style={styles.body2}>{t('trial.line1', { game: info.gameName, days: info.days })}</Text>
                 <Text style={styles.body2}>{t('trial.line2', { game: info.gameName })}</Text>
                 <Text style={styles.body2}>{t('trial.line3', { days: info.days, period })}</Text>
-                <Pressable onPress={() => onProceed(info)} accessibilityRole="button" style={({ pressed }) => [styles.btn, styles.btnProceed, pressed && styles.pressed]}>
-                  <Text style={styles.btnText}>{t('trial.proceed')}</Text>
-                </Pressable>
+                <SheetButton label={t('trial.proceed')} onPress={() => onProceed(info)} style={styles.btnProceed} />
               </View>
             </View>
           )}
-        </Pressable>
-      </Pressable>
-    </Modal>
+    </NeonSheet>
   );
 }
 
@@ -93,18 +86,6 @@ function useStep(info: TrialInfo | null) {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center', padding: 24 },
-  /* Đen đặc, chữ trắng - đúng ảnh mẫu. */
-  card: {
-    width: '100%',
-    maxWidth: 720,
-    borderRadius: 14,
-    backgroundColor: '#000000',
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    alignItems: 'center',
-    gap: 16,
-  },
   body: { fontSize: 17, lineHeight: 25, color: '#FFFFFF', textAlign: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 22, alignSelf: 'stretch' },
   logoCol: { width: 170, alignItems: 'center', gap: 8 },
@@ -112,16 +93,5 @@ const styles = StyleSheet.create({
   gameName: { fontSize: 15, color: '#FFFFFF', textAlign: 'center', fontWeight: '700' },
   textCol: { flex: 1, gap: 12, alignItems: 'center' },
   body2: { fontSize: 15.5, lineHeight: 22, color: '#FFFFFF', alignSelf: 'stretch' },
-  btn: {
-    minWidth: 200,
-    paddingVertical: 8,
-    paddingHorizontal: 22,
-    borderRadius: 8,
-    borderWidth: 2.5,
-    borderColor: '#3B6CE6',
-    alignItems: 'center',
-  },
   btnProceed: { marginTop: 4 },
-  btnText: { fontSize: 18, fontWeight: '600', color: '#FFFFFF', letterSpacing: 0.4, textAlign: 'center' },
-  pressed: { opacity: 0.7 },
 });

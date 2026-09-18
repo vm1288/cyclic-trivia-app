@@ -360,15 +360,19 @@ const styles = StyleSheet.create({
 
   /* Hàng tiêu đề cao 56: khung viền căn giữa, chừa chỗ nút back bên trái. */
   titleRow: { height: 56, alignItems: 'center', justifyContent: 'center', paddingLeft: 90, paddingRight: 90 },
-  titleBox: {
-    borderWidth: 1.5,
-    borderColor: 'rgba(230,236,255,0.85)',
-    borderRadius: 6,
-    paddingHorizontal: 18,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(6,8,26,0.7)',
+  /* Tony 18/9: bỏ viền quanh tiêu đề - chữ trần, cùng kiểu tiêu đề các màn khác. */
+  titleBox: { paddingHorizontal: 18, paddingVertical: 6 },
+  title: {
+    color: '#F4F9FF',
+    fontSize: 18,
+    fontWeight: '800',
+    fontStyle: 'italic',
+    letterSpacing: 1,
+    textAlign: 'center',
+    textShadowColor: 'rgba(140,200,255,0.65)',
+    textShadowRadius: 14,
+    textShadowOffset: { width: 0, height: 0 },
   },
-  title: { color: text.primary, fontSize: 17, fontWeight: '800', letterSpacing: 1, textAlign: 'center' },
 
   columns: { flex: 1, flexDirection: 'row', alignItems: 'stretch', gap: 18, paddingTop: 6 },
   col: { flex: 1 },

@@ -128,7 +128,7 @@ export function useGameState(options: {
       if (!alive.current) return;
 
       if (result.isSuccess) {
-        setSnapshot({ Game: result.Game, Players: result.Players, fetchedAt: Date.now() });
+        setSnapshot({ Game: result.Game, Players: result.Players, Sponsor: result.Sponsor ?? null, fetchedAt: Date.now() });
         if (wantBoard && result.Board) {
           setBoard(result.Board);
           hasBoard.current = true;

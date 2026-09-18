@@ -154,7 +154,8 @@ export default function PurchaseScreen() {
 
   useEffect(() => {
     if (!connected || !plans?.length) return;
-    void fetchProducts({ skus: plans.map((p) => p.productId), type: 'subs' });
+    // Store chưa sẵn sàng (dev-client, máy không có Play) thì hứa bị từ chối - nuốt, màn rơi về giá web.
+    void fetchProducts({ skus: plans.map((p) => p.productId), type: 'subs' }).catch(() => {});
   }, [connected, plans, fetchProducts]);
 
   const storeBySku = useMemo(() => {
@@ -384,7 +385,7 @@ export default function PurchaseScreen() {
                 : { kind: 'comingSoon' }
         }
         storePrice={openPlan ? (storeBySku.get(openPlan.productId)?.displayPrice ?? null) : null}
-        notice={openGame && openGame.available && openPlan && (!connected || !storeBySku.has(openPlan.productId)) ? t('purchase.storeOffline') : notice}
+        notice={openGame && !ownedGame(openGame) && openGame.available && openPlan && (!connected || !storeBySku.has(openPlan.productId)) ? t('purchase.storeOffline') : notice}
         onClose={() => setOpenGame(null)}
       >
         {__DEV__ && openPlan && openGame && !ownedGame(openGame) ? (

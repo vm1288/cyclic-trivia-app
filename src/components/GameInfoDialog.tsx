@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { NeonSheet, SheetButton } from './NeonSheet';
 import { assetUrl } from '../api/game';
 import { useT } from '../i18n/I18nProvider';
 
@@ -15,6 +16,9 @@ import { useT } from '../i18n/I18nProvider';
  *   - UNLOCK NOW (K110): luôn PURCHASE.
  *
  * Chữ theo game do server cấp (`GameCatalog`). Giá là giá niêm yết của gói; giá thật do store.
+ *
+ * Nền: KHÔNG đen đặc như ảnh mẫu (Tony 18/9: "nền đen của mockup chỉ là demo") - tấm mờ, nền sân
+ * khấu của app hiện xuyên qua. Áp cho mọi tấm K107-K111 (Go big!, free trial, unlock, taken).
  */
 export type GameInfo = {
   sponsorId: string;
@@ -65,9 +69,7 @@ export function GameInfoDialog({
     info.durationDays >= 360 ? t('unlock.perYear') : info.durationDays >= 28 ? t('unlock.perMonth') : t('unlock.perDays', { days: info.durationDays });
 
   return (
-    <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button">
-        <Pressable style={styles.card} onPress={() => {}}>
+    <NeonSheet visible onClose={onClose} maxWidth={900} style={styles.card}>
           <Pressable onPress={onClose} accessibilityRole="button" hitSlop={10} style={styles.back}>
             <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
             <Text style={styles.backText}>{t('common.back')}</Text>
@@ -78,29 +80,18 @@ export function GameInfoDialog({
               <Text style={styles.tagline}>{info.tagline}</Text>
 
               {cta.kind === 'newMatch' ? (
-                <Pressable onPress={cta.onPress} accessibilityRole="button" style={({ pressed }) => [styles.btn, pressed && styles.pressed]}>
-                  <Text style={styles.btnText}>{t('games.newMatch')}</Text>
-                </Pressable>
+                <SheetButton label={t('games.newMatch')} onPress={cta.onPress} style={styles.cta} />
               ) : cta.kind === 'purchase' ? (
-                <Pressable
+                <SheetButton
+                  label={t('unlock.purchase')}
+                  sub={money ? t('unlock.price', { price: money, per }) : null}
                   onPress={cta.onPress}
-                  disabled={cta.disabled || cta.busy}
-                  accessibilityRole="button"
-                  style={({ pressed }) => [styles.btn, pressed && styles.pressed, (cta.disabled || cta.busy) && styles.dim]}
-                >
-                  {cta.busy ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <>
-                      <Text style={styles.btnText}>{t('unlock.purchase')}</Text>
-                      {money ? <Text style={styles.btnSub}>{t('unlock.price', { price: money, per })}</Text> : null}
-                    </>
-                  )}
-                </Pressable>
+                  disabled={cta.disabled}
+                  busy={cta.busy}
+                  style={styles.cta}
+                />
               ) : (
-                <View style={[styles.btn, styles.dim]}>
-                  <Text style={styles.btnText}>{t('games.comingSoon')}</Text>
-                </View>
+                <SheetButton label={t('games.comingSoon')} variant="ghost" disabled style={styles.cta} />
               )}
               {children}
             </View>
@@ -119,28 +110,21 @@ export function GameInfoDialog({
               {notice ? <Text style={styles.notice}>{notice}</Text> : null}
             </ScrollView>
           </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
+    </NeonSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center', padding: 20 },
-  card: { width: '100%', maxWidth: 900, maxHeight: '96%', borderRadius: 14, backgroundColor: '#000000', paddingHorizontal: 22, paddingVertical: 10, gap: 8 },
+  card: { alignItems: 'stretch', paddingHorizontal: 22, paddingVertical: 10, gap: 8, maxHeight: '100%' },
   back: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 2 },
   backText: { color: '#FFFFFF', fontSize: 15 },
-  row: { flexDirection: 'row', gap: 20, flexShrink: 1 },
+  row: { flexDirection: 'row', gap: 20, flexShrink: 1, minHeight: 0 },
   logoCol: { width: 190, alignItems: 'center', justifyContent: 'center', gap: 10 },
-  logo: { width: 170, height: 130 },
+  logo: { width: 150, height: 112 },
   tagline: { fontSize: 15, color: '#FFFFFF', textAlign: 'center' },
-  btn: { minWidth: 170, paddingVertical: 6, paddingHorizontal: 16, borderRadius: 8, borderWidth: 2.5, borderColor: '#3B6CE6', alignItems: 'center' },
-  btnText: { fontSize: 18, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.6 },
-  btnSub: { fontSize: 15, color: '#FFFFFF', marginTop: 2 },
-  pressed: { opacity: 0.7 },
-  dim: { opacity: 0.5 },
+  cta: { minWidth: 180 },
   textCol: { flex: 1 },
-  textInner: { gap: 14, paddingVertical: 4 },
-  desc: { fontSize: 15, lineHeight: 21, color: '#FFFFFF' },
+  textInner: { gap: 10, paddingVertical: 4 },
+  desc: { fontSize: 14, lineHeight: 20, color: '#FFFFFF' },
   notice: { fontSize: 13.5, lineHeight: 19, color: '#FFD166' },
 });

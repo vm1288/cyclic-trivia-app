@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 
 import { GameInfoDialog, type GameInfo } from './GameInfoDialog';
+import { NeonSheet, SheetButton } from './NeonSheet';
 import { useT } from '../i18n/I18nProvider';
 
 /**
@@ -36,24 +37,13 @@ export function UnlockDialog({
     return <GameInfoDialog info={info} cta={{ kind: 'purchase', onPress: () => onPurchase(info) }} onClose={onClose} />;
   }
   return (
-    <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button">
-        <Pressable style={styles.card} onPress={() => {}}>
-          <Text style={styles.body}>{t('unlock.notYet', { game: info.gameName })}</Text>
-          <Pressable onPress={() => setStep(2)} accessibilityRole="button" style={({ pressed }) => [styles.btn, pressed && styles.pressed]}>
-            <Text style={styles.btnText}>{t('unlock.cta')}</Text>
-          </Pressable>
-        </Pressable>
-      </Pressable>
-    </Modal>
+    <NeonSheet visible onClose={onClose} maxWidth={560}>
+      <Text style={styles.body}>{t('unlock.notYet', { game: info.gameName })}</Text>
+      <SheetButton label={t('unlock.cta')} onPress={() => setStep(2)} />
+    </NeonSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center', padding: 20 },
-  card: { width: '100%', maxWidth: 560, borderRadius: 14, backgroundColor: '#000000', paddingHorizontal: 24, paddingVertical: 20, alignItems: 'center', gap: 18 },
   body: { fontSize: 17, lineHeight: 25, color: '#FFFFFF', textAlign: 'center' },
-  btn: { minWidth: 210, paddingVertical: 8, paddingHorizontal: 22, borderRadius: 8, borderWidth: 2.5, borderColor: '#3B6CE6', alignItems: 'center' },
-  btnText: { fontSize: 18, fontWeight: '600', color: '#FFFFFF', letterSpacing: 0.4 },
-  pressed: { opacity: 0.7 },
 });

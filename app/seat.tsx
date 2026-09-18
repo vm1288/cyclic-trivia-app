@@ -5,6 +5,7 @@ import { Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { assetUrl, getGameState, type GameCharacter } from '../src/api/game';
 import { submitNickname } from '../src/api/room';
 import { FormScreen } from '../src/components/FormScreen';
+import { NeonSheet, SheetButton } from '../src/components/NeonSheet';
 import { NeonButton } from '../src/components/NeonButton';
 import { NeonField } from '../src/components/NeonField';
 import { SectionHeader } from '../src/components/SectionHeader';
@@ -271,16 +272,10 @@ export default function SeatScreen() {
       <Text style={styles.holdHint}>{t('seat.holdHint')}</Text>
       <NeonButton label={t('seat.submit')} color={neon.green} onPress={submit} busy={busy} />
 
-      <Modal visible={takenPopup} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setTakenPopup(false)}>
-        <Pressable style={styles.previewBackdrop} onPress={() => setTakenPopup(false)} accessibilityRole="button">
-          <Pressable style={styles.takenCard} onPress={() => {}}>
-            <Text style={styles.takenText}>{t('seat.takenTitle')}</Text>
-            <Pressable onPress={() => setTakenPopup(false)} accessibilityRole="button" style={({ pressed }) => [styles.takenBtn, pressed && { opacity: 0.7 }]}>
-              <Text style={styles.takenBtnText}>{t('seat.takenCta')}</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <NeonSheet visible={takenPopup} onClose={() => setTakenPopup(false)} maxWidth={520}>
+        <Text style={styles.takenText}>{t('seat.takenTitle')}</Text>
+        <SheetButton label={t('seat.takenCta')} onPress={() => setTakenPopup(false)} style={styles.takenBtn} />
+      </NeonSheet>
 
       <Modal visible={preview !== null} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setPreview(null)}>
         <Pressable style={styles.previewBackdrop} onPress={() => setPreview(null)} accessibilityRole="button">
@@ -362,10 +357,9 @@ const styles = StyleSheet.create({
   },
   previewImage: { width: 230, height: 230 },
   /* Tấm đen chữ trắng như ảnh mẫu (K111). */
-  takenCard: { width: '100%', maxWidth: 520, borderRadius: 14, backgroundColor: '#000000', paddingHorizontal: 24, paddingVertical: 22, alignItems: 'center', gap: 18 },
+  /* Tấm nhân vật đã có người (K111) - khung NeonSheet. */
   takenText: { fontSize: 18, lineHeight: 26, color: '#FFFFFF', textAlign: 'center' },
-  takenBtn: { minWidth: 260, paddingVertical: 8, paddingHorizontal: 18, borderRadius: 8, borderWidth: 2.5, borderColor: '#3B6CE6', alignItems: 'center' },
-  takenBtnText: { fontSize: 17, fontWeight: '600', color: '#FFFFFF', textAlign: 'center' },
+  takenBtn: { minWidth: 280 },
   previewName: { fontSize: 17, fontWeight: '800', letterSpacing: 0.6 },
   characterImage: { width: '100%', height: '100%' },
   tick: {

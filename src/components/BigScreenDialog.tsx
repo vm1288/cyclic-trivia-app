@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 
+import { NeonSheet, SheetButton } from './NeonSheet';
 import { sendToBigScreen, useBigScreenDevices, type BigScreenDevice } from '../cast/bigScreen';
 import { useT } from '../i18n/I18nProvider';
 
@@ -71,20 +72,14 @@ export function BigScreenDialog({
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button">
-        <Pressable style={styles.card} onPress={() => {}}>
+    <NeonSheet visible={visible} onClose={onClose} maxWidth={480}>
           {phase === 'intro' ? (
             <>
               <Text style={styles.title}>{t('bigScreen.title')}</Text>
               <Text style={styles.body}>{t('bigScreen.body')}</Text>
               <View style={styles.row}>
-                <Pressable onPress={onClose} accessibilityRole="button" style={({ pressed }) => [styles.btn, styles.btnCancel, pressed && styles.pressed]}>
-                  <Text style={styles.btnText}>{t('bigScreen.cancel')}</Text>
-                </Pressable>
-                <Pressable onPress={goDevices} accessibilityRole="button" style={({ pressed }) => [styles.btn, styles.btnCast, pressed && styles.pressed]}>
-                  <Text style={styles.btnText}>{t('bigScreen.cast')}</Text>
-                </Pressable>
+                <SheetButton label={t('bigScreen.cancel')} variant="ghost" onPress={onClose} style={styles.half} />
+                <SheetButton label={t('bigScreen.cast')} onPress={goDevices} style={styles.half} />
               </View>
             </>
           ) : phase === 'done' ? (
@@ -125,44 +120,21 @@ export function BigScreenDialog({
               {error ? <Text style={styles.error}>{error}</Text> : null}
               {phase === 'devices' ? (
                 <View style={styles.row}>
-                  <Pressable onPress={onClose} accessibilityRole="button" style={({ pressed }) => [styles.btn, styles.btnCancel, pressed && styles.pressed]}>
-                    <Text style={styles.btnText}>{t('bigScreen.cancel')}</Text>
-                  </Pressable>
-                  <Pressable onPress={shareLink} disabled={!url} accessibilityRole="button" style={({ pressed }) => [styles.btn, styles.btnShare, pressed && styles.pressed, !url && styles.deviceOff]}>
-                    <Text style={styles.btnText}>{t('bigScreen.share')}</Text>
-                  </Pressable>
+                  <SheetButton label={t('bigScreen.cancel')} variant="ghost" onPress={onClose} style={styles.half} />
+                  <SheetButton label={t('bigScreen.share')} onPress={shareLink} disabled={!url} style={styles.half} />
                 </View>
               ) : null}
             </>
           )}
-        </Pressable>
-      </Pressable>
-    </Modal>
+    </NeonSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center', padding: 24 },
-  /* Đen đặc, chữ trắng - đúng ảnh mẫu "Go big!" của Tony. */
-  card: {
-    width: '100%',
-    maxWidth: 480,
-    maxHeight: '92%',
-    borderRadius: 14,
-    backgroundColor: '#000000',
-    paddingHorizontal: 22,
-    paddingVertical: 18,
-    alignItems: 'center',
-    gap: 12,
-  },
   title: { fontSize: 20, fontWeight: '500', color: '#FFFFFF', textAlign: 'center' },
   body: { fontSize: 16.5, lineHeight: 23, color: '#FFFFFF', textAlign: 'center' },
-  row: { flexDirection: 'row', gap: 22, marginTop: 6 },
-  btn: { minWidth: 118, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, borderWidth: 2.5, alignItems: 'center' },
-  btnCancel: { borderColor: '#D9262E' },
-  btnCast: { borderColor: '#1FC85A' },
-  btnShare: { borderColor: '#3AA5FF' },
-  btnText: { fontSize: 17, fontWeight: '600', color: '#FFFFFF', letterSpacing: 0.4 },
+  row: { flexDirection: 'row', gap: 14, marginTop: 6, alignSelf: 'stretch' },
+  half: { flex: 1, minWidth: 0 },
   pressed: { opacity: 0.7 },
   spinner: { marginVertical: 10 },
   list: { alignSelf: 'stretch', maxHeight: 190 },
