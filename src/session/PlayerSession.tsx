@@ -1,4 +1,6 @@
+import * as Application from 'expo-application';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 /**
@@ -67,6 +69,25 @@ const PlayerContext = createContext<PlayerContextValue | null>(null);
  * APK (xem SETUP_NOTES.md). Giá trị này KHÔNG phải bí mật - nó chỉ để nhận ra
  * cùng một máy; thứ có thẩm quyền là token server cấp.
  */
+/**
+ * K109: id máy phải SỐNG QUA CÀI LẠI APP, vì nó đếm 3 lượt vào miễn phí và "đã dùng thử chưa"
+ * (GAME_RULES 15l/15m). SecureStore trên Android bị xoá khi gỡ app → id ngẫu nhiên cũ là gỡ
+ * cài lại được thêm 3 lượt. Android có ANDROID_ID (SSAID: cố định theo app + máy, sống qua cài
+ * lại, chỉ đổi khi factory reset); iOS SecureStore = Keychain, sống qua cài lại nên id ngẫu
+ * nhiên vẫn ổn. Máy đã có id (bản cũ) thì GIỮ - đổi id giữa chừng là mất ghế đang chơi.
+ */
+function stableDeviceId(): string {
+  if (Platform.OS === 'android') {
+    try {
+      const id = Application.getAndroidId();
+      if (id && id.length >= 8) return 'ssaid-' + id.toLowerCase();
+    } catch {
+      // Không lấy được thì rơi về ngẫu nhiên.
+    }
+  }
+  return makeDeviceId();
+}
+
 function makeDeviceId(): string {
   const hex = '0123456789abcdef';
   let out = '';
@@ -101,7 +122,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const deviceId = makeDeviceId();
+      const deviceId = stableDeviceId();
       await write({ deviceId, seat: null });
       if (alive) setState({ status: 'ready', deviceId, seat: null });
     })();

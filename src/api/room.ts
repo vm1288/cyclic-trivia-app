@@ -114,6 +114,21 @@ export type ClaimedSeat = {
  * `hostIds` = id host của các license máy này đã kích hoạt (K108): server đối chiếu sponsor để biết
  * đã MUA game của phòng chưa; không có / không khớp → tính lượt miễn phí.
  */
+/** K109: thân 409 `free_joins_used` - server kèm gói dùng thử của game nếu máy chưa từng dùng thử. */
+export type FreeJoinsUsedBody = {
+  FreeJoinsUsed?: number;
+  FreeJoinsTotal?: number;
+  Trial?: {
+    Available: boolean;
+    Days: number;
+    ProductId: string | null;
+    DurationDays: number;
+    SponsorId: string;
+    GameName: string | null;
+    LogoUrl: string | null;
+  } | null;
+};
+
 export function claimSeat(code: string, deviceId: string, hostIds: string[] = []): Promise<ApiResult<ClaimedSeat>> {
   return postJson<ClaimedSeat>(`/api/room/${encodeURIComponent(code)}/seat`, { DeviceId: deviceId, HostIds: hostIds });
 }

@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useIAP, type ProductSubscription, type Purchase } from 'expo-iap';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import { FormScreen } from '../src/components/FormScreen';
 import { NeonButton } from '../src/components/NeonButton';
 import { StageBackground } from '../src/components/StageBackground';
 import { useT } from '../src/i18n/I18nProvider';
+import { usePlayer } from '../src/session/PlayerSession';
 import { bg, innerGlow, neon, outerGlow, text } from '../src/theme/colors';
 
 /**
@@ -43,6 +44,13 @@ function trialOffer(sub: ProductSubscription | undefined) {
 export default function PurchaseScreen() {
   const router = useRouter();
   const t = useT();
+  const player = usePlayer();
+  /*
+   * K109: `?trialFor=<sponsorId>` - tới từ tấm "7-day free trial" (PROCEED) ở JOIN A MATCH: tự
+   * bấm mua gói có kỳ dùng thử của game đó ngay khi store trả giá, không bắt chọn lại.
+   */
+  const params = useLocalSearchParams<{ trialFor?: string }>();
+  const autoBought = useRef(false);
 
   const [plans, setPlans] = useState<StorePlan[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -69,7 +77,12 @@ export default function PurchaseScreen() {
       handled.current.add(key);
 
       setVerifying(true);
-      const result = await submitStorePurchase({ platform: PLATFORM, productId, token });
+      const result = await submitStorePurchase({
+        platform: PLATFORM,
+        productId,
+        token,
+        deviceId: player.status === 'ready' ? player.deviceId : undefined,
+      });
       setVerifying(false);
       setBusySku(null);
 
@@ -168,6 +181,19 @@ export default function PurchaseScreen() {
       setNotice(error instanceof Error ? error.message : t('purchase.failed'));
     }
   };
+
+  useEffect(() => {
+    if (autoBought.current || !params.trialFor || !plans?.length || storeBySku.size === 0) return;
+    const plan = plans
+      .filter((p) => p.sponsorId.toLowerCase() === String(params.trialFor).toLowerCase() && p.trialDays > 0 && storeBySku.has(p.productId))
+      .sort((a, b) => b.durationDays - a.durationDays)[0];
+    if (!plan) return;
+    autoBought.current = true;
+    // Tài khoản store đã dùng thử rồi thì store không đưa offer free-trial - báo trước khi mở sheet.
+    if (trialOffer(storeBySku.get(plan.productId))?.paymentMode !== 'free-trial') setNotice(t('purchase.trialUsedStore'));
+    void buy(plan);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.trialFor, plans, storeBySku]);
 
   /*
    * Restore: cài lại app / máy mới cùng tài khoản store. Store trả các giao dịch còn

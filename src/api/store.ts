@@ -63,6 +63,8 @@ export function submitStorePurchase(args: {
   token: string;
   buyerName?: string;
   buyerEmail?: string;
+  /** K109: id máy (PlayerSession) - server ghi vào Payment để biết máy đã dùng thử game này. */
+  deviceId?: string;
 }): Promise<ApiResult<StorePurchaseResult>> {
   return postJson<StorePurchaseResult>('/api/store/purchase', args);
 }

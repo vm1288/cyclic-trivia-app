@@ -12,7 +12,9 @@ import {
   resolveRoom,
   roomCodeFromScan,
   ROOM_CODE_LENGTH,
+  type FreeJoinsUsedBody,
 } from '../src/api/room';
+import { FreeTrialDialog, type TrialInfo } from '../src/components/FreeTrialDialog';
 import { NeonButton } from '../src/components/NeonButton';
 import { NeonField } from '../src/components/NeonField';
 import { StageBackground } from '../src/components/StageBackground';
@@ -55,6 +57,9 @@ export default function JoinScreen() {
   const [hint, setHint] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [exhausted, setExhausted] = useState(false);
+  /* K109: hết lượt + chưa dùng thử → hai tấm "7-day free trial" thay cho dòng lỗi. */
+  const [trial, setTrial] = useState<TrialInfo | null>(null);
+  const [trialTotal, setTrialTotal] = useState(3);
   const [scanning, setScanning] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   /* Camera bắn onBarcodeScanned liên tục - chỉ nhận lần đầu, tránh xin hai ghế. */
@@ -105,8 +110,22 @@ export default function JoinScreen() {
       setBusy(false);
 
       if (!seat.isSuccess) {
+        if (seat.errorCode === 'free_joins_used') {
+          const body = (seat.data ?? {}) as FreeJoinsUsedBody;
+          if (body.Trial?.Available) {
+            setTrialTotal(body.FreeJoinsTotal ?? 3);
+            setTrial({
+              days: body.Trial.Days,
+              durationDays: body.Trial.DurationDays,
+              sponsorId: body.Trial.SponsorId,
+              gameName: body.Trial.GameName ?? t('games.unnamed'),
+              logoUrl: body.Trial.LogoUrl,
+            });
+            return;
+          }
+          setExhausted(true);
+        }
         setError(apiErrorText(seat, t));
-        if (seat.errorCode === 'free_joins_used') setExhausted(true);
         return;
       }
 
@@ -252,6 +271,17 @@ export default function JoinScreen() {
           </View>
         </View>
       </SafeAreaView>
+
+      <FreeTrialDialog
+        info={trial}
+        total={trialTotal}
+        onClose={() => setTrial(null)}
+        onProceed={(info) => {
+          setTrial(null);
+          // /purchase tự bấm mua gói có kỳ dùng thử của game này (K109).
+          router.push({ pathname: '/purchase', params: { trialFor: info.sponsorId } });
+        }}
+      />
 
       {/* Camera toàn màn hình; thoát bằng nút ✕ hoặc BACK cứng. */}
       <Modal visible={scanning} animationType="fade" statusBarTranslucent onRequestClose={() => setScanning(false)}>
