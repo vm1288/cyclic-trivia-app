@@ -47,6 +47,40 @@ export async function fetchStorePlans(): Promise<ApiResult<{ plans: StorePlan[] 
   }
 }
 
+/** K111 EXPLORE GAMES: một game (sponsor) - có bán hay "Coming Soon", chữ giới thiệu từ `GameCatalog` server. */
+export type StoreGame = {
+  sponsorId: string;
+  name: string;
+  logoUrl: string | null;
+  available: boolean;
+  productId: string | null;
+  trialDays: number;
+  price: number;
+  currency: string | null;
+  durationDays: number;
+  tagline: string;
+  prompt: string;
+  description: string;
+  players: string;
+  ageRange: string;
+};
+
+export async function fetchStoreGames(): Promise<ApiResult<{ games: StoreGame[] }>> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/store/games`, { signal: controller.signal });
+    const body = (await response.json().catch(() => null)) as { isSuccess?: boolean; games?: StoreGame[] } | null;
+    if (!response.ok || !body?.isSuccess) return { isSuccess: false, kind: 'http', message: `HTTP ${response.status}` };
+    return { isSuccess: true, games: body.games ?? [] };
+  } catch (error) {
+    const aborted = error instanceof Error && error.name === 'AbortError';
+    return { isSuccess: false, kind: aborted ? 'timeout' : 'network', messageKey: aborted ? 'error.timeout' : 'error.network' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export type StorePurchaseResult = {
   /** Mã license 6 số - đưa vào REGISTER như mã mua trên web. */
   code: string;

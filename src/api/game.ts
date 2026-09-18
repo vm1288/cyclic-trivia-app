@@ -325,6 +325,8 @@ export type GamePlayer = {
 export type GameSnapshot = {
   /** `Date.now()` lúc app nhận state - cho đồng hồ ván (K87). */
   fetchedAt?: number;
+  /** K111: game (sponsor) của ván - phòng chờ khách in logo + tên; server cũ không có. */
+  Sponsor?: { Id: string; Name: string; LogoUrl: string | null } | null;
   Game: {
     Id: string;
     HostId: string;

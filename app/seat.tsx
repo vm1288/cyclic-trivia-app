@@ -59,6 +59,8 @@ export default function SeatScreen() {
   const [characterId, setCharacterId] = useState<string>('');
   /** K107: giữ ngón tay trên một ô → phóng to nhân vật đó giữa màn hình; thả / chạm ngoài để đóng. */
   const [preview, setPreview] = useState<GameCharacter | null>(null);
+  /** K111: chạm ô TAKEN, hoặc server trả `character_taken` → tấm "Another player has already chosen…". */
+  const [takenPopup, setTakenPopup] = useState(false);
   const [gender, setGender] = useState<'male' | 'female'>('male');
   const [taken, setTaken] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -129,10 +131,14 @@ export default function SeatScreen() {
     setBusy(false);
 
     if (!result.isSuccess) {
+      // Có người vừa lấy mất nhân vật -> tấm báo (K111) + làm mới danh sách để người dùng
+      // thấy ngay cái nào còn, thay vì bấm lại rồi trượt tiếp.
+      if (result.errorCode === 'character_taken') {
+        setTakenPopup(true);
+        void loadTaken();
+        return;
+      }
       setError(apiErrorText(result, t));
-      // Có người vừa lấy mất nhân vật -> làm mới danh sách để người dùng thấy
-      // ngay cái nào còn, thay vì bấm lại rồi trượt tiếp.
-      if (result.errorCode === 'character_taken') void loadTaken();
       return;
     }
 
@@ -221,7 +227,7 @@ export default function SeatScreen() {
           return (
             <Pressable
               key={character.Id}
-              onPress={() => { if (!isTaken) setCharacterId(character.Id); }}
+              onPress={() => (isTaken ? setTakenPopup(true) : setCharacterId(character.Id))}
               onLongPress={() => setPreview(character)}
               delayLongPress={280}
               disabled={busy}
@@ -264,6 +270,17 @@ export default function SeatScreen() {
       ) : null}
       <Text style={styles.holdHint}>{t('seat.holdHint')}</Text>
       <NeonButton label={t('seat.submit')} color={neon.green} onPress={submit} busy={busy} />
+
+      <Modal visible={takenPopup} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setTakenPopup(false)}>
+        <Pressable style={styles.previewBackdrop} onPress={() => setTakenPopup(false)} accessibilityRole="button">
+          <Pressable style={styles.takenCard} onPress={() => {}}>
+            <Text style={styles.takenText}>{t('seat.takenTitle')}</Text>
+            <Pressable onPress={() => setTakenPopup(false)} accessibilityRole="button" style={({ pressed }) => [styles.takenBtn, pressed && { opacity: 0.7 }]}>
+              <Text style={styles.takenBtnText}>{t('seat.takenCta')}</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal visible={preview !== null} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setPreview(null)}>
         <Pressable style={styles.previewBackdrop} onPress={() => setPreview(null)} accessibilityRole="button">
@@ -344,6 +361,11 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   previewImage: { width: 230, height: 230 },
+  /* Tấm đen chữ trắng như ảnh mẫu (K111). */
+  takenCard: { width: '100%', maxWidth: 520, borderRadius: 14, backgroundColor: '#000000', paddingHorizontal: 24, paddingVertical: 22, alignItems: 'center', gap: 18 },
+  takenText: { fontSize: 18, lineHeight: 26, color: '#FFFFFF', textAlign: 'center' },
+  takenBtn: { minWidth: 260, paddingVertical: 8, paddingHorizontal: 18, borderRadius: 8, borderWidth: 2.5, borderColor: '#3B6CE6', alignItems: 'center' },
+  takenBtnText: { fontSize: 17, fontWeight: '600', color: '#FFFFFF', textAlign: 'center' },
   previewName: { fontSize: 17, fontWeight: '800', letterSpacing: 0.6 },
   characterImage: { width: '100%', height: '100%' },
   tick: {

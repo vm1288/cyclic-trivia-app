@@ -54,6 +54,8 @@ export type ActivationCheckResult = {
   sponsorLogoUrl?: string | null;
   /** Tên sponsor (CricTriv, FootieTriv...) - dán nhãn trong danh sách license. */
   sponsorName?: string | null;
+  /** K111: id sponsor - EXPLORE GAMES đối chiếu "máy đã mua game này chưa". */
+  sponsorId?: string | null;
   /** Gói đang gắn với license ("7 days", "12 months"…) - màn My Games (K106). Null nếu chưa có. */
   planTitle?: string | null;
   /** `License.ExpiredTime` - ngày gia hạn / hết hạn gói (K106). */

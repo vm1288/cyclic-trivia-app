@@ -6,7 +6,9 @@ import { ActivityIndicator, Image, Platform, Pressable, ScrollView, StyleSheet, 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { assetUrl } from '../src/api/game';
-import { fetchStorePlans, submitStorePurchase, type StorePlan, type StorePurchaseResult } from '../src/api/store';
+import { fetchStoreGames, fetchStorePlans, submitStorePurchase, type StoreGame, type StorePlan, type StorePurchaseResult } from '../src/api/store';
+import { GameInfoDialog, type GameInfo } from '../src/components/GameInfoDialog';
+import { useLicense } from '../src/session/LicenseSession';
 import { apiErrorText } from '../src/i18n/apiError';
 import { FormScreen } from '../src/components/FormScreen';
 import { NeonButton } from '../src/components/NeonButton';
@@ -45,6 +47,7 @@ export default function PurchaseScreen() {
   const router = useRouter();
   const t = useT();
   const player = usePlayer();
+  const license = useLicense();
   /*
    * K109: `?trialFor=<sponsorId>` - tới từ tấm "7-day free trial" (PROCEED) ở JOIN A MATCH: tự
    * bấm mua gói có kỳ dùng thử của game đó ngay khi store trả giá, không bắt chọn lại.
@@ -55,6 +58,9 @@ export default function PurchaseScreen() {
   const autoBought = useRef(false);
 
   const [plans, setPlans] = useState<StorePlan[] | null>(null);
+  /** K111: lưới game (sponsor) - kể cả game chưa bán ("Coming Soon"). */
+  const [games, setGames] = useState<StoreGame[] | null>(null);
+  const [openGame, setOpenGame] = useState<StoreGame | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busySku, setBusySku] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -125,14 +131,20 @@ export default function PurchaseScreen() {
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const result = await fetchStorePlans();
+      const [result, gamesResult] = await Promise.all([fetchStorePlans(), fetchStoreGames()]);
       if (!alive) return;
       if (!result.isSuccess) {
         setLoadError(apiErrorText(result, t));
         setPlans([]);
-        return;
+      } else {
+        setPlans(result.plans);
       }
-      setPlans(result.plans);
+      if (!gamesResult.isSuccess) {
+        setLoadError((e) => e ?? apiErrorText(gamesResult, t));
+        setGames([]);
+      } else {
+        setGames(gamesResult.games);
+      }
     })();
     return () => {
       alive = false;
@@ -236,6 +248,41 @@ export default function PurchaseScreen() {
     setDone(result);
   };
 
+  /** Máy đã mua / đang dùng thử game này (có license đã kích hoạt cùng sponsor). */
+  const ownedGame = (g: StoreGame | null) =>
+    !!g &&
+    license.all.some(
+      (s) => s.activated && ((s.sponsorId ?? '').toLowerCase() === g.sponsorId.toLowerCase() || (!s.sponsorId && s.sponsorName === g.name)),
+    );
+
+  /** NEW MATCH từ tấm giới thiệu: chuyển sang license của game đó rồi vào NEW MATCH (như My Games). */
+  const newMatchFor = async (g: StoreGame) => {
+    const s = license.all.find(
+      (x) => x.activated && ((x.sponsorId ?? '').toLowerCase() === g.sponsorId.toLowerCase() || (!x.sponsorId && x.sponsorName === g.name)),
+    );
+    if (!s) return;
+    setOpenGame(null);
+    if (license.status !== 'active' || license.session.hostId !== s.hostId) await license.switchTo(s.hostId);
+    license.setCurrentGame(null);
+    router.push('/new-game');
+  };
+
+  const openPlan = openGame ? (plans ?? []).find((p) => p.productId === openGame.productId) ?? null : null;
+  const openInfo: GameInfo | null = openGame
+    ? {
+        sponsorId: openGame.sponsorId,
+        gameName: openGame.name,
+        logoUrl: openGame.logoUrl,
+        tagline: openGame.tagline,
+        description: openGame.description,
+        players: openGame.players,
+        ageRange: openGame.ageRange,
+        price: openGame.price,
+        currency: openGame.currency,
+        durationDays: openGame.durationDays,
+      }
+    : null;
+
   const goRegister = () => {
     if (!done) return;
     router.replace({ pathname: '/register', params: { code: done.code } });
@@ -256,9 +303,10 @@ export default function PurchaseScreen() {
   }
 
   /*
-   * Bố cục "C - hàng gọn" (Tony chọn 2026-09-12 sau bản phác): toàn bề ngang, mỗi bộ
-   * một hàng logo · tên + mô tả · giá · nút, ba bộ vừa màn ngang không cuộn. Không dùng
-   * `FormScreen` vì khuôn hai cột của nó chỉ chừa 60% bề ngang cho danh sách.
+   * K111 (Tony 18/9, ảnh mẫu 3): EXPLORE GAMES = lưới game (logo + tagline), game chưa bán có dải
+   * "Coming Soon". Chạm một game → tấm giới thiệu (`GameInfoDialog`, ảnh mẫu 4): NEW MATCH khi máy
+   * đã mua / đang dùng thử game đó, PURCHASE ($XX per month) khi chưa - mua ngay trong tấm bằng
+   * sheet của store (logic IAP ở trên giữ nguyên). Thay bố cục "hàng gọn" K66.
    */
   return (
     <View style={styles.root}>
@@ -276,78 +324,37 @@ export default function PurchaseScreen() {
             <Text style={styles.backText}>{t('common.back')}</Text>
           </Pressable>
 
-          <Text style={styles.title}>{t('purchase.title')}</Text>
-          <Text style={styles.subtitle}>
-            {!connected || storeBySku.size === 0 ? t('purchase.storeOffline') : t('purchase.subtitle', { store: storeName })}
-          </Text>
+          <Text style={styles.title}>{t('explore.title')}</Text>
 
-          {plans === null ? (
+          {games === null ? (
             <View style={styles.center}>
               <ActivityIndicator color={neon.blue.stroke} />
-              <Text style={styles.muted}>{t('purchase.loading')}</Text>
+              <Text style={styles.muted}>{t('explore.loading')}</Text>
             </View>
-          ) : plans.length === 0 ? (
-            <Text style={styles.muted}>{loadError ?? t('purchase.noPlans')}</Text>
+          ) : games.length === 0 ? (
+            <Text style={styles.muted}>{loadError ?? t('explore.none')}</Text>
           ) : (
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list} style={styles.scroll}>
-              {plans.map((plan) => {
-                const sub = storeBySku.get(plan.productId);
-                const price = sub?.displayPrice ?? `${plan.currency} ${plan.price}`;
-                const canBuy = !!sub && connected && !busySku;
-                const meta = [
-                  plan.trialDays > 0 ? t('purchase.trial', { days: plan.trialDays }) : null,
-                  t(plan.maxDevices === 1 ? 'purchase.devices' : 'purchase.devices_plural', { count: plan.maxDevices }),
-                ]
-                  .filter(Boolean)
-                  .join(' · ');
-                return (
-                  <View key={plan.productId} style={styles.row}>
-                    {plan.sponsorIconUrl ? (
-                      <Image source={{ uri: assetUrl(plan.sponsorIconUrl) }} style={styles.icon} resizeMode="contain" accessibilityIgnoresInvertColors />
-                    ) : (
-                      <View style={styles.icon} />
-                    )}
-                    <View style={styles.nameCol}>
-                      <Text style={styles.name} numberOfLines={1}>
-                        {plan.title}
-                      </Text>
-                      <Text style={styles.meta} numberOfLines={1}>
-                        {meta}
-                      </Text>
-                    </View>
-                    <View style={styles.priceCol}>
-                      <Text style={styles.price} numberOfLines={1}>
-                        {price}
-                      </Text>
-                      <Text style={styles.priceSub} numberOfLines={1}>
-                        {plan.isSubscription
-                          ? plan.trialDays > 0
-                            ? t('purchase.afterTrial', { days: plan.trialDays })
-                            : t('purchase.perMonthShort')
-                          : t('purchase.forDays', { days: plan.durationDays })}
-                      </Text>
-                    </View>
-                    <View style={styles.btnCol}>
-                      <NeonButton
-                        label={t(plan.trialDays > 0 ? 'purchase.buy' : 'purchase.buyNoTrial')}
-                        color={neon.orange}
-                        onPress={() => void buy(plan)}
-                        busy={busySku === plan.productId || verifying}
-                        disabled={!canBuy}
-                      />
-                      {__DEV__ ? (
-                        <Pressable onPress={() => void simulate(plan)} style={styles.devBtn} accessibilityRole="button">
-                          <Text style={styles.devText}>{t('purchase.devSimulate')}</Text>
-                        </Pressable>
-                      ) : null}
-                    </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.grid} style={styles.scroll}>
+              {games.map((g) => (
+                <Pressable key={g.sponsorId} onPress={() => setOpenGame(g)} accessibilityRole="button" style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+                  <View style={styles.logoBox}>
+                    {g.logoUrl ? <Image source={{ uri: assetUrl(g.logoUrl) }} style={styles.logo} resizeMode="contain" accessibilityIgnoresInvertColors /> : null}
+                    {!g.available ? (
+                      <View style={styles.ribbonWrap} pointerEvents="none">
+                        <View style={styles.ribbon}>
+                          <Text style={styles.ribbonText}>{t('games.comingSoon')}</Text>
+                        </View>
+                      </View>
+                    ) : null}
                   </View>
-                );
-              })}
-              {notice ? <Text style={styles.notice}>{notice}</Text> : null}
-              {verifying ? <Text style={styles.muted}>{t('purchase.verifying')}</Text> : null}
+                  <Text style={styles.tagline}>{g.tagline}</Text>
+                </Pressable>
+              ))}
             </ScrollView>
           )}
+
+          {notice && !openGame ? <Text style={styles.notice}>{notice}</Text> : null}
+          {verifying ? <Text style={styles.muted}>{t('purchase.verifying')}</Text> : null}
 
           <View style={styles.bottom}>
             <Text style={styles.fine} numberOfLines={2}>
@@ -359,6 +366,33 @@ export default function PurchaseScreen() {
           </View>
         </View>
       </SafeAreaView>
+
+      <GameInfoDialog
+        info={openInfo}
+        cta={
+          !openGame
+            ? { kind: 'comingSoon' }
+            : ownedGame(openGame)
+              ? { kind: 'newMatch', onPress: () => void newMatchFor(openGame) }
+              : openGame.available && openPlan
+                ? {
+                    kind: 'purchase',
+                    onPress: () => void buy(openPlan),
+                    busy: busySku === openPlan.productId || verifying,
+                    disabled: !storeBySku.has(openPlan.productId) || !connected,
+                  }
+                : { kind: 'comingSoon' }
+        }
+        storePrice={openPlan ? (storeBySku.get(openPlan.productId)?.displayPrice ?? null) : null}
+        notice={openGame && openGame.available && openPlan && (!connected || !storeBySku.has(openPlan.productId)) ? t('purchase.storeOffline') : notice}
+        onClose={() => setOpenGame(null)}
+      >
+        {__DEV__ && openPlan && openGame && !ownedGame(openGame) ? (
+          <Pressable onPress={() => void simulate(openPlan)} style={styles.devBtn} accessibilityRole="button">
+            <Text style={styles.devText}>{t('purchase.devSimulate')}</Text>
+          </Pressable>
+        ) : null}
+      </GameInfoDialog>
     </View>
   );
 }
@@ -367,6 +401,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: bg.deep },
   safe: { flex: 1 },
   body: { flex: 1, paddingHorizontal: 20 },
+  pressed: { opacity: 0.8 },
   back: {
     position: 'absolute',
     top: 8,
@@ -379,51 +414,38 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   backText: { color: text.primary, fontSize: 16 },
-  title: {
-    marginTop: 10,
-    color: text.primary,
-    fontSize: 24,
-    fontWeight: '800',
-    letterSpacing: 1.5,
-    textAlign: 'center',
-  },
-  subtitle: { color: text.muted, fontSize: 12.5, textAlign: 'center', marginTop: 2, marginBottom: 8 },
+  title: { marginTop: 10, color: text.primary, fontSize: 24, fontWeight: '800', letterSpacing: 1.5, textAlign: 'center' },
 
   center: { alignItems: 'center', gap: 10, paddingVertical: 20 },
   muted: { color: text.muted, fontSize: 13, textAlign: 'center' },
   scroll: { flex: 1 },
-  list: { gap: 8, paddingBottom: 4 },
-
-  /** Một hàng = một bộ: logo · tên + mô tả · giá · nút. */
-  row: {
-    flexDirection: 'row',
+  /** Lưới ngang: ba game vừa một màn, nhiều hơn thì cuộn ngang. */
+  grid: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', gap: 26, paddingHorizontal: 10, paddingVertical: 8 },
+  card: { width: 210, alignItems: 'center', gap: 10 },
+  logoBox: { width: 190, height: 160, alignItems: 'center', justifyContent: 'center' },
+  logo: { width: 180, height: 150 },
+  tagline: { color: text.primary, fontSize: 15, lineHeight: 21, textAlign: 'center' },
+  /* Dải "Coming Soon" đỏ chéo góc trên trái như ảnh mẫu. */
+  ribbonWrap: { position: 'absolute', top: 0, left: 0, width: 120, height: 120, overflow: 'hidden' },
+  ribbon: {
+    position: 'absolute',
+    top: 24,
+    left: -38,
+    width: 170,
+    paddingVertical: 4,
+    backgroundColor: '#D9262E',
+    transform: [{ rotate: '-45deg' }],
     alignItems: 'center',
-    gap: 14,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    borderWidth: 1.6,
-    borderColor: 'rgba(58,165,255,0.45)',
-    backgroundColor: '#0A0810',
   },
-  icon: { width: 44, height: 44 },
-  nameCol: { flex: 1, minWidth: 0 },
-  name: { color: text.primary, fontSize: 17, fontWeight: '800', letterSpacing: 0.8 },
-  meta: { color: text.muted, fontSize: 12 },
-  priceCol: { alignItems: 'flex-end', minWidth: 96 },
-  price: { color: neon.orange.mid, fontSize: 20, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  priceSub: { color: text.muted, fontSize: 11 },
-  /** `alignItems` mặc định (stretch) - NeonButton lấy bề ngang từ cha, đặt `center` là nó co thành cục. */
-  btnCol: { width: 200 },
-  devBtn: { paddingTop: 2, alignSelf: 'center' },
-  devText: { color: '#FF3B52', fontSize: 10, fontWeight: '700', letterSpacing: 1 },
+  ribbonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
 
-  notice: { color: '#FF8A9A', fontSize: 13, textAlign: 'center' },
-  bottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 6, paddingBottom: 10 },
+  notice: { color: '#FFD166', fontSize: 13, lineHeight: 18, textAlign: 'center', marginTop: 4 },
+  devBtn: { marginTop: 6, paddingVertical: 4, paddingHorizontal: 8 },
+  devText: { color: 'rgba(255,255,255,0.45)', fontSize: 11, textDecorationLine: 'underline' },
+  bottom: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
   fine: { flex: 1, color: 'rgba(255,255,255,0.32)', fontSize: 11 },
   restoreText: { color: neon.blue.stroke, fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' },
   dim: { opacity: 0.4 },
-
   doneCard: {
     borderRadius: 16,
     borderWidth: 2,

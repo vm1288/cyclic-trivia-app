@@ -1,9 +1,10 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useRef } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ackFlow, shouldBeOnBoard } from '../src/api/game';
+import { ackFlow, assetUrl, getGameConfig, shouldBeOnBoard, type GameConfig } from '../src/api/game';
+import { ArrowLeftIcon } from '../src/components/NeonIcons';
 import { TYPE_ID } from '../src/net/gameConnection';
 import { useGameState } from '../src/net/useGameState';
 import { lobbyColors, PlayerRow } from '../src/components/LobbyParts';
@@ -103,6 +104,29 @@ export default function WaitingScreen() {
   const live = snapshot ? shouldBeOnBoard(snapshot.Game) : false;
 
   /*
+   * K111 (Tony 18/9, ảnh mẫu 2): phòng chờ KHÁCH cùng khuôn với lobby chủ phòng - ROOM CODE + tấm
+   * (logo game, "Game duration: …") thay cho QR/nút mời, KHÔNG có START MATCH; bên phải danh sách
+   * ghế có tên. Nhãn thời lượng lấy từ cấu hình ("15 minutes" / "Leaderboard Challenge"…).
+   */
+  const [config, setConfig] = useState<GameConfig | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void getGameConfig().then((r) => {
+      if (alive && r.isSuccess) setConfig(r.data);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const durationLabel = (() => {
+    const m = snapshot?.Game.DurationMinutes;
+    if (m == null) return '';
+    const found = config?.Durations.find((d) => d.Duration === m);
+    if (found) return found.Time;
+    return m === 0 ? t('waiting.leaderboard') : t('waiting.minutes', { minutes: m });
+  })();
+
+  /*
    * Ván đã chạy (hoặc đang đếm ngược vòng đua) -> sang màn bàn cờ.
    *
    * `replace` chứ không `push`: back từ bàn cờ phải về màn hình chính, không
@@ -140,68 +164,78 @@ export default function WaitingScreen() {
 
       {/* Ngang thì tai thỏ nằm ở cạnh trái/phải - phải khai báo cả `left`/`right`. */}
       <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
-        {/*
-          Cột trái là phần TĨNH (tiêu đề + thẻ "bạn là ai"), cột phải là danh
-          sách ghế - thứ duy nhất thay đổi theo thời gian thực và cần cuộn.
-        */}
-        <View style={styles.row}>
-          <View style={styles.leftCol}>
-            <Text style={styles.title}>{live ? t('waiting.liveTitle') : t('waiting.title')}</Text>
-            <Text style={styles.subtitle}>
-              {live ? t('waiting.liveSubtitle') : t('waiting.subtitle')}
-            </Text>
-
-            <View style={styles.youCard}>
-              <Text style={styles.youLabel}>{t('waiting.you')}</Text>
-              <Text style={styles.youName}>{seat.nickname ?? '—'}</Text>
-              {seat.roomCode ? (
-                <Text style={styles.roomCode}>
-                  {t('waiting.room', { code: seat.roomCode })}
-                </Text>
-              ) : null}
-            </View>
-
-            {live ? <Text style={styles.liveNote}>{t('waiting.opening')}</Text> : null}
-          </View>
-
-          <ScrollView
-            style={styles.rightCol}
-            contentContainerStyle={styles.scroll}
-            showsVerticalScrollIndicator={false}
+        <View style={styles.body}>
+          {/* Nút back nổi, cùng khuôn lobby (`lobby.tsx`). */}
+          <Pressable
+            onPress={() => router.replace('/')}
+            style={styles.backRow}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back')}
           >
-          <SectionHeader title={t('lobby.seats')} />
+            <View style={styles.backCircle}>
+              <ArrowLeftIcon color="#8FD0FF" />
+            </View>
+            <Text style={styles.backLabel}>{t('common.back').toUpperCase()}</Text>
+          </Pressable>
 
-          <View style={styles.progressRow}>
-            <Text style={styles.joinedText}>{t('lobby.joinedCount', { joined, total })}</Text>
-            <View style={styles.spacer} />
-            <Text style={styles.countText}>
-              {joined}/{total}
-            </Text>
+          <View style={styles.stack}>
+            <View style={styles.header}>
+              <Text style={styles.title}>{live ? t('waiting.liveTitle') : t('waiting.title')}</Text>
+            </View>
+
+            <View style={styles.middle}>
+              {/* Trái: mã phòng + tấm game (logo, thời lượng). */}
+              <View style={styles.col}>
+                <SectionHeader title={t('lobby.roomCode')} />
+                <View style={styles.codeRim}>
+                  <View style={styles.codeInner}>
+                    <Text style={styles.codeText} selectable>
+                      {(seat.roomCode ?? '').split('').join(' ')}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.gameCard}>
+                  {snapshot?.Sponsor?.LogoUrl ? (
+                    <Image source={{ uri: assetUrl(snapshot.Sponsor.LogoUrl) }} style={styles.gameLogo} resizeMode="contain" />
+                  ) : (
+                    <Text style={styles.gameName}>{snapshot?.Sponsor?.Name ?? ''}</Text>
+                  )}
+                  {durationLabel ? <Text style={styles.gameDuration}>{t('waiting.gameDuration', { duration: durationLabel })}</Text> : null}
+                  {live ? <Text style={styles.liveNote}>{t('waiting.opening')}</Text> : null}
+                </View>
+              </View>
+
+              {/* Phải: danh sách ghế có tên. */}
+              <View style={styles.col}>
+                <SectionHeader title={t('lobby.seats')} trailing={t('lobby.joinedCount', { joined, total })} />
+                <ScrollView style={styles.rowsScroll} showsVerticalScrollIndicator={false}>
+                  {seats.length === 0 ? (
+                    <View style={styles.centerBlock}>
+                      <ActivityIndicator color={lobbyColors.blue} size="large" />
+                    </View>
+                  ) : (
+                    <View style={styles.rows}>
+                      {seats.map((p, i) => (
+                        <PlayerRow
+                          key={p.Id}
+                          height={44}
+                          index={i + 1}
+                          name={p.NickName}
+                          colour={p.PlayerColor || lobbyColors.blue}
+                          ready
+                          isHost={p.IsHost}
+                          hostLabel={t('lobby.host')}
+                          statusLabel={t('lobby.statusReady')}
+                        />
+                      ))}
+                    </View>
+                  )}
+                </ScrollView>
+              </View>
+            </View>
           </View>
-
-          {seats.length === 0 ? (
-            <View style={styles.centerBlock}>
-              <ActivityIndicator color={lobbyColors.blue} size="large" />
-            </View>
-          ) : (
-            <View style={styles.rows}>
-              {seats.map((p, i) => (
-                <PlayerRow
-                  key={p.Id}
-                  index={i + 1}
-                  name={p.IsSetupNickName ? p.NickName : t('lobby.seatEmpty')}
-                  colour={p.PlayerColor || lobbyColors.blue}
-                  ready={p.IsSetupNickName}
-                  isHost={p.IsHost}
-                  hostLabel={t('lobby.host')}
-                  statusLabel={
-                    p.IsSetupNickName ? t('lobby.statusReady') : t('lobby.statusWaiting')
-                  }
-                />
-              ))}
-            </View>
-          )}
-          </ScrollView>
         </View>
       </SafeAreaView>
     </View>
@@ -268,6 +302,45 @@ const styles = StyleSheet.create({
   countText: { fontSize: 14, fontWeight: '700', color: text.primary },
 
   rows: { gap: 6, marginTop: 9 },
+
+  /* K111: khuôn lobby. */
+  body: { flex: 1 },
+  stack: { flex: 1, paddingHorizontal: 20, paddingBottom: 10 },
+  header: { height: 44, justifyContent: 'center' },
+  middle: { flex: 1, flexDirection: 'row', gap: 22, paddingTop: 4 },
+  col: { flex: 1 },
+  backRow: { position: 'absolute', top: 4, left: 14, zIndex: 2, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  backCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: lobbyColors.blue,
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 0 10px rgba(47,143,255,0.55)',
+  },
+  backLabel: { color: text.primary, fontSize: 16, fontWeight: '700', letterSpacing: 2.4 },
+  codeRim: { marginTop: 6, padding: 1.5, borderRadius: 13, backgroundColor: lobbyColors.purple, boxShadow: '0 0 18px rgba(200,107,255,0.6)' },
+  codeInner: { height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(48,12,80,0.95)' },
+  codeText: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', letterSpacing: 4, textShadowColor: 'rgba(226,167,255,0.9)', textShadowRadius: 14, textShadowOffset: { width: 0, height: 0 } },
+  gameCard: {
+    marginTop: 8,
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(63,224,255,0.55)',
+    backgroundColor: 'rgba(10,12,40,0.78)',
+    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    boxShadow: '0 0 12px rgba(47,143,255,0.35)',
+  },
+  gameLogo: { width: 150, height: 96 },
+  gameName: { fontSize: 20, fontWeight: '800', color: text.primary },
+  gameDuration: { fontSize: 17, color: text.primary, textAlign: 'center' },
+  rowsScroll: { flex: 1, marginTop: 8 },
 
   centerBlock: { marginTop: 40, gap: 18 },
   note: { color: lobbyColors.dim, fontSize: 13, lineHeight: 20, textAlign: 'center' },
