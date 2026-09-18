@@ -49,7 +49,9 @@ export default function PurchaseScreen() {
    * K109: `?trialFor=<sponsorId>` - tới từ tấm "7-day free trial" (PROCEED) ở JOIN A MATCH: tự
    * bấm mua gói có kỳ dùng thử của game đó ngay khi store trả giá, không bắt chọn lại.
    */
-  const params = useLocalSearchParams<{ trialFor?: string }>();
+  const params = useLocalSearchParams<{ trialFor?: string; autoBuy?: string }>();
+  /* K110: `?autoBuy=<sponsorId>` (tấm UNLOCK NOW) - như trialFor nhưng không đòi gói có dùng thử. */
+  const autoFor = params.trialFor ?? params.autoBuy;
   const autoBought = useRef(false);
 
   const [plans, setPlans] = useState<StorePlan[] | null>(null);
@@ -183,17 +185,17 @@ export default function PurchaseScreen() {
   };
 
   useEffect(() => {
-    if (autoBought.current || !params.trialFor || !plans?.length || storeBySku.size === 0) return;
+    if (autoBought.current || !autoFor || !plans?.length || storeBySku.size === 0) return;
     const plan = plans
-      .filter((p) => p.sponsorId.toLowerCase() === String(params.trialFor).toLowerCase() && p.trialDays > 0 && storeBySku.has(p.productId))
+      .filter((p) => p.sponsorId.toLowerCase() === String(autoFor).toLowerCase() && (!params.trialFor || p.trialDays > 0) && storeBySku.has(p.productId))
       .sort((a, b) => b.durationDays - a.durationDays)[0];
     if (!plan) return;
     autoBought.current = true;
     // Tài khoản store đã dùng thử rồi thì store không đưa offer free-trial - báo trước khi mở sheet.
-    if (trialOffer(storeBySku.get(plan.productId))?.paymentMode !== 'free-trial') setNotice(t('purchase.trialUsedStore'));
+    if (params.trialFor && trialOffer(storeBySku.get(plan.productId))?.paymentMode !== 'free-trial') setNotice(t('purchase.trialUsedStore'));
     void buy(plan);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.trialFor, plans, storeBySku]);
+  }, [autoFor, plans, storeBySku]);
 
   /*
    * Restore: cài lại app / máy mới cùng tài khoản store. Store trả các giao dịch còn

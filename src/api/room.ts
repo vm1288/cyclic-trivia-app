@@ -127,6 +127,17 @@ export type FreeJoinsUsedBody = {
     GameName: string | null;
     LogoUrl: string | null;
   } | null;
+  /** K110: đã dùng thử → tấm UNLOCK NOW → tấm mua (chữ theo game từ `GameCatalog` của server). */
+  Unlock?: {
+    ProductId: string | null;
+    Price: number;
+    Currency: string | null;
+    DurationDays: number;
+    Tagline: string;
+    Description: string;
+    Players: string;
+    AgeRange: string;
+  } | null;
 };
 
 export function claimSeat(code: string, deviceId: string, hostIds: string[] = []): Promise<ApiResult<ClaimedSeat>> {

@@ -15,6 +15,7 @@ import {
   type FreeJoinsUsedBody,
 } from '../src/api/room';
 import { FreeTrialDialog, type TrialInfo } from '../src/components/FreeTrialDialog';
+import { UnlockDialog, type UnlockInfo } from '../src/components/UnlockDialog';
 import { NeonButton } from '../src/components/NeonButton';
 import { NeonField } from '../src/components/NeonField';
 import { StageBackground } from '../src/components/StageBackground';
@@ -60,6 +61,8 @@ export default function JoinScreen() {
   /* K109: hết lượt + chưa dùng thử → hai tấm "7-day free trial" thay cho dòng lỗi. */
   const [trial, setTrial] = useState<TrialInfo | null>(null);
   const [trialTotal, setTrialTotal] = useState(3);
+  /* K110: hết lượt + đã dùng thử → hai tấm "UNLOCK NOW" → mua. */
+  const [unlock, setUnlock] = useState<UnlockInfo | null>(null);
   const [scanning, setScanning] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   /* Camera bắn onBarcodeScanned liên tục - chỉ nhận lần đầu, tránh xin hai ghế. */
@@ -120,6 +123,21 @@ export default function JoinScreen() {
               sponsorId: body.Trial.SponsorId,
               gameName: body.Trial.GameName ?? t('games.unnamed'),
               logoUrl: body.Trial.LogoUrl,
+            });
+            return;
+          }
+          if (body.Unlock) {
+            setUnlock({
+              sponsorId: body.Trial?.SponsorId ?? '',
+              gameName: body.Trial?.GameName ?? t('games.unnamed'),
+              logoUrl: body.Trial?.LogoUrl ?? null,
+              price: body.Unlock.Price,
+              currency: body.Unlock.Currency,
+              durationDays: body.Unlock.DurationDays,
+              tagline: body.Unlock.Tagline,
+              description: body.Unlock.Description,
+              players: body.Unlock.Players,
+              ageRange: body.Unlock.AgeRange,
             });
             return;
           }
@@ -280,6 +298,15 @@ export default function JoinScreen() {
           setTrial(null);
           // /purchase tự bấm mua gói có kỳ dùng thử của game này (K109).
           router.push({ pathname: '/purchase', params: { trialFor: info.sponsorId } });
+        }}
+      />
+
+      <UnlockDialog
+        info={unlock}
+        onClose={() => setUnlock(null)}
+        onPurchase={(info) => {
+          setUnlock(null);
+          router.push({ pathname: '/purchase', params: { autoBuy: info.sponsorId } });
         }}
       />
 
