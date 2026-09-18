@@ -28,6 +28,8 @@ export type PlayerSeat = {
   /** Có giá trị sau khi đã nhận ghế xong. Rỗng = còn nợ bước nhập tên. */
   nickname?: string | null;
   characterId?: string | null;
+  /** K108: lượt vào miễn phí đang dùng cho game này (null = đã mua). Chỉ để hiện dòng nhắc. */
+  freeJoin?: { used: number; total: number } | null;
 };
 
 type Stored = {

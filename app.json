@@ -46,6 +46,13 @@
       "expo-video",
       "expo-iap",
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Cyclic uses the camera to scan the room QR code shown on the host's phone.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
         "react-native-google-cast",
         {
           "receiverAppId": "CC1AD845",

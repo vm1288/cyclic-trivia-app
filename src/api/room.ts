@@ -103,10 +103,32 @@ export type ClaimedSeat = {
   NickName: string | null;
   CharacterId: string | null;
   NumberOfPlayers: number;
+  /**
+   * K108: máy này chưa mua game của phòng → đang dùng lượt vào miễn phí (3 mỗi game), kể cả lượt
+   * này. `null` = đã mua (hoặc server cũ). Hết lượt thì server trả `errorCode: free_joins_used`.
+   */
+  FreeJoin?: { Used: number; Total: number } | null;
 };
 
-export function claimSeat(code: string, deviceId: string): Promise<ApiResult<ClaimedSeat>> {
-  return postJson<ClaimedSeat>(`/api/room/${encodeURIComponent(code)}/seat`, { DeviceId: deviceId });
+/**
+ * `hostIds` = id host của các license máy này đã kích hoạt (K108): server đối chiếu sponsor để biết
+ * đã MUA game của phòng chưa; không có / không khớp → tính lượt miễn phí.
+ */
+export function claimSeat(code: string, deviceId: string, hostIds: string[] = []): Promise<ApiResult<ClaimedSeat>> {
+  return postJson<ClaimedSeat>(`/api/room/${encodeURIComponent(code)}/seat`, { DeviceId: deviceId, HostIds: hostIds });
+}
+
+/**
+ * Mã phòng từ nội dung QR / link mời (K108 - nút quét ở JOIN A MATCH). Nhận:
+ *   - `{SiteUrl}join/ABC123` (Common QR Code ở lobby, K89)
+ *   - `cyclic://join?code=ABC123`
+ *   - hoặc chính mã.
+ */
+export function roomCodeFromScan(raw: string): string | null {
+  const s = (raw ?? '').trim();
+  const m = s.match(/join\/([A-Za-z0-9]{4,10})(?:[/?#]|$)/) ?? s.match(/[?&]code=([A-Za-z0-9]{4,10})/);
+  const code = normaliseRoomCode(m ? m[1] : s);
+  return isRoomCodeShaped(code) ? code : null;
 }
 
 /**

@@ -126,6 +126,25 @@ async function post<T>(
     }
 
     if (!response.ok) {
+      /*
+       * K108: một số route trả lời từ chối bằng MÃ HTTP 4xx kèm thân JSON `{isSuccess:false,
+       * errorCode, errorMessage}` (`/api/room/{code}/seat`: 409 `game_full` / `game_started` /
+       * `free_joins_used`, 404 "Room not found"). Trước đây rơi xuống "Server returned error 409"
+       * - người dùng không biết vì sao. Có câu của server thì dùng câu của server.
+       */
+      if (response.status < 500) {
+        const body = (await response.json().catch(() => null)) as Envelope | null;
+        if (body && (body.errorMessage || body.errorCode)) {
+          return {
+            isSuccess: false,
+            kind: 'rejected',
+            message: body.errorMessage,
+            messageKey: body.errorMessage ? undefined : 'error.rejected',
+            errorCode: body.errorCode,
+            data: body as unknown as Record<string, unknown>,
+          };
+        }
+      }
       return {
         isSuccess: false,
         kind: 'http',

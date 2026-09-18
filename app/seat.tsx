@@ -259,6 +259,9 @@ export default function SeatScreen() {
         })}
       </View>
 
+      {seat?.freeJoin ? (
+        <Text style={styles.freeJoin}>{t('seat.freeJoin', { used: seat.freeJoin.used, total: seat.freeJoin.total })}</Text>
+      ) : null}
       <Text style={styles.holdHint}>{t('seat.holdHint')}</Text>
       <NeonButton label={t('seat.submit')} color={neon.green} onPress={submit} busy={busy} />
 
@@ -327,6 +330,7 @@ const styles = StyleSheet.create({
   // chỗ mỗi khi có người nhận nhân vật.
   characterTaken: { opacity: 0.28 },
   holdHint: { fontSize: 11.5, lineHeight: 15, color: text.muted, textAlign: 'center', marginTop: -6 },
+  freeJoin: { fontSize: 12, lineHeight: 16, color: '#FFD166', textAlign: 'center', marginTop: -6 },
   previewBackdrop: { flex: 1, backgroundColor: 'rgba(3,3,14,0.8)', alignItems: 'center', justifyContent: 'center' },
   previewCard: {
     width: 300,
