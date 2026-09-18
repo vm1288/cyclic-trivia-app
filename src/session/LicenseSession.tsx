@@ -80,6 +80,10 @@ export type LicenseSession = {
   languageCode?: string | null;
   /** Tên sponsor (CricTriv, FootieTriv...) để dán nhãn trong danh sách. */
   sponsorName?: string | null;
+  /** Gói đang dùng ("7 days", "12 months"…) - màn My Games (K106). */
+  planTitle?: string | null;
+  /** Ngày gia hạn / hết hạn gói (ISO) - màn My Games (K106). */
+  licenseExpiresAt?: string | null;
   /**
    * Đường dẫn file logo sponsor ĐÃ TẢI VỀ MÁY (file:// ...), không phải URL
    * trên server. Xem `sponsorLogo.ts` để biết vì sao tải về.
@@ -373,6 +377,9 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
                   token: result.data,
                   expiresAt: result.expiresAt ?? null,
                   activated: result.isActivated,
+                  /* Gói/hạn đổi khi gia hạn trong store - làm mới theo (K106). */
+                  planTitle: result.planTitle ?? s.planTitle ?? null,
+                  licenseExpiresAt: result.licenseExpiresAt ?? s.licenseExpiresAt ?? null,
                 }
               : s,
           ),

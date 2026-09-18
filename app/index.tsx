@@ -2,6 +2,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Image,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -17,21 +18,21 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getCurrentGame, getGameState, shouldBeOnBoard } from '../src/api/game';
 import { useConfirm } from '../src/components/ConfirmDialog';
 import { GlowDivider } from '../src/components/GlowDivider';
 import { NeonButton } from '../src/components/NeonButton';
+import { MyGamesSheet } from '../src/components/MyGamesSheet';
 import {
   BookIcon,
   CartIcon,
   JoinIcon,
-  LockIcon,
   NewGameIcon,
 } from '../src/components/NeonIcons';
+import { NoGamesDialog } from '../src/components/NoGamesDialog';
 import { StageBackground } from '../src/components/StageBackground';
-import { SwitchGameSheet } from '../src/components/SwitchGameSheet';
 import { useT } from '../src/i18n/I18nProvider';
 import { useLicense } from '../src/session/LicenseSession';
 import { usePlayer } from '../src/session/PlayerSession';
@@ -66,6 +67,8 @@ const MENU = [
 export default function HomeScreen() {
   const router = useRouter();
   const { width, height } = useWindowDimensions();
+  /* Nút "My Games" đặt tuyệt đối nên tự cộng tai thỏ/thanh trạng thái (absolute bỏ qua padding của SafeAreaView). */
+  const insets = useSafeAreaInsets();
   const license = useLicense();
   const player = usePlayer();
   const t = useT();
@@ -86,7 +89,13 @@ export default function HomeScreen() {
 
   type OpenGame = { id: string; players: number; minutes: number; joined: number };
   const [openGame, setOpenGame] = useState<OpenGame | null>(null);
-  const [switchOpen, setSwitchOpen] = useState(false);
+  /*
+   * K106 (Tony 18/9): không còn nhập mã license - mua trong app. Home có nút nhỏ "My Games"
+   * (góc trên trái, đè lên logo) mở tấm quản lý; SET UP A MATCH mở tấm CHỌN game khi có hơn
+   * một game; chưa có game nào thì cả hai ra hộp "No Games Found" dẫn sang EXPLORE GAMES.
+   */
+  const [sheet, setSheet] = useState<'manage' | 'choose' | null>(null);
+  const [noGames, setNoGames] = useState(false);
 
   /**
    * Ghế của máy này trong một ván ĐANG CHƠI DỞ, nếu có.
@@ -264,11 +273,42 @@ export default function HomeScreen() {
    */
   const firstButton = liveSeatGameId
     ? { key: 'home.resume' as const, Icon: NewGameIcon, href: '/game-landscape' as const }
-    : !activated
-      ? { key: 'home.register' as const, Icon: LockIcon, href: '/register' as const }
-      : openGame
-        ? { key: 'home.resume' as const, Icon: NewGameIcon, href: '/lobby' as const }
-        : { key: 'home.newGame' as const, Icon: NewGameIcon, href: '/new-game' as const };
+    : activated && openGame
+      ? { key: 'home.resume' as const, Icon: NewGameIcon, href: '/lobby' as const }
+      : { key: 'home.newGame' as const, Icon: NewGameIcon, href: '/new-game' as const };
+
+  /** SET UP A MATCH: chưa game → hộp No Games; một game → thẳng /new-game; nhiều → tấm chọn. */
+  const setUpMatch = () => {
+    const games = license.all.filter((g) => g.activated);
+    if (games.length === 0) { setNoGames(true); return; }
+    if (games.length === 1) {
+      if (!activated || license.session.hostId !== games[0].hostId) void license.switchTo(games[0].hostId);
+      router.push('/new-game');
+      return;
+    }
+    setSheet('choose');
+  };
+
+  const openMyGames = () => {
+    if (license.all.filter((g) => g.activated).length === 0) { setNoGames(true); return; }
+    setSheet('manage');
+  };
+
+  /** Huỷ gói = quản lý trên store; app chỉ dẫn tới trang đăng ký của store. */
+  const cancelSubscription = async () => {
+    const store = t(Platform.OS === 'ios' ? 'purchase.storeApple' : 'purchase.storeGoogle');
+    const ok = await confirm({
+      title: t('games.cancelTitle'),
+      message: t('games.cancelBody', { store }),
+      cancelLabel: t('common.cancel').toUpperCase(),
+      confirmLabel: t('games.cancelOpen').toUpperCase(),
+    });
+    if (!ok) return;
+    const url = Platform.OS === 'ios'
+      ? 'https://apps.apple.com/account/subscriptions'
+      : 'https://play.google.com/store/account/subscriptions';
+    void Linking.openURL(url).catch(() => {});
+  };
 
   // `players === 0` = đang dùng bản dự phòng lúc mất mạng, chưa biết chi tiết
   // ván -> bỏ dòng phụ thay vì hiện "0 người".
@@ -417,9 +457,9 @@ export default function HomeScreen() {
                  */
                 liveSeatGameId
                   ? router.push('/game-landscape')
-                  : openGame
+                  : activated && openGame
                     ? router.push({ pathname: '/lobby', params: { gameId: openGame.id } })
-                    : router.push(firstButton.href)
+                    : setUpMatch()
               }
             />
 
@@ -459,66 +499,49 @@ export default function HomeScreen() {
               Nhãn đổi theo số license: mới có một cái thì "Switch" là sai, chưa
               có gì để chuyển sang.
             */}
-            {activated ? (
-              <Pressable
-                onPress={() => setSwitchOpen(true)}
-                accessibilityRole="button"
-                hitSlop={10}
-                style={styles.switchLink}
-              >
-                <Text style={styles.switchText}>
-                  {license.all.length > 1 ? t('home.switchGame') : t('home.addGame')}
-                </Text>
-              </Pressable>
-            ) : null}
           </ScrollView>
         </View>
+
+        {/* Nút nhỏ "My Games" góc trên trái, ĐÈ lên vùng logo - không chiếm hàng, logo không bị đẩy (K106). */}
+        <Pressable
+          onPress={openMyGames}
+          accessibilityRole="button"
+          hitSlop={8}
+          style={({ pressed }) => [styles.myGames, { top: insets.top + 8, left: insets.left + 18 }, pressed && styles.pressed]}
+        >
+          <Text style={styles.myGamesText}>{t('home.myGames')}</Text>
+        </Pressable>
       </SafeAreaView>
 
-      <SwitchGameSheet
-        visible={switchOpen}
-        sessions={license.all}
+      <MyGamesSheet
+        visible={sheet !== null}
+        mode={sheet ?? 'manage'}
+        sessions={license.all.filter((g) => g.activated)}
         activeHostId={activated ? license.session.hostId : null}
-        onClose={() => setSwitchOpen(false)}
-        onSelect={async (hostId) => {
-          setSwitchOpen(false);
-          await license.switchTo(hostId);
+        onClose={() => setSheet(null)}
+        onNewMatch={async (hostId) => {
+          setSheet(null);
+          if (!activated || license.session.hostId !== hostId) await license.switchTo(hostId);
+          // Ván cũ của license này (nếu có) hiện ở RESUME; NEW MATCH là tạo ván mới thật.
+          license.setCurrentGame(null);
+          router.push('/new-game');
         }}
-        onRemove={async (hostId) => {
-          const target = license.all.find((s) => s.hostId === hostId);
-          if (!target) return;
-
-          /*
-           * Đóng sheet TRƯỚC khi hỏi xác nhận: cả hai đều là Modal, chồng hai
-           * Modal lên nhau trên Android cho thứ tự lớp không đoán trước được -
-           * hộp xác nhận có thể nằm dưới sheet và không bấm được.
-           */
-          setSwitchOpen(false);
-
-          const ok = await confirm({
-            title: t('switch.removeTitle', {
-              name: target.sponsorName || t('switch.unnamed', { code: target.licenseCode }),
-            }),
-            message: t('switch.removeBody'),
-            cancelLabel: t('common.cancel').toUpperCase(),
-            confirmLabel: t('switch.removeConfirm').toUpperCase(),
-            destructive: true,
-          });
-
-          if (!ok) {
-            // Huỷ thì trả người dùng về đúng chỗ họ đang đứng.
-            setSwitchOpen(true);
-            return;
-          }
-
-          await license.remove(hostId);
-          // Còn license khác thì mở lại sheet để thấy kết quả; hết sạch thì ở
-          // lại màn hình chính, lúc đó nút đã tự về REGISTER GAME.
-          if (license.all.length > 1) setSwitchOpen(true);
+        onCancelSubscription={() => {
+          setSheet(null);
+          void cancelSubscription();
         }}
-        onAdd={() => {
-          setSwitchOpen(false);
-          router.push('/register');
+        onBuyAnother={() => {
+          setSheet(null);
+          router.push('/purchase');
+        }}
+      />
+
+      <NoGamesDialog
+        visible={noGames}
+        onClose={() => setNoGames(false)}
+        onExplore={() => {
+          setNoGames(false);
+          router.push('/purchase');
         }}
       />
     </View>
@@ -629,12 +652,16 @@ const styles = StyleSheet.create({
 
   // Link chữ, không phải nút: đây là hành động hiếm và không nên tranh chỗ với
   // bốn nút neon ngay trên nó.
-  switchLink: { alignSelf: 'center', marginTop: 2, paddingVertical: 4 },
-  switchText: {
-    color: 'rgba(198,212,240,0.85)',
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-    textDecorationLine: 'underline',
+  /* Nút nhỏ góc trên trái, tuyệt đối để không đẩy logo (K106). `top/left` tính từ SafeAreaView. */
+  myGames: {
+    position: 'absolute',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(205,228,255,0.7)',
+    backgroundColor: 'rgba(16,20,40,0.85)',
+    boxShadow: '0 0 10px rgba(160,200,255,0.30)',
   },
+  myGamesText: { color: '#F2F7FF', fontSize: 12.5, fontWeight: '800', letterSpacing: 1 },
 });
