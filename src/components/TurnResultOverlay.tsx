@@ -86,7 +86,9 @@ type TurnResultKind =
   /** Mình hết giờ, không kịp trả lời. `main` như trên. */
   | { kind: 'timeout'; main?: boolean }
   /** Có người chốt câu trước mình. */
-  | { kind: 'late'; by?: string };
+  | { kind: 'late'; by?: string }
+  /** K116: vòng đua - mình sai, người khác còn đang trả lời. Đứng tới khi có kết quả chung. */
+  | { kind: 'raceWrong' };
 
 /**
  * `name`: tên người trả lời khi tấm là của NGƯỜI KHÁC (gói 93, K94). Bỏ trống =
@@ -108,6 +110,7 @@ export function TurnResultOverlay({
   name,
   /** "runs" / "goals" / "points" tuỳ bàn - xem `MoveDirectionOverlay`. */
   unit,
+  oneUnit,
   /**
    * Bàn cờ đang chiếm chỗ hay không.
    *
@@ -120,6 +123,8 @@ export function TurnResultOverlay({
   result: TurnResult;
   name: string;
   unit: string;
+  /** K116: dạng số ít ("1 run" thay "1 runs"); thiếu thì dùng `unit`. */
+  oneUnit?: string;
   compact?: boolean;
 }) {
   const t = useT();
@@ -138,7 +143,7 @@ export function TurnResultOverlay({
   const tone =
     result.kind === 'correct' || result.kind === 'challengePass'
       ? { line: boardColors.green, tint: 'rgba(6,54,22,0.96)' }
-      : result.kind === 'wrong' || result.kind === 'timeout' || result.kind === 'challengeFail'
+      : result.kind === 'wrong' || result.kind === 'timeout' || result.kind === 'challengeFail' || result.kind === 'raceWrong'
         ? { line: boardColors.red, tint: 'rgba(58,8,16,0.96)' }
         : { line: boardColors.amber, tint: 'rgba(52,40,4,0.96)' };
 
@@ -163,12 +168,14 @@ export function TurnResultOverlay({
             ? t('result.wrong', { name })
             : result.kind === 'timeout'
               ? t('result.timeout', { name })
-              : t('result.lateBy', { name: result.by ?? '' });
+              : result.kind === 'raceWrong'
+                ? t('result.raceWrong')
+                : t('result.lateBy', { name: result.by ?? '' });
 
   /* Trượt thử thách: web chỉ có một dòng tên + "Y It's your go" - dòng sau là tấm chào lượt lo. */
   const body =
     result.kind === 'correct' || result.kind === 'challengePass'
-      ? t('result.earned', { point: result.point, unit })
+      ? t('result.earned', { point: result.point, unit: result.point === 1 && oneUnit ? oneUnit : unit })
       : result.kind === 'wrong' || result.kind === 'timeout'
         /* Tấm của NGƯỜI KHÁC sai/hết giờ (K100): người xem chính là người sắp tranh trả lời.
            Mình sai mà chỉ là người TRANH (K103): không có dòng dưới. */
@@ -179,7 +186,9 @@ export function TurnResultOverlay({
             : t('result.wrongBody')
         : result.kind === 'challengeFail'
           ? ''
-          : t('result.late');
+          : result.kind === 'raceWrong'
+            ? t('result.raceWrongBody')
+            : t('result.late');
 
   /*
    * Bản web hiện thêm dòng này khi người chơi còn lượt tung nữa. Tấm của NGƯỜI KHÁC

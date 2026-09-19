@@ -60,6 +60,7 @@ export function GameOverOverlay({
   isLeaderboard,
   players,
   unit = '',
+  oneUnit,
   onLeave,
 }: {
   gameId: string | null;
@@ -83,6 +84,8 @@ export function GameOverOverlay({
   players?: { Id: string; NickName: string; Point: number }[];
   /** "runs" / "goals" / "points" tuỳ bàn. */
   unit?: string;
+  /** K116: số ít cho 1 điểm. */
+  oneUnit?: string;
   onLeave: () => void;
 }) {
   const t = useT();
@@ -187,7 +190,7 @@ export function GameOverOverlay({
                     {p.Id === meId ? t('gameOver.youSuffix') : ''}
                   </Text>
                   <Text style={[styles.matchPoint, i === 0 && styles.matchFirst]}>
-                    {p.Point} {unit}
+                    {p.Point} {p.Point === 1 && oneUnit ? oneUnit : unit}
                   </Text>
                 </View>
               ))}

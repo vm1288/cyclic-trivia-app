@@ -1315,11 +1315,16 @@ export default function GameLandscapeScreen() {
             const payload = model.Payload as TurnQuestionPayload | undefined;
             if (!payload?.question?.Id) return;
             const dur = num('DurationInSeconds');
+            /*
+             * K116 (Tony 19/9): Eliminator chỉ bớt đáp án trên máy NGƯỜI CHÍNH - người xem vẫn thấy
+             * đủ 3 đáp án (chỉ nhận thêm 5 giây). Skipper/Changer đổi câu thì vẫn thay câu.
+             */
+            const eliminator = str('Cardname').toLowerCase() === 'eliminator';
             setQuestion((prev) =>
               prev && prev.readOnly
                 ? {
                     ...prev,
-                    question: payload.question,
+                    question: eliminator ? prev.question : payload.question,
                     categories: prev.categories.length ? prev.categories : categoryChain(payload.category),
                     duration: dur > 0 ? dur : prev.duration,
                   }
@@ -1340,7 +1345,7 @@ export default function GameLandscapeScreen() {
           /* Vòng đua không ai đúng (K103): tấm chung + đếm lùi tới câu mới. */
           case 'WrongAnswerForTurn':
             setQuestion((prev) => (prev?.kind === 'race' ? null : prev));
-            setTurnResult((prev) => (prev && (prev.kind === 'timeout' || prev.kind === 'wrong' || prev.kind === 'late') ? null : prev));
+            setTurnResult((prev) => (prev && (prev.kind === 'timeout' || prev.kind === 'wrong' || prev.kind === 'late' || prev.kind === 'raceWrong') ? null : prev));
             setRaceNobody({ seconds: num('Seconds') || 10 });
             return;
 
@@ -1551,7 +1556,7 @@ export default function GameLandscapeScreen() {
          * (Tony 09-16: "người thua hiện một lần 2 popup"). Gói 45 là của câu tranh lượt thường;
          * ở vòng đua tấm "X is the fastest" nói đủ - bỏ tấm kia.
          */
-        setTurnResult((prev) => (prev?.kind === 'late' ? null : prev));
+        setTurnResult((prev) => (prev?.kind === 'late' || prev?.kind === 'raceWrong' ? null : prev));
         setRaceWinner({ name, isMe: packet.PlayerId === seat?.playerId });
         return;
       }
@@ -2687,6 +2692,8 @@ export default function GameLandscapeScreen() {
      * dưới vẫn bấm được; tấm chào lượt / thẻ thưởng xếp hàng sau (K78).
      */
     const hasExplain = turnResult.kind === 'correct' && !!turnResult.explain;
+    /* K116: "Wrong answer. Waiting for others…" không tự tắt - gói 66 / WrongAnswerForTurn gỡ. */
+    if (turnResult.kind === 'raceWrong') return;
     /* Lời chào lượt kế vừa gắn vào (K100) → tấm đã đổi object, đồng hồ chạy lại: 3 s nữa là đủ đọc. */
     const ms = turnResult.nextTurnText ? 3000 : hasExplain ? 6000 : 3500;
     const hide = setTimeout(() => setTurnResult(null), ms);
@@ -2965,6 +2972,15 @@ export default function GameLandscapeScreen() {
     ).then((res) => {
       // Vòng đua và battle có thông báo riêng - xem ghi chú trong `showAnswerResult`.
       if (current.kind === 'turn') showAnswerResult(res, answerContent);
+      /*
+       * K116 (Tony 19/9): vòng đua sai mà người khác còn chưa trả lời → "Wrong answer. Waiting for
+       * others…" (server mới trả `isCorrect`/`waitingForOthers`; server cũ không có → im như trước).
+       * Tấm đứng tới khi có kết quả chung: RaceWinner (gói 66) hoặc WrongAnswerForTurn (K103) gỡ.
+       */
+      if (current.kind === 'race' && res.isSuccess) {
+        const r = res as unknown as { isCorrect?: boolean; waitingForOthers?: boolean };
+        if (r.isCorrect === false && r.waitingForOthers) setTurnResult({ kind: 'raceWrong' });
+      }
     });
   };
 
@@ -3573,6 +3589,7 @@ export default function GameLandscapeScreen() {
                 /* Bản web luôn nêu TÊN người vừa trả lời, không nói trống không. Gói 93 mang tên người khác. */
                 name={turnResult.name ?? me?.NickName ?? ''}
                 unit={pointUnit}
+                oneUnit={onePointUnit}
                 /*
                  * Bàn cờ còn hiện thì khung phải gọn - nó đang nằm ĐÈ lên bàn cờ.
                  * Ẩn bàn cờ rồi thì cả cột trái trống, khung lấy khổ của bàn cờ
@@ -4101,6 +4118,7 @@ export default function GameLandscapeScreen() {
           isLeaderboard={(snapshot?.Game?.TotalRollDice ?? 0) > 0}
           players={snapshot?.Players ?? []}
           unit={pointUnit}
+          oneUnit={onePointUnit}
           onLeave={leaveToHome}
         />
       ) : null}
