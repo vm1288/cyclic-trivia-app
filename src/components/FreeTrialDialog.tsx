@@ -33,11 +33,17 @@ export function FreeTrialDialog({
   onProceed,
   onClose,
   initialStep = 1,
+  busy,
+  notice,
 }: {
   info: TrialInfo | null;
   total: number;
   /** 2 = mở thẳng tấm giải thích dùng thử (EXPLORE GAMES → TRY {GAME}, K112). */
   initialStep?: 1 | 2;
+  /** K114: đang mở sheet store - nút PROCEED quay; tấm KHÔNG tự đóng, chỉ đóng khi mua xong / ✕. */
+  busy?: boolean;
+  /** K114: store từ chối / chưa sẵn sàng - in ngay dưới nút thay vì im lặng. */
+  notice?: string | null;
   onProceed: (info: TrialInfo) => void;
   onClose: () => void;
 }) {
@@ -53,7 +59,7 @@ export function FreeTrialDialog({
         : t('trial.periodDays', { days: info.durationDays });
 
   return (
-    <NeonSheet visible onClose={onClose} maxWidth={720}>
+    <NeonSheet visible onClose={onClose} maxWidth={720} closeButton>
           {step.value === 1 ? (
             <>
               <Text style={styles.body}>{t('trial.usedAll', { total, game: info.gameName, days: info.days })}</Text>
@@ -71,7 +77,8 @@ export function FreeTrialDialog({
                 <Text style={styles.body2}>{t('trial.line1', { game: info.gameName, days: info.days })}</Text>
                 <Text style={styles.body2}>{t('trial.line2', { game: info.gameName })}</Text>
                 <Text style={styles.body2}>{t('trial.line3', { days: info.days, period })}</Text>
-                <SheetButton label={t('trial.proceed')} onPress={() => onProceed(info)} style={styles.btnProceed} />
+                <SheetButton label={t('trial.proceed')} onPress={() => onProceed(info)} busy={busy} style={styles.btnProceed} />
+                {notice ? <Text style={styles.notice}>{notice}</Text> : null}
               </View>
             </View>
           )}
@@ -97,4 +104,5 @@ const styles = StyleSheet.create({
   textCol: { flex: 1, gap: 12, alignItems: 'center' },
   body2: { fontSize: 15.5, lineHeight: 22, color: '#FFFFFF', alignSelf: 'stretch' },
   btnProceed: { marginTop: 4 },
+  notice: { fontSize: 13, lineHeight: 18, color: '#FFD166', textAlign: 'center', alignSelf: 'stretch' },
 });

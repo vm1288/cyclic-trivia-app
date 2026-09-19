@@ -1,5 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { NeonSheet, SheetButton } from './NeonSheet';
 import { assetUrl } from '../api/game';
@@ -8,7 +7,7 @@ import { useT } from '../i18n/I18nProvider';
 /**
  * Tấm giới thiệu một game (ảnh mẫu 4 của Tony, K110/K111):
  *
- *   ‹ Back | logo · tagline · [NÚT]  |  mô tả · No of players · Age Range
+ *   ✕ (góc, ngoài mép) | logo · tagline · [NÚT]  |  mô tả · No of players · Age Range
  *
  * Dùng ở hai chỗ, chỉ khác NÚT:
  *   - EXPLORE GAMES (K111): NEW MATCH khi máy đã mua / đang dùng thử game đó; PURCHASE ($XX per
@@ -80,11 +79,7 @@ export function GameInfoDialog({
     info.durationDays >= 360 ? t('unlock.perYear') : info.durationDays >= 28 ? t('unlock.perMonth') : t('unlock.perDays', { days: info.durationDays });
 
   return (
-    <NeonSheet visible onClose={onClose} maxWidth={900} style={styles.card}>
-          <Pressable onPress={onClose} accessibilityRole="button" hitSlop={10} style={styles.back}>
-            <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
-            <Text style={styles.backText}>{t('common.back')}</Text>
-          </Pressable>
+    <NeonSheet visible onClose={onClose} maxWidth={900} style={styles.card} closeButton>
           <View style={styles.row}>
             <View style={styles.logoCol}>
               <View style={styles.logoBox}>
@@ -146,9 +141,8 @@ export function GameInfoDialog({
 }
 
 const styles = StyleSheet.create({
-  card: { alignItems: 'stretch', paddingHorizontal: 22, paddingVertical: 10, gap: 8 },
-  back: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 2 },
-  backText: { color: '#FFFFFF', fontSize: 15 },
+  /* Lề đều bốn phía - ✕ nằm ngoài mép (NeonSheet closeButton), không có hàng Back. */
+  card: { alignItems: 'stretch', paddingHorizontal: 24, paddingVertical: 20 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 20 },
   logoCol: { width: 190, alignItems: 'center', justifyContent: 'center', gap: 6 },
   logoBox: { width: 124, height: 92 },

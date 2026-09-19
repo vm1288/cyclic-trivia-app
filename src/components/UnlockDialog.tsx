@@ -37,7 +37,7 @@ export function UnlockDialog({
     return <GameInfoDialog info={info} cta={{ kind: 'purchase', onPress: () => onPurchase(info) }} onClose={onClose} />;
   }
   return (
-    <NeonSheet visible onClose={onClose} maxWidth={560}>
+    <NeonSheet visible onClose={onClose} maxWidth={560} closeButton>
       <Text style={styles.body}>{t('unlock.notYet', { game: info.gameName })}</Text>
       <SheetButton label={t('unlock.cta')} onPress={() => setStep(2)} />
     </NeonSheet>

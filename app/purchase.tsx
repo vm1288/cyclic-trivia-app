@@ -74,6 +74,7 @@ export default function PurchaseScreen() {
   const [done, setDone] = useState<StorePurchaseResult | null>(null);
   /** K112: TRY {GAME} → tấm giải thích dùng thử (bước 2 của FreeTrialDialog) → PROCEED → mua. */
   const [trialFor, setTrialFor] = useState<{ info: TrialInfo; plan: StorePlan } | null>(null);
+  const [trialNotice, setTrialNotice] = useState<string | null>(null);
   /** K112: mua xong + server kích hoạt luôn → "You're ready to play!" (logo, NEW MATCH / JOIN A MATCH). */
   const [ready, setReady] = useState<StoreGame | null>(null);
   /** Chặn xử lý cùng một purchase hai lần (store phát lại khi nối lại). */
@@ -131,7 +132,9 @@ export default function PurchaseScreen() {
         setBusySku(null);
         // Người dùng tự đóng sheet của store thì không phải lỗi.
         const cancelled = String(error.code ?? '').toLowerCase().includes('cancel');
-        setNotice(cancelled ? t('purchase.cancelled') : (error.message ?? t('purchase.failed')));
+        const msg = cancelled ? t('purchase.cancelled') : (error.message ?? t('purchase.failed'));
+        setNotice(msg);
+        setTrialNotice(msg);
       },
       onError: (error) => {
         // fetchProducts / restore hỏng - store không sẵn sàng. Màn vẫn hiện giá web.
@@ -166,6 +169,7 @@ export default function PurchaseScreen() {
     });
     setOpenGame(null);
     setTrialFor(null);
+    setTrialNotice(null);
     const g = (games ?? []).find((x) => x.sponsorId.toLowerCase() === (s.sponsorId ?? '').toLowerCase()) ?? null;
     setReady(
       g ?? {
@@ -259,7 +263,9 @@ export default function PurchaseScreen() {
       // Kết quả về qua onPurchaseSuccess / onPurchaseError, không phải ở đây.
     } catch (error) {
       setBusySku(null);
-      setNotice(error instanceof Error ? error.message : t('purchase.failed'));
+      const msg = error instanceof Error ? error.message : t('purchase.failed');
+      setNotice(msg);
+      setTrialNotice(msg);
     }
   };
 
@@ -416,7 +422,15 @@ export default function PurchaseScreen() {
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.grid} style={styles.scroll}>
               {games.map((g) => (
-                <Pressable key={g.sponsorId} onPress={() => setOpenGame(g)} accessibilityRole="button" style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+                <Pressable
+                  key={g.sponsorId}
+                  onPress={() => setOpenGame(g)}
+                  // K114 (Tony 19/9): game Coming Soon chưa mua/dùng thử được → mờ + không bấm (trừ khi máy đã có license của nó).
+                  disabled={!g.available && !ownedGame(g)}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: !g.available && !ownedGame(g) }}
+                  style={({ pressed }) => [styles.card, pressed && styles.pressed, !g.available && !ownedGame(g) && styles.cardOff]}
+                >
                   <View style={styles.logoBox}>
                     {g.logoUrl ? <Image source={{ uri: assetUrl(g.logoUrl) }} style={styles.logo} resizeMode="contain" accessibilityIgnoresInvertColors /> : null}
                     {!g.available ? (
@@ -489,19 +503,27 @@ export default function PurchaseScreen() {
         total={3}
         initialStep={2}
         onClose={() => setTrialFor(null)}
+        busy={!!trialFor && (busySku === trialFor.plan.productId || verifying)}
+        notice={trialFor ? trialNotice : null}
         onProceed={() => {
+          /*
+           * K114: KHÔNG đóng tấm - mở sheet store ngay trên nó. Store chưa sẵn sàng (dev-client, máy
+           * không có Play) thì báo tại chỗ; thành công thì `landPurchase` đóng tấm và hiện "You're ready".
+           */
           const plan = trialFor?.plan;
-          setTrialFor(null);
-          if (plan) void buy(plan);
+          if (!plan) return;
+          if (!connected || !storeBySku.has(plan.productId)) {
+            setTrialNotice(t('purchase.storeNotReady', { store: storeName }));
+            return;
+          }
+          setTrialNotice(null);
+          void buy(plan);
         }}
       />
 
       {/* K112: mua xong, đã kích hoạt cho máy → "You're ready to play!" (ảnh mẫu 3 dưới). */}
-      <NeonSheet visible={ready !== null} onClose={() => setReady(null)} maxWidth={900} style={styles.readyCard}>
-        <Pressable onPress={() => router.replace('/')} accessibilityRole="button" hitSlop={10} style={styles.readyBack}>
-          <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
-          <Text style={styles.readyBackText}>{t('explore.backHome')}</Text>
-        </Pressable>
+      {/* ✕ = về Home (ảnh mẫu ghi "‹ Back to Home"; Tony 19/9 chốt ✕ góc ngoài mép cho tấm kiểu này). */}
+      <NeonSheet visible={ready !== null} onClose={() => router.replace('/')} maxWidth={900} style={styles.readyCard} closeButton>
         <View style={styles.readyRow}>
           <View style={styles.readyLogoCol}>
             {ready?.logoUrl ? <Image source={{ uri: assetUrl(ready.logoUrl) }} style={styles.readyLogo} resizeMode="contain" /> : null}
@@ -561,6 +583,7 @@ const styles = StyleSheet.create({
   /** Lưới ngang: ba game vừa một màn, nhiều hơn thì cuộn ngang. */
   grid: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', gap: 26, paddingHorizontal: 10, paddingVertical: 8 },
   card: { width: 210, alignItems: 'center', gap: 10 },
+  cardOff: { opacity: 0.45 },
   logoBox: { width: 190, height: 160, alignItems: 'center', justifyContent: 'center' },
   logo: { width: 180, height: 150 },
   tagline: { color: text.primary, fontSize: 15, lineHeight: 21, textAlign: 'center' },
@@ -580,9 +603,7 @@ const styles = StyleSheet.create({
 
   notice: { color: '#FFD166', fontSize: 13, lineHeight: 18, textAlign: 'center', marginTop: 4 },
   /* K112: tấm "You're ready to play!" */
-  readyCard: { alignItems: 'stretch', paddingHorizontal: 22, paddingVertical: 12, gap: 10 },
-  readyBack: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 2 },
-  readyBackText: { color: '#FFFFFF', fontSize: 15 },
+  readyCard: { alignItems: 'stretch', paddingHorizontal: 24, paddingVertical: 22 },
   readyRow: { flexDirection: 'row', alignItems: 'center', gap: 24 },
   readyLogoCol: { width: 200, alignItems: 'center', gap: 8 },
   readyLogo: { width: 170, height: 130 },

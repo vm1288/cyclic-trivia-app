@@ -167,6 +167,7 @@ export const en = {
   'trial.period1m': '1 month',
   'trial.periodDays': '{days} days',
   'trial.proceed': 'PROCEED',
+  'purchase.storeNotReady': '{store} billing is not available on this build. Install the app from {store} (internal testing) to start the trial.',
   'purchase.trialUsedStore': 'Your store account has already used the free trial for this game, so you will be charged right away.',
 
   'unlock.notYet': "You haven't unlocked {game} yet. Purchase the game now to continue joining matches, creating new games, and playing with your friends without limits!",
@@ -891,6 +892,7 @@ const vi: Record<TranslationKey, string> = {
   'trial.period1m': '1 tháng',
   'trial.periodDays': '{days} ngày',
   'trial.proceed': 'TIẾP TỤC',
+  'purchase.storeNotReady': 'Bản này chưa nối được thanh toán của {store}. Cài app từ {store} (internal testing) để bắt đầu dùng thử.',
   'purchase.trialUsedStore': 'Tài khoản store của bạn đã dùng thử game này rồi, nên sẽ tính phí ngay.',
 
   'unlock.notYet': 'Bạn chưa mở khoá {game}. Mua game ngay để tiếp tục vào ván, mở ván mới và chơi cùng bạn bè không giới hạn!',

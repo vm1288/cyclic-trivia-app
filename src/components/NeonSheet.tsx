@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Ionicons } from '@expo/vector-icons';
+
 import { Halftone } from './Halftone';
 
 /**
@@ -23,11 +25,17 @@ export function NeonSheet({
   onClose,
   maxWidth = 560,
   style,
+  closeButton = false,
   children,
 }: {
   visible: boolean;
   onClose: () => void;
   maxWidth?: number;
+  /**
+   * Nút ✕ tròn đè góc trên phải, nhô ra ngoài mép tấm 10dp (Tony 19/9: "1 nút X nằm absolute trên
+   * top right -10px… padding của contents sẽ đều" - thay hàng ‹ Back chiếm cả một dòng).
+   */
+  closeButton?: boolean;
   /** Style thêm cho thân tấm (padding, gap, alignItems…). */
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
@@ -47,12 +55,13 @@ export function NeonSheet({
         ]}
       >
         <Pressable style={styles.backdropTouch} onPress={onClose} accessibilityRole="button" />
+        <View style={[styles.frame, { maxWidth }]}>
         <LinearGradient
           colors={['#3AA5FF', '#7B5CFF', '#E05CFF']}
           locations={[0, 0.45, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={[styles.rim, { maxWidth }]}
+          style={styles.rim}
         >
           <View style={[styles.card, style]}>
             <LinearGradient
@@ -65,6 +74,12 @@ export function NeonSheet({
             {children}
           </View>
         </LinearGradient>
+        {closeButton ? (
+          <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={10} style={styles.closeBtn}>
+            <Ionicons name="close" size={22} color="#FFFFFF" />
+          </Pressable>
+        ) : null}
+        </View>
       </View>
     </Modal>
   );
@@ -133,7 +148,22 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(3,3,14,0.6)', alignItems: 'center', justifyContent: 'center', padding: 20 },
   backdropTouch: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   fill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  rim: { width: '100%', maxHeight: '94%', padding: 2, borderRadius: 22, boxShadow: '0 0 22px rgba(106,92,255,0.45)' },
+  frame: { width: '100%', maxHeight: '94%' },
+  rim: { width: '100%', maxHeight: '100%', padding: 2, borderRadius: 22, boxShadow: '0 0 22px rgba(106,92,255,0.45)' },
+  closeBtn: {
+    position: 'absolute',
+    top: -10,
+    right: -10,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 2,
+    borderColor: '#E05CFF',
+    backgroundColor: '#12102E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 0 12px rgba(224,92,255,0.55)',
+  },
   card: { borderRadius: 20, paddingHorizontal: 24, paddingVertical: 20, overflow: 'hidden', alignItems: 'center', gap: 16, flexShrink: 1 },
   dots: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 160 },
 });
