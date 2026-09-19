@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import {
   Image,
   type NativeScrollEvent,
@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { assetUrl } from '../src/api/game';
+import { fetchStoreGames, type StoreGame } from '../src/api/store';
 import { StageBackground } from '../src/components/StageBackground';
 import { useT } from '../src/i18n/I18nProvider';
 import type { TranslationKey } from '../src/i18n/translations';
@@ -57,7 +58,42 @@ type Art =
   | 'trophy'
   | 'resume';
 
-type Page = { eyebrow: TranslationKey; lines: TranslationKey[]; art: Art; strong?: number };
+/**
+ * K113 (Tony 19/9, ảnh mẫu): HOW TO PLAY = trang chọn mục **GAME INSTRUCTIONS** (General Instructions
+ * · Trivia games · Cyclic Career) rồi từng mục là pager. Trang kiểu mới: chữ bên TRÁI (tiêu đề +
+ * đoạn, `**đậm**`, `• ` gạch đầu dòng), ảnh chụp app / ô chờ ảnh bên PHẢI. Các trang cũ (chép web,
+ * 09-12) giữ nguyên khuôn art-trái / chữ-phải và nối sau ba trang Trivia mới.
+ */
+type Page = {
+  eyebrow: TranslationKey;
+  lines: TranslationKey[];
+  art: Art | 'photo' | 'placeholder';
+  strong?: number;
+  /** Tiêu đề trang kiểu mới ("Host a Game"). */
+  heading?: TranslationKey;
+  /** `art: 'photo'` → ảnh này; `art: 'placeholder'` → ô chữ `placeholder`. */
+  photo?: number;
+  placeholder?: TranslationKey;
+};
+
+const PHOTO = {
+  lobby: require('../assets/howto/lobby.jpg'),
+  join: require('../assets/howto/join.jpg'),
+  question: require('../assets/howto/question.jpg'),
+  cards: require('../assets/howto/cards.jpg'),
+} as const;
+
+const GENERAL_PAGES: Page[] = [
+  { eyebrow: 'howTo.g1', heading: 'howTo.g1', lines: ['howTo.g1a', 'howTo.g1b', 'howTo.g1c'], art: 'photo', photo: PHOTO.lobby },
+  { eyebrow: 'howTo.g2', heading: 'howTo.g2', lines: ['howTo.g2a', 'howTo.g2b', 'howTo.g2c', 'howTo.g2d', 'howTo.g2e'], art: 'photo', photo: PHOTO.join },
+  { eyebrow: 'howTo.g3', heading: 'howTo.g3', lines: ['howTo.g3a', 'howTo.g3b'], art: 'placeholder', placeholder: 'howTo.g3img' },
+];
+
+const TRIVIA_HEAD: Page[] = [
+  { eyebrow: 'howTo.t1', heading: 'howTo.t1', lines: ['howTo.t1a', 'howTo.t1b', 'howTo.t1c'], art: 'photo', photo: PHOTO.question },
+  { eyebrow: 'howTo.t2', heading: 'howTo.t2', lines: ['howTo.t2a', 'howTo.t2b', 'howTo.t2c'], art: 'placeholder', placeholder: 'howTo.t2img' },
+  { eyebrow: 'howTo.t3', heading: 'howTo.t3', lines: ['howTo.t3a', 'howTo.t3b', 'howTo.t3c', 'howTo.t3d', 'howTo.t3e', 'howTo.t3f'], art: 'photo', photo: PHOTO.cards },
+];
 
 /**
  * `strong` = chỉ số dòng in đậm vàng (câu chốt của trang). Thứ tự trang và chữ
@@ -321,15 +357,155 @@ function PageArt({ art, t }: { art: Art; t: ReturnType<typeof useT> }) {
   }
 }
 
+/** `**đậm**` → chữ đậm; `• ` đầu dòng → gạch đầu dòng thụt vào. */
+function Rich({ text: raw, style, width }: { text: string; style: object; width: number }) {
+  const bullet = raw.startsWith('• ');
+  const body = bullet ? raw.slice(2) : raw;
+  const parts = body.split('**');
+  return (
+    <Text style={[style, { width: bullet ? width - 18 : width, marginLeft: bullet ? 18 : 0 }]}>
+      {bullet ? '•  ' : ''}
+      {parts.map((part, i) => (
+        <Text key={i} style={i % 2 === 1 ? styles.bold : undefined}>
+          {part}
+        </Text>
+      ))}
+    </Text>
+  );
+}
+
+type Section = 'general' | 'trivia';
+
 export default function HowToPlayScreen() {
   const router = useRouter();
   const t = useT();
+  const params = useLocalSearchParams<{ section?: string }>();
+  const section: Section | null = params.section === 'general' || params.section === 'trivia' ? params.section : null;
+
+  const [games, setGames] = useState<StoreGame[]>([]);
+  useEffect(() => {
+    let alive = true;
+    void fetchStoreGames().then((r) => {
+      if (alive && r.isSuccess) setGames(r.games);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // ✕ = về HOME kể cả đang ở mục con (mục con push lên trên hub - `replace` chỉ thay trang trên cùng).
+  const close = () => (router.canDismiss() ? router.dismissAll() : router.replace('/'));
+
+  if (!section) {
+    return (
+      <Frame title={t('howTo.hubTitle')} onBack={() => router.back()} onClose={close}>
+        <View style={styles.hub}>
+          <Pressable
+            onPress={() => router.push({ pathname: '/how-to-play', params: { section: 'general' } })}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
+          >
+            <View style={styles.tileArt}>
+              <Ionicons name="book-outline" size={64} color="#5FE6FF" />
+              <View style={styles.tileCheck}>
+                <Ionicons name="checkmark" size={18} color="#04061A" />
+              </View>
+            </View>
+            <Text style={styles.tileLabel}>{t('howTo.hubGeneral')}</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.push({ pathname: '/how-to-play', params: { section: 'trivia' } })}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
+          >
+            <View style={[styles.tileArt, styles.tileLogos]}>
+              {games.slice(0, 3).map((g) =>
+                g.logoUrl ? (
+                  <Image key={g.sponsorId} source={{ uri: assetUrl(g.logoUrl) }} style={styles.tileLogo} resizeMode="contain" accessibilityIgnoresInvertColors />
+                ) : null,
+              )}
+            </View>
+            <Text style={styles.tileLabel}>{t('howTo.hubTrivia')}</Text>
+          </Pressable>
+
+          {/* Cyclic Career: chưa có nội dung - ô logo giữ chỗ như ảnh mẫu. */}
+          <View style={[styles.tile, styles.tileSoon]}>
+            <View style={[styles.tileArt, styles.careerBox]}>
+              <Text style={styles.careerText}>logo</Text>
+            </View>
+            <Text style={styles.tileLabel}>{t('howTo.hubCareer')}</Text>
+          </View>
+        </View>
+      </Frame>
+    );
+  }
+
+  const pages = section === 'general' ? GENERAL_PAGES : [...TRIVIA_HEAD, ...PAGES];
+  return (
+    <Pager
+      key={section}
+      title={t(section === 'general' ? 'howTo.generalTitle' : 'howTo.triviaTitle')}
+      pages={pages}
+      onExit={() => router.back()}
+      onClose={close}
+      t={t}
+    />
+  );
+}
+
+/** Khung chung: ‹ Back trái, tiêu đề giữa, ✕ vàng phải (ảnh mẫu 19/9). */
+function Frame({
+  title,
+  onBack,
+  onClose,
+  children,
+}: {
+  title: string;
+  onBack: () => void;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const t = useT();
+  return (
+    <View style={styles.root}>
+      <StageBackground />
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
+        <View style={styles.body}>
+          <Pressable style={styles.back} onPress={onBack} accessibilityRole="button" accessibilityLabel={t('common.back')} hitSlop={12}>
+            <Ionicons name="chevron-back" size={24} color={text.primary} />
+            <Text style={styles.backText}>{t('common.back')}</Text>
+          </Pressable>
+          <Pressable style={styles.close} onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.cancel')} hitSlop={12}>
+            <Text style={styles.closeText}>✕</Text>
+          </Pressable>
+          <Text style={styles.title}>{title}</Text>
+          {children}
+        </View>
+      </SafeAreaView>
+    </View>
+  );
+}
+
+function Pager({
+  title,
+  pages,
+  onExit,
+  onClose,
+  t,
+}: {
+  title: string;
+  pages: Page[];
+  onExit: () => void;
+  onClose: () => void;
+  t: ReturnType<typeof useT>;
+}) {
   const scroll = useRef<ScrollView>(null);
   const [width, setWidth] = useState(0);
   const [index, setIndex] = useState(0);
 
   const goTo = (i: number) => {
-    const next = Math.max(0, Math.min(PAGES.length - 1, i));
+    const next = Math.max(0, Math.min(pages.length - 1, i));
     scroll.current?.scrollTo({ x: next * width, animated: true });
     setIndex(next);
   };
@@ -337,7 +513,7 @@ export default function HowToPlayScreen() {
     if (width > 0) setIndex(Math.round(e.nativeEvent.contentOffset.x / width));
   };
 
-  const last = index === PAGES.length - 1;
+  const last = index === pages.length - 1;
   const nextColor = last ? neon.orange : neon.green;
 
   /*
@@ -348,40 +524,48 @@ export default function HowToPlayScreen() {
   const inner = width - PAGE_PAD * 2 - PAGE_GAP;
   const artW = Math.round(inner * 0.34);
   const copyW = inner - artW;
+  /* Trang kiểu mới: chữ 56% trái, ảnh 44% phải. */
+  const photoW = Math.round(inner * 0.44);
+  const richW = inner - photoW;
 
   return (
-    <View style={styles.root}>
-      <StageBackground />
-      {/* Ngang thì tai thỏ nằm ở cạnh trái/phải - phải khai báo cả `left`/`right`. */}
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
-        <View style={styles.body}>
-          <Pressable
-            style={styles.back}
-            onPress={() => router.back()}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.back')}
-            hitSlop={12}
-          >
-            <Ionicons name="chevron-back" size={24} color={text.primary} />
-            <Text style={styles.backText}>{t('common.back')}</Text>
-          </Pressable>
+    <Frame title={title} onBack={() => (index === 0 ? onExit() : goTo(index - 1))} onClose={onClose}>
+      {pages[index].heading ? null : <Text style={styles.eyebrow}>{t(pages[index].eyebrow)}</Text>}
+      <Text style={styles.pageNum}>
+        {index + 1} / {pages.length}
+      </Text>
 
-          <Text style={styles.title}>{t('howTo.title')}</Text>
-          <Text style={styles.eyebrow}>{t(PAGES[index].eyebrow)}</Text>
-          <Text style={styles.pageNum}>
-            {index + 1} / {PAGES.length}
-          </Text>
-
-          <ScrollView
-            ref={scroll}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={onScrollEnd}
-            onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
-            style={styles.pager}
-          >
-            {width > 0 && PAGES.map((p, i) => (
+      <ScrollView
+        ref={scroll}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={onScrollEnd}
+        onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+        style={styles.pager}
+      >
+        {width > 0 &&
+          pages.map((p, i) =>
+            p.art === 'photo' || p.art === 'placeholder' ? (
+              <View key={i} style={[styles.page, { width }]}>
+                <ScrollView style={{ width: richW }} contentContainerStyle={styles.richCol} showsVerticalScrollIndicator={false}>
+                  {p.heading ? <Text style={[styles.heading, { width: richW }]}>{t(p.heading)}</Text> : null}
+                  {p.lines.map((k) => (
+                    <Rich key={k} text={t(k)} style={styles.richLine} width={richW} />
+                  ))}
+                </ScrollView>
+                <View style={[styles.photoCol, { width: photoW }]}>
+                  {/* Kích thước ẢNH đặt bằng số: trong ScrollView ngang, '100%' không ép được Image co lại (đo 19/9, ảnh tràn cả trang). */}
+                  {p.art === 'photo' && p.photo ? (
+                    <Image source={p.photo} style={[styles.photo, { width: photoW, height: Math.round(photoW * 0.485) }]} resizeMode="contain" accessibilityIgnoresInvertColors />
+                  ) : (
+                    <View style={[styles.placeholder, { width: photoW, height: Math.round(photoW * 0.58) }]}>
+                      <Text style={styles.placeholderText}>{p.placeholder ? t(p.placeholder) : ''}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            ) : (
               <View key={i} style={[styles.page, { width }]}>
                 <View style={[styles.art, { width: artW }]}>
                   <PageArt art={p.art} t={t} />
@@ -394,45 +578,30 @@ export default function HowToPlayScreen() {
                   ))}
                 </View>
               </View>
-            ))}
-          </ScrollView>
+            ),
+          )}
+      </ScrollView>
 
-          <View style={styles.nav}>
-            <Pressable
-              onPress={() => goTo(index - 1)}
-              disabled={index === 0}
-              accessibilityRole="button"
-              style={({ pressed }) => [
-                styles.pill,
-                { borderColor: neon.blue.stroke, boxShadow: `${outerGlow(neon.blue)}, ${innerGlow(neon.blue)}` },
-                index === 0 && styles.pillDisabled,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={styles.pillText}>{t('common.back').toUpperCase()}</Text>
-            </Pressable>
-
-            <View style={styles.dots}>
-              {PAGES.map((_, i) => (
-                <View key={i} style={[styles.dot, i === index && styles.dotOn]} />
-              ))}
-            </View>
-
-            <Pressable
-              onPress={() => (last ? router.back() : goTo(index + 1))}
-              accessibilityRole="button"
-              style={({ pressed }) => [
-                styles.pill,
-                { borderColor: nextColor.stroke, boxShadow: `${outerGlow(nextColor)}, ${innerGlow(nextColor)}` },
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={styles.pillText}>{t(last ? 'howTo.done' : 'howTo.next')}</Text>
-            </Pressable>
-          </View>
+      <View style={styles.nav}>
+        <View style={styles.dots}>
+          {pages.map((_, i) => (
+            <View key={i} style={[styles.dot, i === index && styles.dotOn]} />
+          ))}
         </View>
-      </SafeAreaView>
-    </View>
+
+        <Pressable
+          onPress={() => (last ? onExit() : goTo(index + 1))}
+          accessibilityRole="button"
+          style={({ pressed }) => [
+            styles.pill,
+            { borderColor: nextColor.stroke, boxShadow: `${outerGlow(nextColor)}, ${innerGlow(nextColor)}` },
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text style={styles.pillText}>{t(last ? 'howTo.done' : 'howTo.next')}</Text>
+        </Pressable>
+      </View>
+    </Frame>
   );
 }
 
@@ -453,6 +622,31 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   backText: { color: text.primary, fontSize: 16 },
+  /* ✕ vàng góc phải (ảnh mẫu 19/9) - về Home. */
+  close: { position: 'absolute', top: 8, right: 14, zIndex: 2, paddingVertical: 6, paddingHorizontal: 10 },
+  closeText: { color: '#FFD84D', fontSize: 22, fontWeight: '800' },
+
+  /* Trang chọn mục. */
+  hub: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 36, paddingHorizontal: 20 },
+  tile: { width: 200, alignItems: 'center', gap: 12 },
+  tileSoon: { opacity: 0.85 },
+  tileArt: { width: 150, height: 110, alignItems: 'center', justifyContent: 'center' },
+  tileCheck: { position: 'absolute', top: 2, right: 34, width: 26, height: 26, borderRadius: 13, backgroundColor: '#5FE6FF', alignItems: 'center', justifyContent: 'center' },
+  tileLogos: { flexDirection: 'row', gap: 6 },
+  tileLogo: { width: 46, height: 46 },
+  careerBox: { width: 130, height: 68, borderRadius: 6, backgroundColor: '#3B6CE6' },
+  careerText: { color: '#FFFFFF', fontSize: 22 },
+  tileLabel: { color: text.primary, fontSize: 20, textAlign: 'center' },
+
+  /* Trang kiểu mới. */
+  richCol: { paddingVertical: 4, gap: 9, justifyContent: 'center', flexGrow: 1 },
+  richLine: { color: text.primary, fontSize: 14.5, lineHeight: 20, flexShrink: 1 },
+  heading: { color: text.primary, fontSize: 20, fontWeight: '800', marginBottom: 2 },
+  bold: { fontWeight: '800', color: '#FFFFFF' },
+  photoCol: { alignItems: 'center', justifyContent: 'center' },
+  photo: { borderRadius: 10, borderWidth: 1, borderColor: 'rgba(148,163,255,0.35)' },
+  placeholder: { alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(148,163,255,0.25)', backgroundColor: 'rgba(10,12,40,0.5)' },
+  placeholderText: { color: '#FFD84D', fontSize: 22, textAlign: 'center', paddingHorizontal: 20 },
 
   title: {
     marginTop: 10,

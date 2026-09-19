@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { NeonSheet, SheetButton } from './NeonSheet';
 import { assetUrl } from '../api/game';
@@ -31,12 +31,18 @@ export type GameInfo = {
   price: number;
   currency: string | null;
   durationDays: number;
+  /** Dải "Coming Soon" đè góc logo (ảnh mẫu 19/9). */
+  comingSoon?: boolean;
 };
 
 export type GameCta =
   | { kind: 'newMatch'; onPress: () => void }
   | { kind: 'purchase'; onPress: () => void; busy?: boolean; disabled?: boolean }
-  | { kind: 'comingSoon' };
+  /** K112: chưa dùng thử → "Want to utilise the 7-day free trial?" + TRY {GAME}. */
+  | { kind: 'try'; days: number; gameName: string; onPress: () => void; busy?: boolean; disabled?: boolean }
+  | { kind: 'comingSoon' }
+  /** Ảnh mẫu 19/9: game Coming Soon không có nút. */
+  | { kind: 'none' };
 
 const SYMBOL: Record<string, string> = { USD: '$', GBP: '£', EUR: '€', INR: '₹', AUD: 'A$', VND: '₫' };
 
@@ -63,6 +69,11 @@ export function GameInfoDialog({
   children?: React.ReactNode;
 }) {
   const t = useT();
+  /*
+   * Cột chữ là ScrollView TRONG một hàng: không có trần thì nó cao bằng nội dung và đẩy cả hàng
+   * tràn khỏi tấm (logo đè lên nút Back - đo 19/9). Trần = ~60% bề cao màn, phần dư thì cuộn.
+   */
+  const { height: winH } = useWindowDimensions();
   if (!info) return null;
   const money = storePrice || priceText(info);
   const per =
@@ -76,7 +87,16 @@ export function GameInfoDialog({
           </Pressable>
           <View style={styles.row}>
             <View style={styles.logoCol}>
-              {info.logoUrl ? <Image source={{ uri: assetUrl(info.logoUrl) }} style={styles.logo} resizeMode="contain" /> : null}
+              <View style={styles.logoBox}>
+                {info.logoUrl ? <Image source={{ uri: assetUrl(info.logoUrl) }} style={styles.logo} resizeMode="contain" /> : null}
+                {info.comingSoon ? (
+                  <View style={styles.ribbonWrap} pointerEvents="none">
+                    <View style={styles.ribbon}>
+                      <Text style={styles.ribbonText}>{t('games.comingSoon')}</Text>
+                    </View>
+                  </View>
+                ) : null}
+              </View>
               <Text style={styles.tagline}>{info.tagline}</Text>
 
               {cta.kind === 'newMatch' ? (
@@ -90,12 +110,23 @@ export function GameInfoDialog({
                   busy={cta.busy}
                   style={styles.cta}
                 />
-              ) : (
+              ) : cta.kind === 'try' ? (
+                <>
+                  <Text style={styles.tryHint}>{t('explore.tryHint', { days: cta.days })}</Text>
+                  <SheetButton
+                    label={t('explore.tryCta', { game: cta.gameName.toUpperCase() })}
+                    onPress={cta.onPress}
+                    disabled={cta.disabled}
+                    busy={cta.busy}
+                    style={styles.cta}
+                  />
+                </>
+              ) : cta.kind === 'none' ? null : (
                 <SheetButton label={t('games.comingSoon')} variant="ghost" disabled style={styles.cta} />
               )}
               {children}
             </View>
-            <ScrollView style={styles.textCol} contentContainerStyle={styles.textInner}>
+            <ScrollView style={[styles.textCol, { maxHeight: Math.max(220, winH * 0.56) }]} contentContainerStyle={styles.textInner}>
               <Text style={styles.desc}>{info.description}</Text>
               <Text style={styles.desc}>
                 {t('unlock.players')}
@@ -115,13 +146,18 @@ export function GameInfoDialog({
 }
 
 const styles = StyleSheet.create({
-  card: { alignItems: 'stretch', paddingHorizontal: 22, paddingVertical: 10, gap: 8, maxHeight: '100%' },
+  card: { alignItems: 'stretch', paddingHorizontal: 22, paddingVertical: 10, gap: 8 },
   back: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 2 },
   backText: { color: '#FFFFFF', fontSize: 15 },
-  row: { flexDirection: 'row', gap: 20, flexShrink: 1, minHeight: 0 },
-  logoCol: { width: 190, alignItems: 'center', justifyContent: 'center', gap: 10 },
-  logo: { width: 150, height: 112 },
-  tagline: { fontSize: 15, color: '#FFFFFF', textAlign: 'center' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 20 },
+  logoCol: { width: 190, alignItems: 'center', justifyContent: 'center', gap: 6 },
+  logoBox: { width: 124, height: 92 },
+  logo: { width: 124, height: 92 },
+  ribbonWrap: { position: 'absolute', top: 0, left: 0, width: 96, height: 96, overflow: 'hidden' },
+  ribbon: { position: 'absolute', top: 18, left: -34, width: 140, paddingVertical: 3, backgroundColor: '#D9262E', transform: [{ rotate: '-45deg' }], alignItems: 'center' },
+  ribbonText: { color: '#FFFFFF', fontSize: 10.5, fontWeight: '700', letterSpacing: 0.4 },
+  tryHint: { fontSize: 12.5, lineHeight: 16, color: '#9FC4FF', textAlign: 'center' },
+  tagline: { fontSize: 14, lineHeight: 19, color: '#FFFFFF', textAlign: 'center' },
   cta: { minWidth: 180 },
   textCol: { flex: 1 },
   textInner: { gap: 10, paddingVertical: 4 },

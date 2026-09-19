@@ -58,6 +58,8 @@ export type StoreGame = {
   price: number;
   currency: string | null;
   durationDays: number;
+  /** K112: máy này đã bắt đầu dùng thử game này (server tra Payment theo deviceId). */
+  trialUsed: boolean;
   tagline: string;
   prompt: string;
   description: string;
@@ -65,11 +67,12 @@ export type StoreGame = {
   ageRange: string;
 };
 
-export async function fetchStoreGames(): Promise<ApiResult<{ games: StoreGame[] }>> {
+export async function fetchStoreGames(deviceId?: string | null): Promise<ApiResult<{ games: StoreGame[] }>> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
   try {
-    const response = await fetch(`${API_BASE_URL}/api/store/games`, { signal: controller.signal });
+    const q = deviceId ? `?deviceId=${encodeURIComponent(deviceId)}` : '';
+    const response = await fetch(`${API_BASE_URL}/api/store/games${q}`, { signal: controller.signal });
     const body = (await response.json().catch(() => null)) as { isSuccess?: boolean; games?: StoreGame[] } | null;
     if (!response.ok || !body?.isSuccess) return { isSuccess: false, kind: 'http', message: `HTTP ${response.status}` };
     return { isSuccess: true, games: body.games ?? [] };
@@ -88,6 +91,23 @@ export type StorePurchaseResult = {
   isActivated: boolean;
   /** Token này đã đổi mã trước đó (cài lại app / restore). */
   restored: boolean;
+  /**
+   * K112: app gửi `deviceId` → server kích hoạt luôn và trả phiên (cùng hình ActivationCodeCheck)
+   * → app `license.save` rồi "You're ready to play!". Null = server cũ / hết suất máy → đi REGISTER.
+   */
+  session?: {
+    token: string;
+    expiresAt: string | null;
+    deviceId: string;
+    hostId: string;
+    licenseCode: string;
+    languageCode: string | null;
+    sponsorLogoUrl: string | null;
+    sponsorName: string | null;
+    sponsorId: string | null;
+    planTitle: string | null;
+    licenseExpiresAt: string | null;
+  } | null;
 };
 
 export function submitStorePurchase(args: {

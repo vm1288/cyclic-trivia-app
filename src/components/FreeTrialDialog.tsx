@@ -32,14 +32,17 @@ export function FreeTrialDialog({
   total,
   onProceed,
   onClose,
+  initialStep = 1,
 }: {
   info: TrialInfo | null;
   total: number;
+  /** 2 = mở thẳng tấm giải thích dùng thử (EXPLORE GAMES → TRY {GAME}, K112). */
+  initialStep?: 1 | 2;
   onProceed: (info: TrialInfo) => void;
   onClose: () => void;
 }) {
   const t = useT();
-  const step = useStep(info);
+  const step = useStep(info, initialStep);
 
   if (!info) return null;
   const period =
@@ -77,11 +80,11 @@ export function FreeTrialDialog({
 }
 
 /** Về tấm 1 mỗi lần mở lại. */
-function useStep(info: TrialInfo | null) {
-  const [value, set] = useState<1 | 2>(1);
+function useStep(info: TrialInfo | null, initial: 1 | 2) {
+  const [value, set] = useState<1 | 2>(initial);
   useEffect(() => {
-    if (info) set(1);
-  }, [info]);
+    if (info) set(initial);
+  }, [info, initial]);
   return { value, set };
 }
 

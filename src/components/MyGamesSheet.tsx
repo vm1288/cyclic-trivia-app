@@ -1,5 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useMemo } from 'react';
+import { Image, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { lobbyColors } from './LobbyParts';
@@ -41,6 +43,25 @@ export function MyGamesSheet({
   const { t, language } = useI18n();
   const insets = useSafeAreaInsets();
 
+  /*
+   * Tony 19/9: "thao tác vuốt xuống không nhạy" + thiếu nút đóng. `Modal` không có cử chỉ kéo sẵn -
+   * bắt tay trên vùng đầu tấm (grabber + tiêu đề): kéo xuống quá 48dp hoặc vẩy nhanh là đóng.
+   * Danh sách bên dưới vẫn cuộn bình thường vì không nằm trong vùng bắt.
+   */
+  const drag = useMemo(
+    () =>
+      PanResponder.create({
+        // Bắt cả lúc CHẠM (vùng đầu tấm không có nút nào) lẫn lúc kéo - chỉ bắt lúc kéo thì
+        // Text con nuốt mất cử chỉ, đo 19/9 vuốt không đóng.
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, g) => g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+        onPanResponderRelease: (_, g) => {
+          if (g.dy > 40 || g.vy > 0.5) onClose();
+        },
+      }),
+    [onClose],
+  );
+
   /* Ngày theo NGÔN NGỮ APP ("Sep 9, 2026" / "9 thg 9, 2026"), không theo locale máy. */
   const renewal = (s: LicenseSession) => {
     if (!s.licenseExpiresAt) return null;
@@ -61,10 +82,15 @@ export function MyGamesSheet({
           ]}
         >
           <LinearGradient colors={['rgba(24,16,56,0.97)', 'rgba(9,6,30,1)']} style={styles.fill} />
-          <View style={styles.grabber} />
-
-          <Text style={styles.title}>{t(mode === 'choose' ? 'games.chooseTitle' : 'games.title')}</Text>
-          {mode === 'choose' ? null : <Text style={styles.subtitle}>{t('games.subtitle')}</Text>}
+          <View style={styles.head} {...drag.panHandlers} collapsable={false}>
+            <View style={styles.grabber} />
+            <Text style={styles.title}>{t(mode === 'choose' ? 'games.chooseTitle' : 'games.title')}</Text>
+            {mode === 'choose' ? null : <Text style={styles.subtitle}>{t('games.subtitle')}</Text>}
+          </View>
+          {/* ✕ tính cả inset phải: ở chiều ngang thanh điều hướng Android chiếm cạnh phải (Tony 19/9). */}
+          <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.cancel')} hitSlop={10} style={[styles.close, { right: 14 + insets.right }]}>
+            <Ionicons name="close" size={22} color="#F2F7FF" />
+          </Pressable>
 
           <ScrollView style={styles.list} contentContainerStyle={styles.listInner}>
             {sessions.map((s) => {
@@ -155,7 +181,21 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     maxHeight: '92%',
   },
+  head: { paddingBottom: 6, paddingTop: 4, marginTop: -4 },
   grabber: { alignSelf: 'center', width: 44, height: 4, borderRadius: 2, backgroundColor: 'rgba(190,205,255,0.35)', marginBottom: 14 },
+  close: {
+    position: 'absolute',
+    top: 12,
+    right: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: 'rgba(190,205,255,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(12,14,38,0.8)',
+  },
   title: { fontSize: 15, fontWeight: '800', letterSpacing: 2, color: lobbyColors.cyan },
   subtitle: { marginTop: 6, fontSize: 13, lineHeight: 19, color: lobbyColors.dim },
   list: { marginTop: 14 },

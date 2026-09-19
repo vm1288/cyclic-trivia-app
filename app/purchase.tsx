@@ -2,13 +2,19 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useIAP, type ProductSubscription, type Purchase } from 'expo-iap';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, LogBox, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+
+// Dev-client không có Play Billing: expo-iap tự console.error mỗi lần hỏi giá - chỉ là LogBox dev, che đi.
+LogBox.ignoreLogs(['[Expo-IAP]', '[expo-iap]']);
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { assetUrl } from '../src/api/game';
 import { fetchStoreGames, fetchStorePlans, submitStorePurchase, type StoreGame, type StorePlan, type StorePurchaseResult } from '../src/api/store';
+import { FreeTrialDialog, type TrialInfo } from '../src/components/FreeTrialDialog';
 import { GameInfoDialog, type GameInfo } from '../src/components/GameInfoDialog';
+import { NeonSheet, SheetButton } from '../src/components/NeonSheet';
 import { useLicense } from '../src/session/LicenseSession';
+import { downloadSponsorLogo } from '../src/session/sponsorLogo';
 import { apiErrorText } from '../src/i18n/apiError';
 import { FormScreen } from '../src/components/FormScreen';
 import { NeonButton } from '../src/components/NeonButton';
@@ -66,6 +72,10 @@ export default function PurchaseScreen() {
   const [verifying, setVerifying] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [done, setDone] = useState<StorePurchaseResult | null>(null);
+  /** K112: TRY {GAME} → tấm giải thích dùng thử (bước 2 của FreeTrialDialog) → PROCEED → mua. */
+  const [trialFor, setTrialFor] = useState<{ info: TrialInfo; plan: StorePlan } | null>(null);
+  /** K112: mua xong + server kích hoạt luôn → "You're ready to play!" (logo, NEW MATCH / JOIN A MATCH). */
+  const [ready, setReady] = useState<StoreGame | null>(null);
   /** Chặn xử lý cùng một purchase hai lần (store phát lại khi nối lại). */
   const handled = useRef(new Set<string>());
 
@@ -104,7 +114,8 @@ export default function PurchaseScreen() {
       } catch {
         // Store không nhận finish thì lần sau nó phát lại; server đã có token, sẽ trả cùng mã.
       }
-      setDone(result);
+      // Qua ref: `settle` được tạo một lần (deps [t]), landPurchase thì đổi theo games/license.
+      await landRef.current(result);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [t],
@@ -128,10 +139,65 @@ export default function PurchaseScreen() {
       },
     });
 
+  /**
+   * K112: server trả `session` (đã kích hoạt cho máy này) → lưu license, hiện "You're ready to
+   * play!"; không có (server cũ / hết suất máy) → màn mã + REGISTER như K66.
+   */
+  const landPurchase = async (result: StorePurchaseResult) => {
+    const s = result.session;
+    if (!s?.token) {
+      setDone(result);
+      return;
+    }
+    const sponsorLogoUri = s.sponsorLogoUrl ? await downloadSponsorLogo(s.sponsorLogoUrl) : null;
+    await license.save({
+      token: s.token,
+      expiresAt: s.expiresAt ?? null,
+      deviceId: s.deviceId,
+      hostId: s.hostId,
+      licenseCode: s.licenseCode,
+      activated: true,
+      languageCode: s.languageCode ?? null,
+      sponsorName: s.sponsorName ?? null,
+      sponsorId: s.sponsorId ?? null,
+      planTitle: s.planTitle ?? null,
+      licenseExpiresAt: s.licenseExpiresAt ?? null,
+      sponsorLogoUri,
+    });
+    setOpenGame(null);
+    setTrialFor(null);
+    const g = (games ?? []).find((x) => x.sponsorId.toLowerCase() === (s.sponsorId ?? '').toLowerCase()) ?? null;
+    setReady(
+      g ?? {
+        sponsorId: s.sponsorId ?? '',
+        name: s.sponsorName ?? '',
+        logoUrl: s.sponsorLogoUrl,
+        available: true,
+        productId: null,
+        trialDays: 0,
+        price: 0,
+        currency: null,
+        durationDays: 0,
+        trialUsed: true,
+        tagline: '',
+        prompt: '',
+        description: '',
+        players: '',
+        ageRange: '',
+      },
+    );
+  };
+
+  const landRef = useRef(landPurchase);
+  landRef.current = landPurchase;
+
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const [result, gamesResult] = await Promise.all([fetchStorePlans(), fetchStoreGames()]);
+      const [result, gamesResult] = await Promise.all([
+        fetchStorePlans(),
+        fetchStoreGames(player.status === 'ready' ? player.deviceId : null),
+      ]);
       if (!alive) return;
       if (!result.isSuccess) {
         setLoadError(apiErrorText(result, t));
@@ -240,13 +306,18 @@ export default function PurchaseScreen() {
   const simulate = async (plan: StorePlan) => {
     setNotice(null);
     setVerifying(true);
-    const result = await submitStorePurchase({ platform: PLATFORM, productId: plan.productId, token: `dev-${Date.now()}` });
+    const result = await submitStorePurchase({
+      platform: PLATFORM,
+      productId: plan.productId,
+      token: `dev-${Date.now()}`,
+      deviceId: player.status === 'ready' ? player.deviceId : undefined,
+    });
     setVerifying(false);
     if (!result.isSuccess) {
       setNotice(apiErrorText(result, t));
       return;
     }
-    setDone(result);
+    await landPurchase(result);
   };
 
   /** Máy đã mua / đang dùng thử game này (có license đã kích hoạt cùng sponsor). */
@@ -269,6 +340,13 @@ export default function PurchaseScreen() {
   };
 
   const openPlan = openGame ? (plans ?? []).find((p) => p.productId === openGame.productId) ?? null : null;
+  const trialInfoFor = (g: StoreGame, plan: StorePlan): TrialInfo => ({
+    days: g.trialDays,
+    durationDays: plan.durationDays,
+    sponsorId: g.sponsorId,
+    gameName: g.name,
+    logoUrl: g.logoUrl,
+  });
   const openInfo: GameInfo | null = openGame
     ? {
         sponsorId: openGame.sponsorId,
@@ -281,6 +359,7 @@ export default function PurchaseScreen() {
         price: openGame.price,
         currency: openGame.currency,
         durationDays: openGame.durationDays,
+        comingSoon: !openGame.available,
       }
     : null;
 
@@ -372,17 +451,26 @@ export default function PurchaseScreen() {
         info={openInfo}
         cta={
           !openGame
-            ? { kind: 'comingSoon' }
+            ? { kind: 'none' }
             : ownedGame(openGame)
               ? { kind: 'newMatch', onPress: () => void newMatchFor(openGame) }
               : openGame.available && openPlan
-                ? {
-                    kind: 'purchase',
-                    onPress: () => void buy(openPlan),
-                    busy: busySku === openPlan.productId || verifying,
-                    disabled: !storeBySku.has(openPlan.productId) || !connected,
-                  }
-                : { kind: 'comingSoon' }
+                ? !openGame.trialUsed && openGame.trialDays > 0
+                  ? {
+                      // K112 (ảnh mẫu 2): chưa dùng thử → TRY {GAME} → tấm giải thích → PROCEED → mua có dùng thử.
+                      kind: 'try',
+                      days: openGame.trialDays,
+                      gameName: openGame.name,
+                      onPress: () => setTrialFor({ info: trialInfoFor(openGame, openPlan), plan: openPlan }),
+                      busy: busySku === openPlan.productId || verifying,
+                    }
+                  : {
+                      kind: 'purchase',
+                      onPress: () => void buy(openPlan),
+                      busy: busySku === openPlan.productId || verifying,
+                      disabled: !storeBySku.has(openPlan.productId) || !connected,
+                    }
+                : { kind: 'none' }
         }
         storePrice={openPlan ? (storeBySku.get(openPlan.productId)?.displayPrice ?? null) : null}
         notice={openGame && !ownedGame(openGame) && openGame.available && openPlan && (!connected || !storeBySku.has(openPlan.productId)) ? t('purchase.storeOffline') : notice}
@@ -394,6 +482,56 @@ export default function PurchaseScreen() {
           </Pressable>
         ) : null}
       </GameInfoDialog>
+
+      {/* K112: TRY {GAME} → tấm giải thích dùng thử (ảnh mẫu 3) → PROCEED → sheet store (offer free-trial). */}
+      <FreeTrialDialog
+        info={trialFor?.info ?? null}
+        total={3}
+        initialStep={2}
+        onClose={() => setTrialFor(null)}
+        onProceed={() => {
+          const plan = trialFor?.plan;
+          setTrialFor(null);
+          if (plan) void buy(plan);
+        }}
+      />
+
+      {/* K112: mua xong, đã kích hoạt cho máy → "You're ready to play!" (ảnh mẫu 3 dưới). */}
+      <NeonSheet visible={ready !== null} onClose={() => setReady(null)} maxWidth={900} style={styles.readyCard}>
+        <Pressable onPress={() => router.replace('/')} accessibilityRole="button" hitSlop={10} style={styles.readyBack}>
+          <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
+          <Text style={styles.readyBackText}>{t('explore.backHome')}</Text>
+        </Pressable>
+        <View style={styles.readyRow}>
+          <View style={styles.readyLogoCol}>
+            {ready?.logoUrl ? <Image source={{ uri: assetUrl(ready.logoUrl) }} style={styles.readyLogo} resizeMode="contain" /> : null}
+            {ready?.tagline ? <Text style={styles.readyTagline}>{ready.tagline}</Text> : null}
+          </View>
+          <View style={styles.readyTextCol}>
+            <Text style={styles.readyTitle}>{t('explore.readyTitle')}</Text>
+            <Text style={styles.readyBody}>{t('explore.readyBody', { game: ready?.name ?? '' })}</Text>
+            <View style={styles.readyBtns}>
+              <SheetButton
+                label={t('games.newMatch')}
+                onPress={() => {
+                  if (ready) void newMatchFor(ready);
+                  setReady(null);
+                }}
+                style={styles.readyBtn}
+              />
+              <SheetButton
+                label={t('home.join')}
+                variant="ghost"
+                onPress={() => {
+                  setReady(null);
+                  router.replace('/join');
+                }}
+                style={styles.readyBtn}
+              />
+            </View>
+          </View>
+        </View>
+      </NeonSheet>
     </View>
   );
 }
@@ -441,6 +579,19 @@ const styles = StyleSheet.create({
   ribbonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
 
   notice: { color: '#FFD166', fontSize: 13, lineHeight: 18, textAlign: 'center', marginTop: 4 },
+  /* K112: tấm "You're ready to play!" */
+  readyCard: { alignItems: 'stretch', paddingHorizontal: 22, paddingVertical: 12, gap: 10 },
+  readyBack: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 2 },
+  readyBackText: { color: '#FFFFFF', fontSize: 15 },
+  readyRow: { flexDirection: 'row', alignItems: 'center', gap: 24 },
+  readyLogoCol: { width: 200, alignItems: 'center', gap: 8 },
+  readyLogo: { width: 170, height: 130 },
+  readyTagline: { fontSize: 15, color: '#FFFFFF', textAlign: 'center' },
+  readyTextCol: { flex: 1, gap: 12 },
+  readyTitle: { fontSize: 20, fontWeight: '700', color: '#FFFFFF' },
+  readyBody: { fontSize: 16, lineHeight: 22, color: '#FFFFFF' },
+  readyBtns: { flexDirection: 'row', gap: 16, marginTop: 6 },
+  readyBtn: { flex: 1, minWidth: 0 },
   devBtn: { marginTop: 6, paddingVertical: 4, paddingHorizontal: 8 },
   devText: { color: 'rgba(255,255,255,0.45)', fontSize: 11, textDecorationLine: 'underline' },
   bottom: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },

@@ -492,9 +492,8 @@ export default function LobbyScreen() {
                   {/* Icon là thứ hi sinh đầu tiên khi khung hẹp: chữ và nút mời
                       còn mang thông tin, nó thì không. */}
                   {showPanelIcon ? <PeopleIcon /> : null}
-                  <Text style={styles.inviteCopy} numberOfLines={showPanelLabel ? 2 : 1}>
-                    {t('lobby.inviteCopy')}
-                  </Text>
+                  {/* Tony 19/9: không cắt "…" - khung còn rộng, để chữ tự xuống dòng. */}
+                  <Text style={styles.inviteCopy}>{t('lobby.inviteCopy')}</Text>
                   <Pressable
                     onPress={invite}
                     accessibilityRole="button"

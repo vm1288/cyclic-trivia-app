@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
   btnWrap: { minWidth: 200 },
   btnPressed: { transform: [{ scale: 0.98 }] },
   btnOff: { opacity: 0.45 },
-  btn: { minHeight: 50, borderRadius: 25, paddingHorizontal: 26, paddingVertical: 8, alignItems: 'center', justifyContent: 'center' },
+  btn: { minHeight: 46, borderRadius: 23, paddingHorizontal: 22, paddingVertical: 6, alignItems: 'center', justifyContent: 'center' },
   btnGhost: { borderWidth: 1.5, borderColor: 'rgba(190,205,255,0.55)', backgroundColor: 'rgba(8,10,32,0.6)' },
   btnLabel: { color: '#FFFFFF', fontSize: 16, fontWeight: '800', letterSpacing: 1.4, textAlign: 'center' },
   btnSub: { color: 'rgba(255,255,255,0.92)', fontSize: 13.5, marginTop: 1, textAlign: 'center' },
