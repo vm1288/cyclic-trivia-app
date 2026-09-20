@@ -375,6 +375,8 @@ export type GameSnapshot = {
     TotalRollDice: number;
     /** K117: quota lượt tung MỖI NGƯỜI (15 / 25 / 100); 0 = thể thức tính phút. Server cũ không có. */
     RollsPerPlayer?: number;
+    /** K118: START MATCH cần ít nhất chừng này ghế - dev 1, prod 2 (server cũ không gửi → app coi là 2). */
+    MinPlayersToStart?: number;
     /** Xem `GAME_SETUP`. */
     GameSetup: number;
     /** Xem `CASE_ACTION`. */

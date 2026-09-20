@@ -28,10 +28,25 @@ param(
     # Build release: JS bundle trong APK, khong can Metro (K90).
     [switch]$Release,
     # Dia chi server cho ban release, vd https://trivia-asia.cyclicdigital.com (bat buoc khi -Release).
-    [string]$ServerUrl
+    [string]$ServerUrl,
+    # Ban LAN (K118): release (JS trong APK, khong Metro, khong cap) tro vao server DEV qua Wi-Fi bang HTTP.
+    # Tu lay IP LAN cua may nay neu khong dua -ServerUrl. Server phai chay voi ASPNETCORE_URLS=http://0.0.0.0:5276
+    # (scripts	v-session.ps1 ben CyclicTrivia). KHONG dua ban nay len Play.
+    [switch]$Lan
 )
 
 $ErrorActionPreference = 'Stop'
+
+if ($Lan) {
+    $Release = $true
+    if (-not $ServerUrl) {
+        $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -like '192.168.*' -and $_.PrefixOrigin -ne 'WellKnown' } | Sort-Object InterfaceMetric | Select-Object -First 1).IPAddress
+        if (-not $ip) { Write-Host 'Khong tim thay IP LAN 192.168.x.x - dua -ServerUrl http://<ip>:5276' -ForegroundColor Red; exit 1 }
+        $ServerUrl = "http://${ip}:5276"
+    }
+    $env:CYCLIC_ALLOW_CLEARTEXT = '1'
+    Write-Host "Ban LAN -> $ServerUrl (cleartext HTTP, JS trong APK)" -ForegroundColor Yellow
+}
 
 $AppDir = 'E:\Projects\CyclicTriviaApp'
 $Apk    = Join-Path $AppDir 'android\app\build\outputs\apk\debug\app-debug.apk'
@@ -100,7 +115,8 @@ try {
     if ($Release) {
         $dist = Join-Path $AppDir 'dist'
         New-Item -ItemType Directory -Force $dist | Out-Null
-        $out = Join-Path $dist ("CricTriv-" + (Get-Date -Format 'yyyyMMdd-HHmm') + ".apk")
+        $suffix = if ($Lan) { '-lan' } else { '' }
+        $out = Join-Path $dist ("CricTriv-" + (Get-Date -Format 'yyyyMMdd-HHmm') + $suffix + ".apk")
         Copy-Item $Apk $out -Force
         Write-Host "Ban gui di: $out" -ForegroundColor Green
     }

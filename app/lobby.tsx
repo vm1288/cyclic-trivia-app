@@ -222,7 +222,8 @@ export default function LobbyScreen() {
   const seats = (snapshot?.Players ?? []).filter((p) => p.IsSetupNickName);
   const joined = seats.length;
   const total = snapshot?.Game.NumberOfPlayers ?? seats.length;
-  const everyoneIn = joined >= 2;
+  /* K118: server dev cho START với 1 ghế (`Game.MinPlayersToStart` = 1); prod 2. Server cũ không có trường → 2. */
+  const everyoneIn = joined >= (snapshot?.Game.MinPlayersToStart ?? 2);
 
   /* "Play on the Big screen" (K107 → K118): hộp Go big! = hướng dẫn mirror màn hình phụ lên TV. */
   const [bigScreen, setBigScreen] = useState(false);

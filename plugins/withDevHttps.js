@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { withDangerousMod } = require('@expo/config-plugins');
+const { withDangerousMod, withAndroidManifest } = require('@expo/config-plugins');
 
 /**
  * Cho phép bản DEBUG tin chứng chỉ HTTPS dev của .NET, để app gọi được
@@ -44,7 +44,24 @@ const NETWORK_CONFIG = `<?xml version="1.0" encoding="utf-8"?>
 </network-security-config>
 `;
 
+/**
+ * BẢN "LAN" (K118, Tony test trên TV 20/9): release APK (JS trong APK, không Metro, không cáp)
+ * nhưng trỏ vào server dev qua Wi-Fi bằng HTTP (`http://192.168.x.x:5276`). Android chặn
+ * cleartext ở release, nên khi build với `CYCLIC_ALLOW_CLEARTEXT=1` (script `build-apk.ps1 -Lan`)
+ * thì đặt `usesCleartextTraffic` vào manifest CHÍNH. Bản release thật (prod, HTTPS) không đặt.
+ */
+function withLanCleartext(config) {
+  if (process.env.CYCLIC_ALLOW_CLEARTEXT !== '1') return config;
+  console.warn('[withDevHttps] CYCLIC_ALLOW_CLEARTEXT=1 -> release cho phép HTTP (bản LAN, không đưa lên Play).');
+  return withAndroidManifest(config, (cfg) => {
+    const app = cfg.modResults.manifest.application?.[0];
+    if (app) app.$['android:usesCleartextTraffic'] = 'true';
+    return cfg;
+  });
+}
+
 module.exports = function withDevHttps(config) {
+  config = withLanCleartext(config);
   return withDangerousMod(config, [
     'android',
     async (cfg) => {
