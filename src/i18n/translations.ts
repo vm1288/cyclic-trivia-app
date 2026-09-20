@@ -197,6 +197,12 @@ export const en = {
 
   /* K118: TV = gương của màn hình phụ trên phone chủ phòng - chỉ hướng dẫn bật mirror. */
   'bigScreen.title': 'Go big!',
+  'bigScreen.tvCodeBody': 'Open Cyclic on your LG TV and type the 4-digit code shown on the TV:',
+  'bigScreen.tvLink': 'LINK TV',
+  'bigScreen.linkError': 'Wrong or expired code. Check the number on the TV and try again.',
+  'bigScreen.tvLinked': 'TV linked ✓',
+  'bigScreen.tvLinkedBody': 'The main board is now showing on the TV. Your phone stays your private controller.',
+  'bigScreen.orMirror': 'OR MIRROR YOUR PHONE (Cast screen / Smart View):',
   'bigScreen.body': 'Mirror your phone to a smart TV and the main board appears on the TV — your phone stays your private controller.',
   'bigScreen.android1': 'Turn on your TV and connect it to the same Wi-Fi as this phone.',
   'bigScreen.android2': 'Open Quick Settings and tap Cast screen / Smart View / Screen mirroring, then pick the TV.',
@@ -1047,6 +1053,12 @@ const vi: Record<TranslationKey, string> = {
   'waiting.subtitle': 'Bạn đã vào. Chủ phòng sẽ bắt đầu\nkhi mọi người đã có mặt.',
 
   'bigScreen.title': 'Chơi lớn!',
+  'bigScreen.tvCodeBody': 'Mở Cyclic trên TV LG rồi nhập mã 4 số hiện trên TV:',
+  'bigScreen.tvLink': 'NỐI TV',
+  'bigScreen.linkError': 'Mã sai hoặc đã hết hạn. Xem lại số trên TV rồi thử lại.',
+  'bigScreen.tvLinked': 'Đã nối TV ✓',
+  'bigScreen.tvLinkedBody': 'Bàn cờ chính đang hiện trên TV. Điện thoại vẫn là tay cầm riêng của bạn.',
+  'bigScreen.orMirror': 'HOẶC PHẢN CHIẾU ĐIỆN THOẠI (Cast screen / Smart View):',
   'bigScreen.body': 'Phản chiếu màn hình điện thoại lên smart TV là bàn cờ chính hiện trên TV — điện thoại vẫn là tay cầm riêng của bạn.',
   'bigScreen.android1': 'Bật TV và nối cùng Wi-Fi với điện thoại này.',
   'bigScreen.android2': 'Mở Cài đặt nhanh, chạm Cast screen / Smart View / Phản chiếu màn hình rồi chọn TV.',

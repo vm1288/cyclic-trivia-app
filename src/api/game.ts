@@ -817,6 +817,14 @@ export function castLink(gameId: string, token: string): Promise<ApiResult<{ Url
   return postForm(`/public/game/${gameId}/cast-link`, {}, token);
 }
 
+/**
+ * K120: ghép TV LG (trang `/tv` của server) với ghế chủ phòng bằng MÃ 4 SỐ hiện trên TV. Token LICENSE;
+ * `playerId` = ghế của chủ phòng (TV trở thành gương của ghế đó). Lỗi: `bad_code`, `expired`.
+ */
+export function tvLink(gameId: string, token: string, code: string, playerId: string): Promise<ApiResult<Record<string, never>>> {
+  return postForm(`/public/game/${gameId}/tv-link`, { code, playerId }, token);
+}
+
 /** Số người chơi tối thiểu / tối đa của một mốc thời lượng (K107). */
 export function playerRange(config: GameConfig, durationId: string | null): { min: number; max: number } {
   const allowed = playersForDuration(config, durationId).map((p) => p.NumberOfPlayers);

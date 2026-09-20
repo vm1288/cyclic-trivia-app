@@ -19,6 +19,7 @@ import {
   ensureRoomCode,
   getGameState,
   markPlayersReady,
+  tvLink,
   roomInviteUrl,
   type GameSnapshot,
   type RoomCode,
@@ -225,8 +226,18 @@ export default function LobbyScreen() {
   /* K118: server dev cho START với 1 ghế (`Game.MinPlayersToStart` = 1); prod 2. Server cũ không có trường → 2. */
   const everyoneIn = joined >= (snapshot?.Game.MinPlayersToStart ?? 2);
 
-  /* "Play on the Big screen" (K107 → K118): hộp Go big! = hướng dẫn mirror màn hình phụ lên TV. */
+  /* "Play on the Big screen" (K107 → K118 → K120): hộp Go big! = nhập mã TV (app LG) hoặc mirror. */
   const [bigScreen, setBigScreen] = useState(false);
+  const linkTv = useCallback(
+    async (code: string) => {
+      if (!gameId || !session) return t('bigScreen.linkError');
+      const mySeat = (snapshot?.Players ?? []).find((p) => p.IsHost) ?? null;
+      const r = await tvLink(gameId, session.token, code, mySeat?.Id ?? '');
+      if (!r.isSuccess) return apiErrorText(r, t) || t('bigScreen.linkError');
+      return null;
+    },
+    [gameId, session, snapshot, t],
+  );
 
   /*
    * ─── Chiều cao mỗi hàng ghế: TÍNH RA, không đặt cứng ──────────────────────
@@ -596,7 +607,7 @@ export default function LobbyScreen() {
         ConfirmDialog cũng là Modal. Lớp phủ thường thì không bao giờ chui
         xuống dưới.
       */}
-      <BigScreenDialog visible={bigScreen} onClose={() => setBigScreen(false)} />
+      <BigScreenDialog visible={bigScreen} onClose={() => setBigScreen(false)} onLinkTv={linkTv} />
 
       {phase !== 'idle' ? (
         <View style={styles.overlay}>

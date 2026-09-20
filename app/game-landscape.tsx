@@ -2125,6 +2125,8 @@ export default function GameLandscapeScreen() {
        * 7 giây cho một sự kiện là thừa.
        */
       if (packet.typeID === TYPE_ID.TurnAnswerResult) {
+        /* K120: bản IsSelf là cho gương TV của chính máy này - phone đã có kết quả qua HTTP. */
+        if (packet.IsSelf === true) return;
         const pid = typeof packet.PlayerId === 'string' ? packet.PlayerId : '';
         if (!pid || (seat && same(pid, seat.playerId))) return;
         const name = typeof packet.NickName === 'string' ? packet.NickName : '';
