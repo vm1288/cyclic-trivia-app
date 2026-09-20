@@ -352,6 +352,8 @@ export const en = {
   'cards.earnedTitle': 'Congratulations!',
   'cards.earnedBody': '{name}, you’ve collected 5 stars and can now claim a special card!',
   'clock.rollsLeft': '{n} rolls left',
+  'clock.oversLeft': '{n} overs left',
+  'waiting.overs': '{n} overs',
   'cards.earnedAny': '5 stars! You earned a card',
 
   /**
@@ -1048,6 +1050,8 @@ const vi: Record<TranslationKey, string> = {
   'cards.earnedTitle': 'Chúc mừng!',
   'cards.earnedBody': '{name}, bạn đã gom đủ 5 sao và được nhận một lá bài đặc biệt!',
   'clock.rollsLeft': 'còn {n} lượt tung',
+  'clock.oversLeft': 'còn {n} over',
+  'waiting.overs': '{n} over',
   'cards.earnedAny': 'Đủ 5 sao! Bạn được thưởng một lá bài',
 
   'yourChoice.title': 'Bạn muốn chủ đề nào?',

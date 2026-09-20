@@ -179,6 +179,7 @@ export function playersForDuration(config: GameConfig, durationId: string | null
 
   // Duration === 0 là thể thức Leaderboard Challenge (tính theo lượt tung xúc
   // xắc chứ không theo phút), giới hạn 4 người.
+  // K117: Leaderboard Challenge (Duration 0) tối đa 4; Test match / Limited-over (đếm lượt, Duration = số overs) 2–6.
   if (duration.Duration === 0) return active.filter((p) => p.NumberOfPlayers <= 4);
   if (duration.Duration === 15 || duration.Duration === 60) {
     return active.filter((p) => p.NumberOfPlayers <= 6);
@@ -296,6 +297,8 @@ export type GamePlayer = {
   Id: string;
   NickName: string;
   Ordering: number;
+  /** K117: số lượt tung đã dùng (thể thức đếm lượt, tính theo từng người). */
+  RollsUsed?: number;
   CharacterId: string;
   /** 'male' | 'female' - ghép vào tên file ảnh nhân vật. */
   Gender: string;
@@ -370,6 +373,8 @@ export type GameSnapshot = {
      */
     CurrentCountRollDice: number;
     TotalRollDice: number;
+    /** K117: quota lượt tung MỖI NGƯỜI (15 / 25 / 100); 0 = thể thức tính phút. Server cũ không có. */
+    RollsPerPlayer?: number;
     /** Xem `GAME_SETUP`. */
     GameSetup: number;
     /** Xem `CASE_ACTION`. */

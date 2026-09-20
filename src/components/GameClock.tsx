@@ -25,6 +25,7 @@ export function GameClock({
   fetchedAt,
   rollsLeft,
   started,
+  overs = false,
 }: {
   /** Chiều cao thanh trạng thái (`insets.top`); dưới 18 thì không vẽ. */
   height: number;
@@ -38,6 +39,8 @@ export function GameClock({
   rollsLeft: number | null;
   /** Ván đã bắt đầu chơi (có người thắng vòng đua) chưa - chưa thì đứng ở đủ giờ (K88). */
   started: boolean;
+  /** K117: bàn cricket gọi lượt là "overs". */
+  overs?: boolean;
 }) {
   const t = useT();
   const [, tick] = useState(0);
@@ -51,7 +54,14 @@ export function GameClock({
   let label = '';
   let urgent = false;
   let paused = false;
-  if (durationMinutes > 0 && startTime && serverNow) {
+  /*
+   * K117: thể thức đếm lượt đi TRƯỚC - Test match / Limited-over có `DurationMinutes` = số overs (để
+   * phân biệt thể thức) nhưng KHÔNG chạy đồng hồ phút; đếm ngược là lượt CỦA MÌNH còn lại.
+   */
+  if (rollsLeft !== null) {
+    label = t(overs ? 'clock.oversLeft' : 'clock.rollsLeft', { n: String(rollsLeft) });
+    urgent = rollsLeft <= 3;
+  } else if (durationMinutes > 0 && startTime && serverNow) {
     const start = Date.parse(startTime);
     const now = pausedAt ? Date.parse(pausedAt) : Date.parse(serverNow) + (Date.now() - fetchedAt);
     /* Chưa có người thắng vòng đua: server chưa đặt StartTime của ván - đứng ở đủ giờ. */
@@ -61,8 +71,6 @@ export function GameClock({
     label = `${m}:${s < 10 ? '0' : ''}${s}`;
     urgent = left <= 60 && !pausedAt;
     paused = !!pausedAt;
-  } else if (rollsLeft !== null) {
-    label = t('clock.rollsLeft', { n: String(rollsLeft) });
   } else {
     return null;
   }
@@ -70,7 +78,7 @@ export function GameClock({
   return (
     <View style={[styles.bar, { height }]} pointerEvents="none">
       <Text style={[styles.text, urgent && styles.urgent, paused && styles.paused]} numberOfLines={1}>
-        {paused ? '⏸ ' : durationMinutes > 0 ? '⏱ ' : '🎲 '}
+        {paused ? '⏸ ' : rollsLeft !== null ? '🎲 ' : '⏱ '}
         {label}
       </Text>
     </View>

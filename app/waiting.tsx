@@ -123,7 +123,9 @@ export default function WaitingScreen() {
     if (m == null) return '';
     const found = config?.Durations.find((d) => d.Duration === m);
     if (found) return found.Time;
-    return m === 0 ? t('waiting.leaderboard') : t('waiting.minutes', { minutes: m });
+    // K117: hàng đếm lượt có Duration = số overs; không tra được cấu hình thì in "{n} overs".
+    if (m === 0) return t('waiting.leaderboard');
+    return (snapshot?.Game.TotalRollDice ?? 0) > 0 ? t('waiting.overs', { n: m }) : t('waiting.minutes', { minutes: m });
   })();
 
   /*

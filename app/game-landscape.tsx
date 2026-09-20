@@ -4115,7 +4115,8 @@ export default function GameLandscapeScreen() {
            * hiện nút Leaderboard không. Ván tính giờ không ghi bản ghi nào nên
            * chẳng có gì để xếp hạng.
            */
-          isLeaderboard={(snapshot?.Game?.TotalRollDice ?? 0) > 0}
+          /* K117: Leaderboard Challenge = đếm lượt VÀ DurationMinutes 0 (Test/Limited đếm lượt nhưng không xếp hạng). */
+          isLeaderboard={(snapshot?.Game?.TotalRollDice ?? 0) > 0 && (snapshot?.Game?.DurationMinutes ?? 0) === 0}
           players={snapshot?.Players ?? []}
           unit={pointUnit}
           oneUnit={onePointUnit}
@@ -4137,7 +4138,18 @@ export default function GameLandscapeScreen() {
           pausedAt={snapshot.Game.Timer?.PausedAt ?? null}
           serverNow={snapshot.Game.Timer?.ServerNow ?? null}
           fetchedAt={snapshot.fetchedAt ?? Date.now()}
-          rollsLeft={snapshot.Game.TotalRollDice > 0 ? Math.max(0, snapshot.Game.TotalRollDice - snapshot.Game.CurrentCountRollDice) : null}
+          /*
+           * K117: đếm ngược lượt CỦA MÌNH (quota mỗi người − lượt đã dùng), không phải bể chung.
+           * Server cũ không có `RollsPerPlayer` → rơi về bể chung như trước.
+           */
+          rollsLeft={
+            snapshot.Game.TotalRollDice > 0
+              ? snapshot.Game.RollsPerPlayer && me
+                ? Math.max(0, snapshot.Game.RollsPerPlayer - (me.RollsUsed ?? 0))
+                : Math.max(0, snapshot.Game.TotalRollDice - snapshot.Game.CurrentCountRollDice)
+              : null
+          }
+          overs={boardGameId === 'crictriv'}
           started={snapshot.Game.GameSetup === GAME_SETUP.Started}
         />
       ) : null}
