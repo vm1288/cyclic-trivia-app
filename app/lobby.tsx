@@ -16,7 +16,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   ackFlow,
-  castLink,
   ensureRoomCode,
   getGameState,
   markPlayersReady,
@@ -225,14 +224,8 @@ export default function LobbyScreen() {
   const total = snapshot?.Game.NumberOfPlayers ?? seats.length;
   const everyoneIn = joined >= 2;
 
-  /* "Play on the Big screen" (K107): hộp Go big! → quét thiết bị Cast / chia sẻ link. */
+  /* "Play on the Big screen" (K107 → K118): hộp Go big! = hướng dẫn mirror màn hình phụ lên TV. */
   const [bigScreen, setBigScreen] = useState(false);
-  const getCastUrl = useCallback(async () => {
-    if (!gameId || !session) return { error: t('bigScreen.linkError') };
-    const r = await castLink(gameId, session.token);
-    if (!r.isSuccess) return { error: apiErrorText(r, t) || t('bigScreen.linkError') };
-    return { url: r.Url };
-  }, [gameId, session, t]);
 
   /*
    * ─── Chiều cao mỗi hàng ghế: TÍNH RA, không đặt cứng ──────────────────────
@@ -602,7 +595,7 @@ export default function LobbyScreen() {
         ConfirmDialog cũng là Modal. Lớp phủ thường thì không bao giờ chui
         xuống dưới.
       */}
-      <BigScreenDialog visible={bigScreen} getUrl={getCastUrl} onClose={() => setBigScreen(false)} />
+      <BigScreenDialog visible={bigScreen} onClose={() => setBigScreen(false)} />
 
       {phase !== 'idle' ? (
         <View style={styles.overlay}>

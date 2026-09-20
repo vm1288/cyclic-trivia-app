@@ -61,6 +61,8 @@ import {
   type DuelSetupState,
   type DuelSummaryData,
 } from '../src/components/DuelOverlays';
+import { TvBoardView, type TvScene } from '../src/components/TvBoardView';
+import { ExternalDisplay, useTvScreen } from '../src/tv/tvScreen';
 import { TurnResultOverlay, type TurnResult } from '../src/components/TurnResultOverlay';
 import { RaceNobodyOverlay } from '../src/components/RaceNobodyOverlay';
 import { RaceWinnerOverlay } from '../src/components/RaceWinnerOverlay';
@@ -306,6 +308,12 @@ export default function GameLandscapeScreen() {
    * nạp lại state - lăn trước, dừng sau.
    */
   const [dice, setDice] = useState<{ value: number | null; rolledBy?: string | null } | null>(null);
+
+  /*
+   * K118: MÀN HÌNH PHỤ (TV). Có màn phụ và mình là chủ phòng thì vẽ `TvBoardView` vào đó - cùng
+   * state với màn này nhưng chỉ xem. Hook phải đứng trước mọi `return` sớm.
+   */
+  const tvScreen = useTvScreen();
 
   /** Thông báo thoáng qua: người khác vừa dùng thẻ gì. */
   const [notice, setNotice] = useState<string | null>(null);
@@ -3419,8 +3427,90 @@ export default function GameLandscapeScreen() {
     );
   }
 
+  /*
+   * K118: cảnh cho TV - gom state của màn này thành dạng chỉ-xem. Câu hỏi của CHÍNH MÌNH cũng đi
+   * dạng readOnly (TV không lộ đáp án mình chọn). Tấm chọn thẻ / Your Choice là việc riêng của
+   * phone nên TV không có.
+   */
+  const tvRollsLeft =
+    snapshot && snapshot.Game.TotalRollDice > 0
+      ? snapshot.Game.RollsPerPlayer && me
+        ? Math.max(0, snapshot.Game.RollsPerPlayer - (me.RollsUsed ?? 0))
+        : Math.max(0, snapshot.Game.TotalRollDice - snapshot.Game.CurrentCountRollDice)
+      : null;
+  const tvScene: TvScene | null =
+    tvScreen && ExternalDisplay && me?.IsHost
+      ? {
+          board,
+          players,
+          snapshot,
+          pendingMove,
+          currentTurnPlayerId,
+          boardGameId,
+          roomCode: seat.roomCode ?? '',
+          unit: pointUnit,
+          oneUnit: onePointUnit,
+          unitFor,
+          isLeaderboard: (snapshot?.Game?.TotalRollDice ?? 0) > 0 && (snapshot?.Game?.DurationMinutes ?? 0) === 0,
+          clockLabel:
+            tvRollsLeft !== null
+              ? t(boardGameId === 'crictriv' ? 'clock.oversLeft' : 'clock.rollsLeft', { n: String(tvRollsLeft) })
+              : '',
+          dice,
+          question: question
+            ? {
+                question: question.question,
+                categories: question.categories,
+                duration: question.duration,
+                banner:
+                  question.kind === 'race'
+                    ? t('question.race')
+                    : question.kind === 'battle'
+                      ? (question.battleIndex ?? 0) >= 3
+                        ? t('battle.tieBreaker')
+                        : t('battle.question', { index: String((question.battleIndex ?? 0) + 1) })
+                      : question.kind === 'turn'
+                        ? question.readOnly
+                          ? t('question.watching', { name: question.ownerName ?? '' })
+                          : question.isQuestionOwner
+                            ? t('question.watching', { name: me?.NickName ?? '' })
+                            : stealBanner
+                        : null,
+              }
+            : null,
+          direction: direction ? { packet: direction, ownerName: direction.ownerName ?? (direction.readOnly ? '' : me?.NickName ?? '') } : null,
+          raceWinner: raceWinner ? { name: raceWinner.name } : null,
+          raceNobody,
+          raceCountdown:
+            snapshot && !raceFired && raceCountdownActive(snapshot.Game) && snapshot.Game.Timer?.RaceCountdownEndsAt
+              ? { endsAt: snapshot.Game.Timer.RaceCountdownEndsAt, serverNow: snapshot.Game.Timer.ServerNow, fetchedAt: snapshot.fetchedAt ?? Date.now() }
+              : null,
+          curveBall: curveBall
+            ? { message: `curve.${curveBall.type}` in en ? t(`curve.${curveBall.type}` as TranslationKey) : curveBall.message }
+            : null,
+          turnResult: turnResult ? { result: turnResult, name: turnResult.name ?? me?.NickName ?? '' } : null,
+          challenge: challenge ? { ...challenge, challengedName: challenge.challengedName || turnPlayerName } : null,
+          battleDice,
+          battleVideo: battleVideo ? { seq: battleVideo.seq, kind: battleVideo.kind, name: battleVideo.name } : null,
+          duelTime,
+          duel,
+          duelSummary,
+          duelReward,
+          turnBanner: turnBanner?.text ?? null,
+          notice,
+          paused,
+          gameOver,
+        }
+      : null;
+
   return (
     <View style={styles.root}>
+      {/* K118: bàn cờ chính lên TV qua màn hình phụ. Không có màn phụ thì component trả null. */}
+      {tvScene && tvScreen && ExternalDisplay ? (
+        <ExternalDisplay screen={tvScreen.id} fallbackInMainScreen={false}>
+          <TvBoardView width={tvScreen.width} height={tvScreen.height} scene={tvScene} />
+        </ExternalDisplay>
+      ) : null}
       {/*
         Nền riêng cho chiều NGANG - `main-background-landscape.png`, bản vẽ
         riêng chứ không phải bản dọc xoay 90°. Ảnh 1846×852 (tỉ lệ 2.167) trùng
