@@ -969,6 +969,14 @@ export type DirectionPacket = {
   AntiClockwiseIncumbentNickname?: string;
   AntiClockwiseIncumbentTotalPoint?: number;
   AntiClockwiseIncumbentPoint?: number;
+  /**
+   * DUEL V8 (K119): hướng này tới ô có người nhưng KHÔNG đấu được (một bên 0 điểm và 0 thẻ;
+   * Leaderboard: 0 thẻ) → bấm SELECT là hộp "Duel Unavailable … Go the other way", không gửi.
+   */
+  ClockwiseDuelUnavailable?: boolean;
+  AntiClockwiseDuelUnavailable?: boolean;
+  /** DUEL V8: điểm của người thách lúc này (trần cược tính ở bước 95, đây chỉ để hiện). */
+  ChallengerTotalPoint?: number;
 };
 
 export type MoveDirection = 'clockwise' | 'anticlockwise' | 'random';

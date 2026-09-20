@@ -306,6 +306,19 @@ export const TYPE_ID = {
    */
   BoardView: 94,
   /**
+   * DUEL V8 (K119) - bước ĐẶT CƯỢC & CHỌN CHỦ ĐỀ sau video mở màn. HAI CHIỀU:
+   *   nhận `{ Phase: setup|stake|category|timeout|ready|intro, AttackerId, DefenderId, MaxStake,
+   *          Categories[{Id,Title}], StakeDone, CategoryDone, Stake, CategoryName, DurationInSeconds }`
+   *   gửi `{ Stake }` (người thách) hoặc `{ CategoryId }` (người giữ ô). 60 s không chọn là server bốc hộ.
+   */
+  DuelSetup: 95,
+  /**
+   * DUEL V8 (K119) - NGƯỜI THẮNG CHỌN PHẦN THƯỞNG sau video người thắng. HAI CHIỀU:
+   *   nhận `{ Phase: choose|done, WinnerId, LoserId, Stake, LoserCards[], Choice, CardName, Discarded }`
+   *   gửi `{ Choice: 'points'|'card', CardId, Discard }`. 60 s không chọn là server chọn hộ.
+   */
+  DuelReward: 96,
+  /**
    * "Ghế này vừa được mở ở một MÁY KHÁC" — gửi cho máy vừa BỊ ĐÁ khỏi slot.
    *
    * Mỗi người chơi chỉ có MỘT ô `ConnectionId` ở server và mọi gói tin đều đi qua

@@ -67,7 +67,14 @@ export function MoveDirectionOverlay({
 }) {
   const t = useT();
 
+  /*
+   * DUEL V8 (K119, mockup slide 2/4/26/27): "No time limit for this step" - server gửi
+   * `DurationInSeconds = 0`, không đếm lùi, không tự chọn random. Server cũ vẫn gửi 15 → giữ nhịp cũ.
+   */
+  const noLimit = !packet.DurationInSeconds;
   const [left, setLeft] = useState(packet.DurationInSeconds || 15);
+  /** Hướng vừa bấm mà duel KHÔNG đấu được - hiện hộp "Duel Unavailable", không gửi. */
+  const [blocked, setBlocked] = useState<'clockwise' | 'anticlockwise' | null>(null);
 
   /** Một lượt chỉ chọn ĐÚNG MỘT LẦN - xem ghi chú cùng lý do ở `QuestionOverlay`. */
   const sent = useRef(false);
@@ -91,13 +98,19 @@ export function MoveDirectionOverlay({
    * rendering a different component".
    */
   useEffect(() => {
-    if (left > 0 || sent.current || readOnly) return;
+    if (noLimit || left > 0 || sent.current || readOnly) return;
     sent.current = true;
     pick.current('random');
-  }, [left, readOnly]);
+  }, [left, readOnly, noLimit]);
 
   const choose = (direction: MoveDirection) => {
     if (sent.current || readOnly) return;
+    const unavailable =
+      direction === 'clockwise' ? packet.ClockwiseDuelUnavailable === true : packet.AntiClockwiseDuelUnavailable === true;
+    if (unavailable) {
+      setBlocked(direction === 'clockwise' ? 'clockwise' : 'anticlockwise');
+      return;
+    }
     sent.current = true;
     onSelect(direction);
   };
@@ -123,6 +136,7 @@ export function MoveDirectionOverlay({
       title: t(isClock ? 'direction.clockwise' : 'direction.anticlockwise'),
       category: (isClock ? packet.ClockwiseCategory : packet.AntiClockwiseCategory) ?? '',
       battle: !!(isClock ? packet.ClockwiseBattle : packet.AntiClockwiseBattle),
+      unavailable: !!(isClock ? packet.ClockwiseDuelUnavailable : packet.AntiClockwiseDuelUnavailable),
       nickname: isClock ? packet.ClockwiseIncumbentNickname : packet.AntiClockwiseIncumbentNickname,
       total: isClock ? packet.ClockwiseIncumbentTotalPoint : packet.AntiClockwiseIncumbentTotalPoint,
       prize: isClock ? packet.ClockwiseIncumbentPoint : packet.AntiClockwiseIncumbentPoint,
@@ -154,47 +168,42 @@ export function MoveDirectionOverlay({
           </Text>
         </View>
 
-        <Text style={styles.categoryLabel} numberOfLines={1}>
-          {t('direction.category')}
-        </Text>
-        <Text style={styles.categoryValue} numberOfLines={2}>
-          {s.category.toUpperCase()}
-        </Text>
-
-        <Text style={[styles.kind, { color: s.color }]}>
-          {t(s.battle ? 'direction.battle' : 'direction.quiz')}
-        </Text>
-
+        {/*
+          * DUEL V8 (K119): ô có người → "DUEL vs. [Name] / Category: chosen by [Name] / Stakes: …"
+          * (chữ mockup). Không còn % cược, không hiện chủ đề ô - chủ đề do người giữ ô chọn sau.
+          */}
         {!s.battle ? (
-          <Text style={styles.body} numberOfLines={2}>
-            {t('direction.quizBody', {
-              points: CORRECT_QUESTION_POINT,
-              unit: unit(CORRECT_QUESTION_POINT),
-            })}
-          </Text>
-        ) : packet.isLeaderBoard ? (
           <>
-            <Text style={styles.body} numberOfLines={2}>
-              {t('direction.battleLeaderWin', { unit: unit(2) })}
+            <Text style={styles.categoryLabel} numberOfLines={1}>
+              {t('direction.category')}
             </Text>
+            <Text style={styles.categoryValue} numberOfLines={2}>
+              {s.category.toUpperCase()}
+            </Text>
+            <Text style={[styles.kind, { color: s.color }]}>{t('direction.quiz')}</Text>
             <Text style={styles.body} numberOfLines={2}>
-              {t('direction.battleLeaderLose')}
+              {t('direction.quizBody', {
+                points: CORRECT_QUESTION_POINT,
+                unit: unit(CORRECT_QUESTION_POINT),
+              })}
             </Text>
           </>
         ) : (
           <>
-            <Text style={styles.body} numberOfLines={2}>
-              {t('direction.battleWin', {
-                points: s.prize ?? 0,
-                unit: unit(s.prize ?? 0),
-              })}
-            </Text>
-            <Text style={styles.body} numberOfLines={1}>
-              {t('direction.battleRisk', { percent: packet.WaggerPercent ?? 0 })}
+            <Text style={[styles.kind, styles.duelKind, { color: s.color }]} numberOfLines={1}>
+              {t('duel.vs', { name: s.nickname ?? '' })}
             </Text>
             <Text style={styles.rival} numberOfLines={1}>
-              {s.nickname} · {s.total ?? 0} {unit(s.total ?? 0)}
+              {t('duel.categoryBy', { name: s.nickname ?? '' })}
             </Text>
+            <Text style={styles.body} numberOfLines={2}>
+              {t(packet.isLeaderBoard ? 'duel.stakesOneCard' : 'duel.stakesPointsOrCards')}
+            </Text>
+            {!packet.isLeaderBoard ? (
+              <Text style={styles.body} numberOfLines={1}>
+                {s.nickname} · {s.total ?? 0} {unit(s.total ?? 0)}
+              </Text>
+            ) : null}
           </>
         )}
 
@@ -225,10 +234,16 @@ export function MoveDirectionOverlay({
 
           <GlowDivider color="#1F6FD6" accent="#5FE6FF" height={1.5} flareWidth={70} style={styles.rule} />
 
-          <View style={[styles.timerTag, urgent && styles.timerTagUrgent]}>
-            <ClockIcon color={clockColor} />
-            <Text style={[styles.timerText, { color: clockColor }]}>{mmss(left)}</Text>
-          </View>
+          {noLimit ? (
+            <Text style={styles.noLimit} numberOfLines={1}>
+              {t('duel.noTimeLimit')}
+            </Text>
+          ) : (
+            <View style={[styles.timerTag, urgent && styles.timerTagUrgent]}>
+              <ClockIcon color={clockColor} />
+              <Text style={[styles.timerText, { color: clockColor }]}>{mmss(left)}</Text>
+            </View>
+          )}
         </View>
 
         {/* Ngược chiều bên trái, thuận chiều bên phải - cùng thứ tự bản web. */}
@@ -237,6 +252,24 @@ export function MoveDirectionOverlay({
           {renderSide('clockwise')}
         </View>
       </View>
+
+      {/* "Duel Unavailable … [Go the other way]" - mockup slide 3/28. Đóng hộp, KHÔNG chọn hộ. */}
+      {blocked ? (
+        <View style={styles.blockRoot}>
+          <View style={styles.blockCard}>
+            <LinearGradient colors={['rgba(58,8,16,0.98)', 'rgba(10,12,34,0.98)']} style={[fill, styles.blockFill]} />
+            <Text style={styles.blockTitle}>{t('duel.unavailableTitle')}</Text>
+            <Text style={styles.blockBody}>
+              {t(packet.isLeaderBoard ? 'duel.unavailableBodyLeaderboard' : 'duel.unavailableBody', {
+                name: side(blocked).nickname ?? '',
+              })}
+            </Text>
+            <Pressable onPress={() => setBlocked(null)} style={({ pressed }) => [styles.blockBtn, pressed && styles.pressedSm]}>
+              <Text style={styles.blockBtnText}>{t('duel.goOtherWay')}</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -335,4 +368,41 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(9,11,28,0.7)',
   },
   selectText: { fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
+
+  duelKind: { fontSize: 13, marginTop: 6 },
+  noLimit: { fontSize: 10.5, fontWeight: '700', color: boardColors.dim },
+
+  blockRoot: {
+    ...fill,
+    zIndex: 20,
+    backgroundColor: 'rgba(3,4,14,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  blockCard: {
+    width: '78%',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1.6,
+    borderColor: '#FF5A6E',
+    gap: 8,
+    overflow: 'hidden',
+    alignItems: 'center',
+  },
+  blockFill: { borderRadius: 16 },
+  blockTitle: { fontSize: 16, fontWeight: '900', color: '#FF5A6E', textAlign: 'center' },
+  blockBody: { fontSize: 12, lineHeight: 16, color: text.primary, textAlign: 'center' },
+  blockBtn: {
+    marginTop: 2,
+    minWidth: 150,
+    height: 34,
+    borderRadius: 8,
+    borderWidth: 1.4,
+    borderColor: '#5FE6FF',
+    backgroundColor: 'rgba(8,26,34,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  blockBtnText: { fontSize: 12, fontWeight: '900', letterSpacing: 1, color: '#5FE6FF' },
 });

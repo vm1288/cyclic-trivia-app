@@ -52,6 +52,15 @@ import { BattleOverlay } from '../src/components/BattleOverlay';
 import { BattleResultOverlay } from '../src/components/BattleResultOverlay';
 import { BattleDiceOverlay, type BattleDiceState } from '../src/components/BattleDiceOverlay';
 import { BattleVideoOverlay } from '../src/components/BattleVideoOverlay';
+import {
+  DuelCard,
+  DuelRewardOverlay,
+  DuelSetupOverlay,
+  DuelSummaryOverlay,
+  type DuelRewardState,
+  type DuelSetupState,
+  type DuelSummaryData,
+} from '../src/components/DuelOverlays';
 import { TurnResultOverlay, type TurnResult } from '../src/components/TurnResultOverlay';
 import { RaceNobodyOverlay } from '../src/components/RaceNobodyOverlay';
 import { RaceWinnerOverlay } from '../src/components/RaceWinnerOverlay';
@@ -483,6 +492,19 @@ export default function GameLandscapeScreen() {
    * Gồm cả điểm chuyển tay khi có (ván KHÔNG tính leaderboard). Dữ liệu từ gói 58.
    */
   const [battleResult, setBattleResult] = useState<{ name: string; isMe: boolean } | null>(null);
+
+  /*
+   * DUEL V8 (K119, mockup "Changes for battle V8", Tony 2026-09-20) - xem `DuelOverlays`.
+   *   duelTime    - tấm "It's duel time — A will be bowling at batter B…" 3 s TRƯỚC video mở màn (gói 54).
+   *   duel        - bước đặt cược / chọn chủ đề (gói 95), rồi "Duel ready" và hai tấm mở màn; câu 1 (56) đóng.
+   *   duelSummary - tổng kết có tick/cross (gói 84); chiếu xong máy gửi 84 lên (server gate ghế đầu).
+   *   duelReward  - người thắng chọn thưởng (gói 96) rồi tấm chuyển điểm/thẻ 4 s.
+   */
+  const [duelTime, setDuelTime] = useState<{ a: string; b: string } | null>(null);
+  const [duel, setDuel] = useState<DuelSetupState | null>(null);
+  const [duelSummary, setDuelSummary] = useState<DuelSummaryData | null>(null);
+  const [duelReward, setDuelReward] = useState<DuelRewardState | null>(null);
+  const duelSeq = useRef(0);
 
   /**
    * Vòng TUNG XÚC XẮC PHÂN ĐỊNH của battle (gói 91, K57) - sau câu phụ mà vẫn
@@ -1581,6 +1603,10 @@ export default function GameLandscapeScreen() {
         setGameOver({ message: (packet as { GameOverMessage?: string }).GameOverMessage ?? null });
         setQuestion(null);
         setBattle(null);
+        setDuel(null);
+        setDuelSummary(null);
+        setDuelReward(null);
+        setDuelTime(null);
         setChallenge(null);
         setChoice(null);
         setDirection(null);
@@ -1765,12 +1791,99 @@ export default function GameLandscapeScreen() {
           const b = snapshot?.Players?.find((pl) => same(pl.Id, incumbentId))?.NickName ?? '';
           if (a && b) setNotice(t('battle.notice', { a, b }));
         };
-        if (!videoName) {
-          afterVideo();
-          return;
+        /*
+         * DUEL V8 (K119, slide 6): tấm "It's duel time — [A] will be bowling at batter [B]…" 3 s
+         * TRƯỚC video, mọi ghế. Server đợi thêm 3 s cho tấm này (playerAnimatesSeconds).
+         */
+        const aName = typeof packet.ChallengerNickname === 'string' ? packet.ChallengerNickname : '';
+        const bName = typeof packet.IncumbentNickname === 'string' ? packet.IncumbentNickname : '';
+        const startVideo = () => {
+          setDuelTime(null);
+          if (!videoName) {
+            afterVideo();
+            return;
+          }
+          battleVideoSeq.current += 1;
+          setBattleVideo({ seq: battleVideoSeq.current, kind: 'battle', name: videoName, onDone: afterVideo });
+        };
+        setDuel(null);
+        setDuelReward(null);
+        setDuelSummary(null);
+        if (aName && bName) {
+          setDuelTime({ a: aName, b: bName });
+          setTimeout(startVideo, 3000);
+        } else {
+          startVideo();
         }
-        battleVideoSeq.current += 1;
-        setBattleVideo({ seq: battleVideoSeq.current, kind: 'battle', name: videoName, onDone: afterVideo });
+        return;
+      }
+
+      /*
+       * DUEL V8 (K119) - gói 95: đặt cược / chọn chủ đề / trạng thái / ready / mở màn. Mọi ghế
+       * nhận cùng gói, tấm vẽ theo vai (xem `DuelSetupOverlay`). Câu 1 (56) đóng tấm này.
+       */
+      if (packet.typeID === TYPE_ID.DuelSetup) {
+        const phase = String(packet.Phase ?? '') as DuelSetupState['phase'];
+        if (!['setup', 'stake', 'category', 'timeout', 'ready', 'intro'].includes(phase)) return;
+        duelSeq.current += 1;
+        setBattle(null);
+        setDuelTime(null);
+        setDuel({
+          phase,
+          attackerId: String(packet.AttackerId ?? ''),
+          defenderId: String(packet.DefenderId ?? ''),
+          attackerName: typeof packet.AttackerName === 'string' ? packet.AttackerName : '',
+          defenderName: typeof packet.DefenderName === 'string' ? packet.DefenderName : '',
+          isLeaderboard: packet.IsLeaderboard === true,
+          maxStake: typeof packet.MaxStake === 'number' ? packet.MaxStake : 0,
+          attackerPoints: typeof packet.AttackerPoints === 'number' ? packet.AttackerPoints : 0,
+          defenderPoints: typeof packet.DefenderPoints === 'number' ? packet.DefenderPoints : 0,
+          stakeDone: packet.StakeDone === true,
+          categoryDone: packet.CategoryDone === true,
+          stake: typeof packet.Stake === 'number' ? packet.Stake : null,
+          categoryId: typeof packet.CategoryId === 'string' ? packet.CategoryId : null,
+          categoryName: typeof packet.CategoryName === 'string' ? packet.CategoryName : '',
+          categories: Array.isArray(packet.Categories)
+            ? (packet.Categories as { Id: string; Title: string }[]).filter((c) => c && typeof c.Id === 'string')
+            : [],
+          duration: typeof packet.DurationInSeconds === 'number' ? packet.DurationInSeconds : 60,
+          seq: duelSeq.current,
+        });
+        return;
+      }
+
+      /*
+       * DUEL V8 (K119) - gói 96: người thắng chọn thưởng (choose) rồi tấm chuyển điểm/thẻ (done).
+       * `done` nằm trong REFRESH_ON nên điểm/thẻ ở cột phải tự cập nhật; tấm tắt sau 4 s.
+       */
+      if (packet.typeID === TYPE_ID.DuelReward) {
+        const phase = String(packet.Phase ?? '') as DuelRewardState['phase'];
+        if (phase !== 'choose' && phase !== 'done') return;
+        duelSeq.current += 1;
+        setBattleResult(null);
+        const next: DuelRewardState = {
+          phase,
+          winnerId: String(packet.WinnerId ?? ''),
+          loserId: String(packet.LoserId ?? ''),
+          winnerName: typeof packet.WinnerName === 'string' ? packet.WinnerName : '',
+          loserName: typeof packet.LoserName === 'string' ? packet.LoserName : '',
+          stake: typeof packet.Stake === 'number' ? packet.Stake : 0,
+          isLeaderboard: packet.IsLeaderboard === true,
+          loserCards: Array.isArray(packet.LoserCards)
+            ? (packet.LoserCards as DuelRewardState['loserCards']).filter((c) => c && typeof c.CardId === 'string')
+            : [],
+          duration: typeof packet.DurationInSeconds === 'number' ? packet.DurationInSeconds : 60,
+          choice: typeof packet.Choice === 'string' ? packet.Choice : '',
+          cardId: typeof packet.CardId === 'string' ? packet.CardId : '',
+          cardName: typeof packet.CardName === 'string' ? packet.CardName : '',
+          discarded: packet.Discarded === true,
+          seq: duelSeq.current,
+        };
+        setDuelReward(next);
+        if (phase === 'done') {
+          const seq = duelSeq.current;
+          setTimeout(() => setDuelReward((prev) => (prev && prev.seq === seq ? null : prev)), Math.max(2000, next.duration * 1000));
+        }
         return;
       }
 
@@ -1784,6 +1897,8 @@ export default function GameLandscapeScreen() {
         const incumbentId = typeof packet.IncumbentId === 'string' ? packet.IncumbentId : '';
         const mine = seat?.playerId ?? '';
         if (!same(mine, challengerId) && !same(mine, incumbentId)) return;
+        /* DUEL V8 (K119): server mới không gửi 55 xuống nữa (đi gói 95). Server cũ thì giữ khung START. */
+        if (duel) return;
 
         battleQuestionNo.current = 0;
         setQuestion(null);
@@ -1812,6 +1927,7 @@ export default function GameLandscapeScreen() {
         if (answered.current === data.Question.Id) return;
 
         setBattle(null);
+        setDuel(null);
         setQuestion({
           kind: 'battle',
           question: data.Question,
@@ -1851,28 +1967,35 @@ export default function GameLandscapeScreen() {
         const theirId = iAmChallenger
           ? (typeof packet.IncumbentId === 'string' ? packet.IncumbentId : '')
           : challengeId;
-        const theirName = snapshot?.Players?.find((pl) => same(pl.Id, theirId))?.NickName ?? '';
-
-        const score = t('battle.score', {
-          mine: String(count(myAnswers)),
-          theirs: String(count(theirAnswers)),
-          name: theirName,
-        });
+        const incumbentId = typeof packet.IncumbentId === 'string' ? packet.IncumbentId : '';
+        void myAnswers;
+        void theirAnswers;
+        void theirId;
+        void count;
         /*
-         * K57 - chữ chép mockup "Battle - Tie-breaker": sau 3 câu hoà là "It's
-         * tie-breaker time!"; sau câu phụ thì "We have a result." hoặc "After one
-         * tie-breaker question, no winner was determined." (rồi tới xúc xắc).
+         * DUEL V8 (K119, slide 15-19): thay dòng báo bằng tấm chiếu lại như bàn cờ - "The answers &
+         * results" 5 s, từng câu với đáp án đúng xanh + tick/cross cạnh chữ cái mỗi người, rồi
+         * "We have a result. A: x / B: y / [name] won!". Xong thì gửi 84 lên (server gate ghế đầu tiên,
+         * bàn cờ web cũng gửi). Mọi ghế đều chiếu (ai cũng xem như TV).
          */
         const foundWinner = packet.FoundWinner === true;
         const isTieBreaker = packet.IsTieBreaker === true;
-        const headline = isTieBreaker
-          ? foundWinner
-            ? t('battle.resultTitle')
-            : t('battle.noWinner')
-          : foundWinner
-            ? ''
-            : t('battle.tieBreakerTime');
-        setNotice(headline ? `${headline} ${score}` : score);
+        const questions = Array.isArray(packet.Questions) ? (packet.Questions as GameQuestion[]) : [];
+        duelSeq.current += 1;
+        setQuestion((prev) => (prev?.kind === 'battle' ? null : prev));
+        setDuelSummary({
+          questions,
+          correct,
+          challengeAnswers,
+          incumbentAnswers,
+          challengeId,
+          incumbentId,
+          challengeName: snapshot?.Players?.find((pl) => same(pl.Id, challengeId))?.NickName ?? '',
+          incumbentName: snapshot?.Players?.find((pl) => same(pl.Id, incumbentId))?.NickName ?? '',
+          isTieBreaker,
+          foundWinner,
+          seq: duelSeq.current,
+        });
         return;
       }
 
@@ -1950,9 +2073,11 @@ export default function GameLandscapeScreen() {
         };
         const afterVideo = () => {
           setBattleVideo(null);
-          setBattleResult({ name, isMe: same(seat?.playerId ?? '', winnerId) });
+          /* DUEL V8 (K119): không còn tấm "X won the battle" - ngay sau là bước chọn thưởng (gói 96). */
+          void name;
           void connection.current?.send(TYPE_ID.PlayerBattleWinner, echo);
         };
+        setDuelSummary(null);
         if (!videoName) {
           afterVideo();
           return;
@@ -2351,6 +2476,34 @@ export default function GameLandscapeScreen() {
   const startBattle = () => {
     setBattle(null);
     void connection.current?.send(TYPE_ID.PlayerBattleStart);
+  };
+
+  /* DUEL V8 (K119): số ít/số nhiều theo bàn - "1 run", "5 runs". */
+  const unitFor = (n: number) => (n === 1 ? onePointUnit : pointUnit);
+
+  /** Gói 95 lên: người thách gửi `{ Stake }`, người giữ ô gửi `{ CategoryId }`. */
+  const sendStake = (n: number) => {
+    setDuel((prev) => (prev ? { ...prev, stakeDone: true, stake: n } : prev));
+    void connection.current?.send(TYPE_ID.DuelSetup, { Stake: n });
+  };
+  const sendCategory = (id: string) => {
+    setDuel((prev) =>
+      prev
+        ? { ...prev, categoryDone: true, categoryId: id, categoryName: prev.categories.find((c) => c.Id === id)?.Title ?? '' }
+        : prev,
+    );
+    void connection.current?.send(TYPE_ID.DuelSetup, { CategoryId: id });
+  };
+
+  /** Gói 84 lên sau khi chiếu lại xong - server gate ghế đầu tiên (như 55/58). */
+  const duelSummaryDone = () => {
+    setDuelSummary(null);
+    void connection.current?.send(TYPE_ID.PlayerBattleSummary);
+  };
+
+  /** Gói 96 lên: `{ Choice, CardId, Discard }`. */
+  const sendReward = (choice: 'points' | 'card', cardId?: string, discard?: boolean) => {
+    void connection.current?.send(TYPE_ID.DuelReward, { Choice: choice, CardId: cardId ?? '', Discard: discard === true });
   };
 
   /*
@@ -3691,6 +3844,33 @@ export default function GameLandscapeScreen() {
 
             {battleResult ? (
               <BattleResultOverlay name={battleResult.name} isMe={battleResult.isMe} />
+            ) : null}
+
+            {/* DUEL V8 (K119) - xem ghi chú ở state `duel*`. */}
+            {duelTime && !battleVideo ? (
+              <DuelCard
+                title={t('duel.timeTitle')}
+                lines={[
+                  { text: `${t('duel.bowler')}: ${duelTime.a}   ·   ${t('duel.batter')}: ${duelTime.b}`, color: '#5FE6FF' },
+                  t('duel.timeBody', { a: duelTime.a, b: duelTime.b }),
+                ]}
+                block
+              />
+            ) : null}
+            {duel && !question && !battleVideo ? (
+              <DuelSetupOverlay
+                state={duel}
+                meId={seat?.playerId ?? ''}
+                unit={unitFor}
+                onStake={sendStake}
+                onCategory={sendCategory}
+              />
+            ) : null}
+            {duelSummary && !battleVideo ? (
+              <DuelSummaryOverlay data={duelSummary} onDone={duelSummaryDone} />
+            ) : null}
+            {duelReward && !battleVideo ? (
+              <DuelRewardOverlay state={duelReward} meId={seat?.playerId ?? ''} unit={unitFor} onChoose={sendReward} />
             ) : null}
 
             {battleDice && !battleResult && !dice ? (
