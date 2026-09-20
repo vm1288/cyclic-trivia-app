@@ -50,9 +50,9 @@ export function BigScreenDialog({ visible, onClose }: { visible: boolean; onClos
 
 const styles = StyleSheet.create({
   title: { fontSize: 20, fontWeight: '500', color: '#FFFFFF', textAlign: 'center' },
-  body: { fontSize: 15.5, lineHeight: 22, color: '#FFFFFF', textAlign: 'center' },
+  body: { fontSize: 14, lineHeight: 19, color: '#FFFFFF', textAlign: 'center' },
   warn: { fontSize: 14, lineHeight: 20, color: '#FF7A88', textAlign: 'center' },
-  steps: { alignSelf: 'stretch', gap: 8, marginTop: 4 },
+  steps: { alignSelf: 'stretch', gap: 5, marginTop: 2 },
   step: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   stepNo: {
     width: 22,
@@ -65,10 +65,10 @@ const styles = StyleSheet.create({
     color: '#062A10',
     backgroundColor: '#3CE87A',
   },
-  stepText: { flex: 1, fontSize: 14, lineHeight: 20, color: '#FFFFFF' },
+  stepText: { flex: 1, fontSize: 13, lineHeight: 18, color: '#FFFFFF' },
   waiting: { marginTop: 4, fontSize: 12.5, color: 'rgba(200,212,240,0.75)', textAlign: 'center' },
   status: { alignSelf: 'stretch', alignItems: 'center', gap: 4, paddingVertical: 6 },
   statusOk: { fontSize: 17, fontWeight: '800', color: '#3CE87A', textAlign: 'center' },
   statusSub: { fontSize: 13, color: 'rgba(200,212,240,0.8)', textAlign: 'center' },
-  btn: { alignSelf: 'stretch', marginTop: 6 },
+  btn: { alignSelf: 'stretch', marginTop: 2 },
 });

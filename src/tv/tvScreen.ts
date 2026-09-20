@@ -47,8 +47,26 @@ try {
 /** Có native module không (bản build đã kèm lib). */
 export const tvAvailable = () => lib !== null;
 
-/** Component gắn con vào màn hình phụ; `null` khi bản build không có module. */
-export const ExternalDisplay = lib?.default ?? null;
+/**
+ * Component gắn con vào màn hình phụ; `null` khi bản build không có module.
+ *
+ * ⚠️ KHÔNG dùng `lib.default`: wrapper JS của lib chỉ tạo view native khi id nằm trong bảng
+ * `getScreens()` của nó - bảng đó chỉ được cập nhật qua sự kiện, mà sự kiện chỉ đăng ký khi đã có
+ * view → trả `null` mãi (đo A17 14:51 20/9: màn phụ vẫn là gương của phone). Dùng thẳng component
+ * native (codegen `RNExternalDisplay`) với `screen` = id ta tự đọc ở `readNative`; style phải là
+ * kích thước màn phụ (dp) vì view này không có bố cục cha.
+ */
+type NativeView = ComponentType<{ screen?: string; fallbackInMainScreen?: boolean; style?: StyleProp<ViewStyle>; children?: ReactNode }>;
+let nativeView: NativeView | null = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const n = require('react-native-external-display/js/NativeRNExternalDisplay');
+  nativeView = (n?.default ?? n) as NativeView;
+} catch (e) {
+  console.warn('[tv] NativeRNExternalDisplay không nạp được:', e instanceof Error ? e.message : String(e));
+  nativeView = null;
+}
+export const ExternalDisplay: NativeView | null = lib ? nativeView : null;
 
 const first = (info: ScreenInfo | null | undefined): Screen | null => {
   if (!info) return null;
@@ -59,46 +77,55 @@ const first = (info: ScreenInfo | null | undefined): Screen | null => {
 };
 
 /**
+ * Đọc thẳng native module - KHÔNG qua `getScreens()` của lib.
+ *
+ * ⚠️ Lib chỉ đăng ký `DisplayListener` khi một view `<ExternalDisplay>` đã được tạo, mà view đó
+ * chỉ tạo khi đã có màn phụ → không bao giờ nhận sự kiện "vừa nối" (đo A17 14:47 20/9: bật
+ * "Simulate secondary displays" mà hộp Go big! vẫn "Waiting for a screen…"). Native
+ * `getInitialScreens()` liệt kê display `FLAG_PRESENTATION` ngay lúc gọi, rẻ, nên hỏi nó theo nhịp.
+ * Kích thước px chia cho `scale` của cửa sổ chính - đúng quy ước dp của RN (Yoga dùng density
+ * của màn chính cho mọi view, kể cả view trên Presentation).
+ */
+const readNative = (): Screen | null => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { TurboModuleRegistry, Dimensions, Platform } = require('react-native') as typeof import('react-native');
+    type Mod = { getInitialScreens?: () => { SCREEN_INFO?: ScreenInfo }; SCREEN_INFO?: ScreenInfo };
+    const mod = TurboModuleRegistry.get('RNExternalDisplayEvent') as unknown as Mod | null;
+    if (!mod) return null;
+    const raw = Platform.OS === 'android' ? mod.getInitialScreens?.()?.SCREEN_INFO : mod.SCREEN_INFO;
+    if (!raw) return null;
+    const scale = Platform.OS === 'ios' ? 1 : Dimensions.get('window').scale || 1;
+    const info: ScreenInfo = {};
+    for (const [id, sc] of Object.entries(raw)) {
+      info[id] = { ...sc, id: String(sc.id ?? id), width: sc.width / scale, height: sc.height / scale };
+    }
+    return first(info);
+  } catch {
+    return null;
+  }
+};
+
+/**
  * Màn hình phụ đầu tiên đang nối (id + kích thước dp), `null` khi chưa có / bản build không có
- * module. Cập nhật theo sự kiện nối / đổi / rút.
+ * module. Hỏi native mỗi 2 s (xem `readNative`).
  */
 export function useTvScreen(): Screen | null {
-  const [screen, setScreen] = useState<Screen | null>(() => {
-    try {
-      return first(lib?.getScreens());
-    } catch {
-      return null;
-    }
-  });
+  const [screen, setScreen] = useState<Screen | null>(() => (lib ? readNative() : null));
 
   useEffect(() => {
     if (!lib) return;
-    /*
-     * `useExternalDisplay` là hook của lib - không gọi có điều kiện được, nên tự đăng ký sự kiện
-     * qua chính hook đó trong một component con là rườm rà; đơn giản hơn: đọc lại `getScreens()`
-     * mỗi 2 s và khi có sự kiện của lib (DeviceEventEmitter, tên cố định).
-     */
     let alive = true;
     const refresh = () => {
       if (!alive) return;
-      try {
-        const s = first(lib?.getScreens());
-        setScreen((prev) => (prev?.id === s?.id && prev?.width === s?.width && prev?.height === s?.height ? prev : s));
-      } catch {
-        /* bỏ qua */
-      }
+      const s = readNative();
+      setScreen((prev) => (prev?.id === s?.id && prev?.width === s?.width && prev?.height === s?.height ? prev : s));
     };
     const timer = setInterval(refresh, 2000);
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { DeviceEventEmitter } = require('react-native') as typeof import('react-native');
-    const subs = ['@RNExternalDisplay_screenDidConnect', '@RNExternalDisplay_screenDidChange', '@RNExternalDisplay_screenDidDisconnect'].map(
-      (name) => DeviceEventEmitter.addListener(name, () => setTimeout(refresh, 50)),
-    );
     refresh();
     return () => {
       alive = false;
       clearInterval(timer);
-      subs.forEach((s) => s.remove());
     };
   }, []);
 

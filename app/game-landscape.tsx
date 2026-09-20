@@ -1835,7 +1835,11 @@ export default function GameLandscapeScreen() {
         if (!['setup', 'stake', 'category', 'timeout', 'ready', 'intro'].includes(phase)) return;
         duelSeq.current += 1;
         setBattle(null);
-        setDuelTime(null);
+        /*
+         * KHÔNG xoá `duelTime` ở đây: ghế khác gửi 55 nhanh (bot 2 s) thì 95 tới lúc máy này còn đang
+         * chiếu "It's duel time" / video → form đặt cược lóe lên trước video (đo A17 15:02 20/9).
+         * Form chỉ hiện khi cả hai tấm đó đã xong (xem chỗ render).
+         */
         setDuel({
           phase,
           attackerId: String(packet.AttackerId ?? ''),
@@ -3362,7 +3366,11 @@ export default function GameLandscapeScreen() {
      * cả phòng nhận chung "OOPS! Nobody got it right…" qua gương (K103), không phải mỗi máy
      * một câu "X, you're out of time!".
      */
-    if (current.kind !== 'race') setTurnResult({ kind: 'timeout', main: isMyTurn });
+    /*
+     * K119: câu battle hết giờ thì KHÔNG có dòng "The others are racing to answer correctly" -
+     * không ai tranh câu battle (đo A17 15:11 20/9). `main: false` = chỉ "you're out of time!".
+     */
+    if (current.kind !== 'race') setTurnResult({ kind: 'timeout', main: isMyTurn && current.kind !== 'battle' });
 
     void sendFor(current.kind)(
       { questionId: current.question.Id, answerId: EMPTY_GUID, isTimeout: true },
@@ -3488,7 +3496,8 @@ export default function GameLandscapeScreen() {
           curveBall: curveBall
             ? { message: `curve.${curveBall.type}` in en ? t(`curve.${curveBall.type}` as TranslationKey) : curveBall.message }
             : null,
-          turnResult: turnResult ? { result: turnResult, name: turnResult.name ?? me?.NickName ?? '' } : null,
+          /* "Wrong answer. Waiting for others…" của vòng đua là của riêng máy này - TV không lộ. */
+          turnResult: turnResult && turnResult.kind !== 'raceWrong' ? { result: turnResult, name: turnResult.name ?? me?.NickName ?? '' } : null,
           challenge: challenge ? { ...challenge, challengedName: challenge.challengedName || turnPlayerName } : null,
           battleDice,
           battleVideo: battleVideo ? { seq: battleVideo.seq, kind: battleVideo.kind, name: battleVideo.name } : null,
@@ -3507,7 +3516,11 @@ export default function GameLandscapeScreen() {
     <View style={styles.root}>
       {/* K118: bàn cờ chính lên TV qua màn hình phụ. Không có màn phụ thì component trả null. */}
       {tvScene && tvScreen && ExternalDisplay ? (
-        <ExternalDisplay screen={tvScreen.id} fallbackInMainScreen={false}>
+        <ExternalDisplay
+          screen={tvScreen.id}
+          fallbackInMainScreen={false}
+          style={{ position: 'absolute', left: 0, top: 0, width: tvScreen.width, height: tvScreen.height }}
+        >
           <TvBoardView width={tvScreen.width} height={tvScreen.height} scene={tvScene} />
         </ExternalDisplay>
       ) : null}
@@ -3947,7 +3960,7 @@ export default function GameLandscapeScreen() {
                 block
               />
             ) : null}
-            {duel && !question && !battleVideo ? (
+            {duel && !question && !battleVideo && !duelTime ? (
               <DuelSetupOverlay
                 state={duel}
                 meId={seat?.playerId ?? ''}

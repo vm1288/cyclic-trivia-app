@@ -112,13 +112,29 @@ export const TvBoardView = memo(function TvBoardView({
 }) {
   const t = useT();
   const s = scene;
-  const pad = Math.round(Math.min(width, height) * 0.03);
-  const sideW = Math.round(width * 0.24);
-  const boardW = width - sideW - pad * 3;
-  const boardH = height - pad * 2;
+  /*
+   * Vẽ trên KHUNG THIẾT KẾ 1000 dp rộng rồi co theo màn phụ (transform scale) - TV nào cũng cùng
+   * bố cục, chữ tỉ lệ đúng. Mirror Android dùng density của phone nên màn 720p chỉ ~455 dp, 1080p
+   * ~683 dp: không co thì cột phải chật, tên cắt "T…" (đo A17 14:53 20/9 với màn phụ giả lập).
+   */
+  const DESIGN_W = 1000;
+  const scale = width / DESIGN_W;
+  const dw = DESIGN_W;
+  const dh = Math.round(height / scale);
+  const pad = 24;
+  const sideW = 230;
+  const boardW = dw - sideW - pad * 3;
+  const boardH = dh - pad * 2;
 
   return (
     <View style={[styles.root, { width, height }]}>
+      <View
+        style={{
+          width: dw,
+          height: dh,
+          transform: [{ translateX: (width - dw) / 2 }, { translateY: (height - dh) / 2 }, { scale }],
+        }}
+      >
       <StageBackground />
 
       <View style={[styles.row, { padding: pad, gap: pad }]}>
@@ -187,7 +203,7 @@ export const TvBoardView = memo(function TvBoardView({
             />
           ) : null}
           {/* meId rỗng = khán giả: thấy trạng thái "[A]: Setting the stake…", không có form. */}
-          {s.duel && !s.question && !s.battleVideo ? (
+          {s.duel && !s.question && !s.battleVideo && !s.duelTime ? (
             <DuelSetupOverlay state={s.duel} meId="" unit={s.unitFor} onStake={noop} onCategory={noop} />
           ) : null}
           {s.duelSummary && !s.battleVideo ? <DuelSummaryOverlay data={s.duelSummary} onDone={noop} /> : null}
@@ -251,7 +267,7 @@ export const TvBoardView = memo(function TvBoardView({
         </View>
       </View>
 
-      {/* Xúc xắc, video, kết thúc ván: ở GỐC màn hình như trên phone. */}
+      {/* Xúc xắc, video, kết thúc ván: ở GỐC khung như trên phone. */}
       {s.dice ? <DiceRollOverlay value={s.dice.value} rolledBy={s.dice.rolledBy} /> : null}
       {s.battleVideo ? <BattleVideoOverlay key={s.battleVideo.seq} kind={s.battleVideo.kind} name={s.battleVideo.name} onDone={noop} /> : null}
       {s.gameOver ? (
@@ -266,6 +282,7 @@ export const TvBoardView = memo(function TvBoardView({
           onLeave={noop}
         />
       ) : null}
+      </View>
     </View>
   );
 });
