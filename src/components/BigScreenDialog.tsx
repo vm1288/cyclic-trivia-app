@@ -1,18 +1,15 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { NeonSheet, SheetButton } from './NeonSheet';
 import { useT } from '../i18n/I18nProvider';
-import { tvAvailable, useTvScreen } from '../tv/tvScreen';
 
 /**
  * "Go big!" (K107 → K118 → K120, Tony 2026-09-20) - nút "Play on the Big screen" ở phòng chờ.
  *
- * Hai đường lên TV, đường 1 là chính:
- *   1. **App TV (LG webOS, trang `/tv` của server)** - TV hiện mã 4 số, nhập vào đây → server ghép TV
- *      làm GƯƠNG của ghế chủ phòng (K120). TV tự vẽ → mượt, animation đầy đủ.
- *   2. **Mirror màn hình phụ** (K118) - Cast screen / Smart View; TV nhận `TvBoardView`; chấp nhận
- *      nhòe khi chuyển động. Báo "TV connected ✓" khi thấy màn phụ.
+ * Một đường duy nhất: **app TV (LG webOS, trang `/tv` của server)** - TV hiện mã 4 số, nhập vào đây → server
+ * ghép TV làm GƯƠNG của ghế chủ phòng (K120, GAME_RULES 15l). TV tự vẽ → mượt, animation đầy đủ.
+ * Đường mirror màn hình phụ (K118, `react-native-external-display`) đã gỡ 20/9 khuya: nhòe, và đã có bản TV.
  */
 export function BigScreenDialog({
   visible,
@@ -25,12 +22,10 @@ export function BigScreenDialog({
   onLinkTv?: (code: string) => Promise<string | null>;
 }) {
   const t = useT();
-  const tv = useTvScreen();
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [linked, setLinked] = useState(false);
-  const steps = Platform.OS === 'ios' ? ['bigScreen.ios1', 'bigScreen.ios2', 'bigScreen.ios3'] : ['bigScreen.android1', 'bigScreen.android2', 'bigScreen.android3'];
 
   useEffect(() => {
     if (!visible) {
@@ -85,23 +80,7 @@ export function BigScreenDialog({
         </>
       )}
 
-      <Text style={styles.or}>{t('bigScreen.orMirror')}</Text>
-      {!tvAvailable() ? (
-        <Text style={styles.warn}>{t('bigScreen.unavailable')}</Text>
-      ) : tv ? (
-        <Text style={styles.statusOk}>{t('bigScreen.connected')}</Text>
-      ) : (
-        <View style={styles.steps}>
-          {steps.map((k, i) => (
-            <View key={k} style={styles.step}>
-              <Text style={styles.stepNo}>{i + 1}</Text>
-              <Text style={styles.stepText}>{t(k as Parameters<typeof t>[0])}</Text>
-            </View>
-          ))}
-        </View>
-      )}
-
-      <SheetButton label={linked || tv ? t('bigScreen.done') : t('bigScreen.close')} onPress={onClose} style={styles.btn} />
+      <SheetButton label={linked ? t('bigScreen.done') : t('bigScreen.close')} onPress={onClose} style={styles.btn} />
     </NeonSheet>
   );
 }
@@ -125,21 +104,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   linkBtn: { minWidth: 120 },
-  or: { marginTop: 4, fontSize: 11.5, fontWeight: '700', color: 'rgba(200,212,240,0.65)', textAlign: 'center', letterSpacing: 0.5 },
-  steps: { alignSelf: 'stretch', gap: 4 },
-  step: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  stepNo: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    textAlign: 'center',
-    lineHeight: 20,
-    fontSize: 11,
-    fontWeight: '900',
-    color: '#062A10',
-    backgroundColor: '#3CE87A',
-  },
-  stepText: { flex: 1, fontSize: 12, lineHeight: 16, color: 'rgba(230,236,255,0.9)' },
   status: { alignSelf: 'stretch', alignItems: 'center', gap: 4, paddingVertical: 4 },
   statusOk: { fontSize: 16, fontWeight: '800', color: '#3CE87A', textAlign: 'center' },
   statusSub: { fontSize: 13, color: 'rgba(200,212,240,0.8)', textAlign: 'center' },
