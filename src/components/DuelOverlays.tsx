@@ -375,7 +375,12 @@ export type DuelSummaryData = {
 };
 
 const INTRO_MS = 5000;
-const PER_QUESTION_MS = 4000;
+/*
+ * K122 (Tony 21/9): mỗi câu chiếu HAI nhịp - 5 s hiện câu + lựa chọn hai bên (chưa lộ đáp án đúng), rồi 4 s
+ * công bố đáp án đúng, ✓/✗ và cộng điểm cho người đúng. Server đợi `5 + 9n + 6` s (PlayerBattleStartHandler).
+ */
+const PICK_MS = 5000;
+const REVEAL_MS = 4000;
 const RESULT_MS = 4000;
 
 export function DuelSummaryOverlay({ data, onDone }: { data: DuelSummaryData; onDone: () => void }) {
@@ -384,25 +389,29 @@ export function DuelSummaryOverlay({ data, onDone }: { data: DuelSummaryData; on
   /* Câu phụ: chỉ chiếu lại câu thứ tư (index 3), không mở màn lại. */
   const startIndex = data.isTieBreaker ? Math.min(3, Math.max(0, data.questions.length - 1)) : 0;
   const [step, setStep] = useState<'intro' | number | 'result'>(data.isTieBreaker ? startIndex : 'intro');
+  /* Nhịp hai của một câu: đã công bố đáp án đúng chưa. */
+  const [revealed, setRevealed] = useState(false);
   const done = useRef(onDone);
   done.current = onDone;
 
   useEffect(() => {
     setStep(data.isTieBreaker ? startIndex : 'intro');
+    setRevealed(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.seq]);
 
   useEffect(() => {
-    let ms = PER_QUESTION_MS;
+    let ms = revealed ? REVEAL_MS : PICK_MS;
     if (step === 'intro') ms = INTRO_MS;
     if (step === 'result') ms = RESULT_MS;
     const id = setTimeout(() => {
-      if (step === 'intro') setStep(startIndex);
+      if (step === 'intro') { setStep(startIndex); setRevealed(false); }
       else if (step === 'result') done.current();
-      else setStep(step + 1 < data.questions.length ? step + 1 : 'result');
+      else if (!revealed) setRevealed(true);
+      else { setRevealed(false); setStep(step + 1 < data.questions.length ? step + 1 : 'result'); }
     }, ms);
     return () => clearTimeout(id);
-  }, [step, startIndex, data.questions.length]);
+  }, [step, revealed, startIndex, data.questions.length]);
 
   const count = (list: string[], upTo: number) =>
     list.reduce((n, id, i) => (i <= upTo && data.correct[i] && same(id, data.correct[i]) ? n + 1 : n), 0);
@@ -449,6 +458,8 @@ export function DuelSummaryOverlay({ data, onDone }: { data: DuelSummaryData; on
   const a = pick(data.challengeAnswers);
   const b = pick(data.incumbentAnswers);
   const label = step >= 3 ? t('battle.tieBreaker') : t('duel.question', { index: String(step + 1) });
+  /* Điểm: nhịp chọn chỉ tính tới câu TRƯỚC, nhịp công bố mới cộng câu này (Tony: "công bố đáp án đúng và cộng điểm"). */
+  const scoreUpTo = revealed ? step : step - 1;
 
   return (
     <View style={[styles.root, styles.rootBlock]} pointerEvents="auto">
@@ -460,27 +471,43 @@ export function DuelSummaryOverlay({ data, onDone }: { data: DuelSummaryData; on
         </Text>
         <View style={styles.replayAnswers}>
           {(q?.Answers ?? []).map((an, i) => {
-            const ok = same(an.Id, correctId);
+            const ok = revealed && same(an.Id, correctId);
+            /* Nhịp chọn: đánh dấu đáp án mỗi người đã chọn (viền màu của họ), chưa nói đúng sai. */
+            const pickedA = a.idx === i;
+            const pickedB = b.idx === i;
             return (
-              <View key={an.Id} style={[styles.replayAnswer, ok && styles.replayAnswerOk]}>
+              <View
+                key={an.Id}
+                style={[
+                  styles.replayAnswer,
+                  !revealed && (pickedA || pickedB) && styles.replayAnswerPicked,
+                  ok && styles.replayAnswerOk,
+                ]}
+              >
                 <Text style={[styles.replayLetter, ok && { color: '#062A10' }]}>{letter(i)}</Text>
                 <Text style={[styles.replayContent, ok && { color: '#062A10' }]} numberOfLines={2}>
                   {an.Content}
                 </Text>
+                {pickedA || pickedB ? (
+                  <View style={styles.replayPicks}>
+                    {pickedA ? <Text style={[styles.replayPick, { color: ok ? '#062A10' : GOLD }]}>{data.challengeName}</Text> : null}
+                    {pickedB ? <Text style={[styles.replayPick, { color: ok ? '#062A10' : boardColors.purple }]}>{data.incumbentName}</Text> : null}
+                  </View>
+                ) : null}
               </View>
             );
           })}
         </View>
         <View style={styles.boxes}>
-          <PlayerBox name={data.challengeName} letter={a.idx >= 0 ? letter(a.idx) : '–'} ok={a.ok} score={count(data.challengeAnswers, step)} color={GOLD} />
-          <PlayerBox name={data.incumbentName} letter={b.idx >= 0 ? letter(b.idx) : '–'} ok={b.ok} score={count(data.incumbentAnswers, step)} color={boardColors.purple} />
+          <PlayerBox name={data.challengeName} letter={a.idx >= 0 ? letter(a.idx) : '–'} ok={a.ok} revealed={revealed} score={count(data.challengeAnswers, scoreUpTo)} color={GOLD} />
+          <PlayerBox name={data.incumbentName} letter={b.idx >= 0 ? letter(b.idx) : '–'} ok={b.ok} revealed={revealed} score={count(data.incumbentAnswers, scoreUpTo)} color={boardColors.purple} />
         </View>
       </Enter>
     </View>
   );
 }
 
-const PlayerBox = ({ name, letter, ok, score, color }: { name: string; letter: string; ok: boolean; score: number; color: string }) => {
+const PlayerBox = ({ name, letter, ok, revealed, score, color }: { name: string; letter: string; ok: boolean; revealed: boolean; score: number; color: string }) => {
   const t = useT();
   return (
     <View style={[styles.box, { borderColor: color }]}>
@@ -489,7 +516,8 @@ const PlayerBox = ({ name, letter, ok, score, color }: { name: string; letter: s
       </Text>
       <View style={styles.boxRow}>
         <Text style={styles.boxLetter}>{letter}</Text>
-        <Text style={[styles.boxMark, { color: ok ? GREEN : RED }]}>{ok ? '✓' : '✗'}</Text>
+        {/* ✓/✗ chỉ lộ ở nhịp công bố. */}
+        {revealed ? <Text style={[styles.boxMark, { color: ok ? GREEN : RED }]}>{ok ? '✓' : '✗'}</Text> : null}
       </View>
       <Text style={styles.boxScore}>
         {t('duel.score')} {score}
@@ -766,6 +794,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(8,12,40,0.7)',
   },
   replayAnswerOk: { backgroundColor: GREEN, borderColor: GREEN },
+  replayAnswerPicked: { borderColor: 'rgba(255,255,255,0.7)', backgroundColor: 'rgba(255,255,255,0.08)' },
+  replayPicks: { marginLeft: 'auto', alignItems: 'flex-end', paddingLeft: 8 },
+  replayPick: { fontSize: 10.5, fontWeight: '800' },
   replayLetter: { width: 16, fontSize: 12, fontWeight: '900', color: BLUE },
   replayContent: { flex: 1, fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
   boxes: { flexDirection: 'row', justifyContent: 'center', gap: 14, marginTop: 'auto' },

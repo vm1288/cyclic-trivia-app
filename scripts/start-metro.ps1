@@ -69,6 +69,8 @@ if ($Visible) {
     # ⚠️ Danh doi: cua so nay khong ghi ra $Log, nen sau khi dong la mat sach.
     # Muon vua nhin vua luu thi bo -Visible roi `Get-Content $Log -Wait`.
     Write-Host "`nKhoi dong Metro (cua so rieng)..." -ForegroundColor Cyan
+# Metro chet 'JavaScript heap out of memory' sau ~2 gio (21/9) - cho Node 4 GB heap.
+$env:NODE_OPTIONS = '--max-old-space-size=4096'
     Start-Process -FilePath 'cmd.exe' `
         -ArgumentList '/k npx expo start --port 8081' `
         -WorkingDirectory $AppDir
