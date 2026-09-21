@@ -43,7 +43,8 @@ const ICON_DP = 240;
  * Chữ "Cyclic" trong icon chạm đáy ở ~96 % chiều cao file (512 px, bbox tới 490)
  * → 0.96 × 240 − 120 = +110 dp dưới tâm. Tagline bắt đầu ngay dưới đó.
  */
-const TAGLINE_TOP_DP = 100;
+/* Tony 21/9: "sát với logo, cho cách ra một xíu" → 100 → 122. */
+const TAGLINE_TOP_DP = 122;
 const FADE_IN_MS = 350;
 /** Tony (09-16): giữ ít nhất 3 giây - chuyển nhanh quá thì splash vô nghĩa. */
 const HOLD_MS = 3000;

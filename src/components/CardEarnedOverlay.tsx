@@ -1,6 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { RewardGlyph } from './RewardGlyph';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 
 import { CARD_STYLES, type CardKey } from './GameBoardParts';
@@ -40,7 +41,7 @@ export function CardEarnedOverlay({ card, name, ms, onDone }: { card: CardKey; n
           end={{ x: 1, y: 1 }}
           style={[StyleSheet.absoluteFill, styles.fill, { borderColor: style.accent, boxShadow: `0 0 28px ${style.glow}` }]}
         />
-        <Text style={styles.stars}>★ ★ ★ ★ ★</Text>
+        <View style={styles.stars}>{[0, 1, 2, 3, 4].map((i) => <RewardGlyph key={i} size={16} color="#FFC61E" />)}</View>
         <Text style={styles.title}>{t('cards.earnedTitle')}</Text>
         <Text style={styles.sub}>{t('cards.earnedBody', { name })}</Text>
         <View style={styles.glyph}>
@@ -56,7 +57,7 @@ const styles = StyleSheet.create({
   root: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', zIndex: 40 },
   card: { width: 300, paddingVertical: 18, paddingHorizontal: 22, alignItems: 'center', borderRadius: 20 },
   fill: { borderRadius: 20, borderWidth: 1.6 },
-  stars: { color: '#FFC61E', fontSize: 16, letterSpacing: 4, marginBottom: 6 },
+  stars: { flexDirection: 'row', gap: 6, marginBottom: 6 },
   title: { color: '#FFFFFF', fontSize: 15, fontWeight: '800', letterSpacing: 1.2 },
   glyph: { marginTop: 10, marginBottom: 8 },
   name: { fontSize: 22, fontWeight: '900', letterSpacing: 1.6 },

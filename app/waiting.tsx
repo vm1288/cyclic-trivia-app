@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { useKeepAwake } from 'expo-keep-awake';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,6 +25,8 @@ import { neon, text } from '../src/theme/colors';
  */
 
 export default function WaitingScreen() {
+  /* K121 (Tony 21/9): màn không tự tắt khi đang chơi / chờ ván - `expo-keep-awake` (chỉ giữ khi màn này còn mount). */
+  useKeepAwake();
   const router = useRouter();
   const player = usePlayer();
   const t = useT();

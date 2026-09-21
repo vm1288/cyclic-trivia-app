@@ -62,7 +62,8 @@ export default function SeatScreen() {
   const [preview, setPreview] = useState<GameCharacter | null>(null);
   /** K111: chạm ô TAKEN, hoặc server trả `character_taken` → tấm "Another player has already chosen…". */
   const [takenPopup, setTakenPopup] = useState(false);
-  const [gender, setGender] = useState<'male' | 'female'>('male');
+  /* Tony 21/9: bỏ chọn giới tính - server vẫn đòi trường Gender nên gửi cố định 'male'. */
+  const gender = 'male' as const;
   const [taken, setTaken] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -196,25 +197,6 @@ export default function SeatScreen() {
             editable={!busy}
           />
 
-          <View style={styles.genderRow}>
-            {(['male', 'female'] as const).map((option) => {
-              const active = gender === option;
-              return (
-                <Pressable
-                  key={option}
-                  onPress={() => setGender(option)}
-                  disabled={busy}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: active }}
-                  style={[styles.genderCell, active && styles.genderCellOn]}
-                >
-                  <Text style={[styles.genderText, active && styles.genderTextOn]}>
-                    {t(option === 'male' ? 'seat.male' : 'seat.female')}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
         </>
       }
     >
@@ -294,23 +276,6 @@ export default function SeatScreen() {
 const styles = StyleSheet.create({
   hint: { color: text.muted, fontSize: 13, lineHeight: 19, textAlign: 'center' },
 
-  genderRow: { flexDirection: 'row', gap: 10 },
-  genderCell: {
-    flex: 1,
-    height: 44,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: 'rgba(140,160,210,0.35)',
-    backgroundColor: 'rgba(10,13,34,0.8)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  genderCellOn: {
-    borderColor: neon.blue.stroke,
-    boxShadow: `0 0 12px rgba(${neon.blue.rgb},0.45)`,
-  },
-  genderText: { fontSize: 14, fontWeight: '700', color: 'rgba(198,212,240,0.72)' },
-  genderTextOn: { color: text.primary },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
   /*

@@ -1,4 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
+import { useKeepAwake } from 'expo-keep-awake';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -105,6 +106,8 @@ const PANEL_ICON_MIN = 132;
 const PANEL_LABEL_MIN = 112;
 
 export default function LobbyScreen() {
+  /* K121 (Tony 21/9): màn không tự tắt khi đang chơi / chờ ván - `expo-keep-awake` (chỉ giữ khi màn này còn mount). */
+  useKeepAwake();
   const params = useLocalSearchParams<{ gameId?: string }>();
   const router = useRouter();
   const license = useLicense();

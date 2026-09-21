@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, Text, View } from 'react-native';
+import { RewardGlyph } from './RewardGlyph';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -266,7 +267,7 @@ export function TurnResultOverlay({
           </Text>
           {/* Sao chỉ hiện khi thật sự được cộng - xem `earnedStar`. */}
           {(result.kind === 'correct' || result.kind === 'challengePass') && result.earnedStar ? (
-            <Text style={styles.star}>★</Text>
+            <RewardGlyph size={20} />
           ) : null}
         </View>
         ) : null}
@@ -349,5 +350,4 @@ const styles = StyleSheet.create({
   extra: { fontSize: 13, color: 'rgba(226,232,255,0.85)', textAlign: 'center', marginTop: 2 },
   /* Lời chào lượt kế gắn vào tấm - cùng xanh lá với tấm chào lượt đứng riêng. */
   nextTurn: { color: '#7CF29A', fontWeight: '700' },
-  star: { fontSize: 20, lineHeight: 26, color: '#FFD23F' },
 });

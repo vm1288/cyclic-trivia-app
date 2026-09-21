@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { RewardGlyph } from './RewardGlyph';
 import Animated, {
   Easing,
   runOnJS,
@@ -81,7 +82,7 @@ export function FlyingReward({ from, to, reward, onDone }: Props) {
   return (
     <Animated.View style={[styles.root, style]} pointerEvents="none">
       {reward === 'star' ? (
-        <Text style={styles.star}>★</Text>
+        <RewardGlyph size={40} glow />
       ) : (
         <View style={[styles.card, { borderColor: CARD_STYLES[reward].glow, backgroundColor: CARD_STYLES[reward].tint }]}>
           {(() => {
@@ -108,14 +109,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 40,
-  },
-  star: {
-    fontSize: 40,
-    lineHeight: 48,
-    color: '#FFD23F',
-    textShadowColor: 'rgba(255,210,63,0.9)',
-    textShadowRadius: 16,
-    textShadowOffset: { width: 0, height: 0 },
   },
   card: {
     width: SIZE,

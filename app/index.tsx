@@ -36,7 +36,7 @@ import { StageBackground } from '../src/components/StageBackground';
 import { useT } from '../src/i18n/I18nProvider';
 import { useLicense } from '../src/session/LicenseSession';
 import { usePlayer } from '../src/session/PlayerSession';
-import { innerGlow, neon, outerGlow, tagline, text } from '../src/theme/colors';
+import { innerGlow, neon, outerGlow, text } from '../src/theme/colors';
 
 /**
  * Logo dùng MỘT file lockup (hình + chữ "Cyclic" + tagline), vì logo chính thức
@@ -47,15 +47,17 @@ import { innerGlow, neon, outerGlow, tagline, text } from '../src/theme/colors';
  * Thay logo = ghi đè assets/brand/logo-lockup.png. PHẢI có nền trong suốt;
  * file nền trắng sẽ hiện thành khối trắng trên nền tối.
  */
-const LOGO_LOCKUP = require('../assets/brand/logo-lockup.png');
-
-/**
- * Đặt `true` khi file lockup đã bao gồm sẵn dòng PLAY • THINK • WIN, để khỏi
- * vẽ chồng thêm một dòng nữa bằng code.
- *
- * Chỉ áp cho logo Cyclic mặc định. Logo sponsor thì luôn đứng một mình.
+/*
+ * Tony 21/9: bỏ dòng PLAY • THINK • WIN nướng trong ảnh, thay bằng câu của splash "Games for family,
+ * friends and fun!" vẽ bằng code. `logo-lockup-notagline.png` = `logo-lockup.png` cắt bỏ dải chữ dưới
+ * (1122×1128, cắt ở y=1128 - dải tagline nằm 1137..1192). Đổi logo thì cắt lại y như vậy.
  */
-const LOCKUP_INCLUDES_TAGLINE = true;
+const LOGO_LOCKUP = require('../assets/brand/logo-lockup-notagline.png');
+/** Cùng câu với BrandSplash.TAGLINE - đổi một là đổi cả hai. */
+const HOME_TAGLINE = 'Games for family, friends and fun!';
+
+/** Tagline chỉ đi với logo Cyclic mặc định; logo sponsor đứng một mình. Ảnh lockup KHÔNG còn chữ (xem trên). */
+const LOCKUP_INCLUDES_TAGLINE = false;
 
 /** Ba nút dưới không đổi theo trạng thái license. */
 const MENU = [
@@ -419,15 +421,7 @@ export default function HomeScreen() {
             ) : null}
 
             {!expired && showDefaultLockup && !LOCKUP_INCLUDES_TAGLINE && (
-              <View style={styles.tagline}>
-                <View style={styles.taglineRule} />
-                <Text style={[styles.taglineWord, { color: tagline.play }]}>PLAY</Text>
-                <Text style={styles.taglineDot}>•</Text>
-                <Text style={[styles.taglineWord, { color: tagline.think }]}>THINK</Text>
-                <Text style={styles.taglineDot}>•</Text>
-                <Text style={[styles.taglineWord, { color: tagline.win }]}>WIN</Text>
-                <View style={styles.taglineRule} />
-              </View>
+              <Text style={styles.tagline}>{HOME_TAGLINE}</Text>
             )}
           </View>
 
@@ -612,10 +606,19 @@ const styles = StyleSheet.create({
   pressed: { transform: [{ scale: 0.97 }] },
   logo: { width: '100%' },
 
-  tagline: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
-  taglineWord: { fontSize: 14, fontWeight: '800', letterSpacing: 2.5 },
-  taglineDot: { color: text.muted, fontSize: 12 },
-  taglineRule: { width: 26, height: 1, backgroundColor: 'rgba(120,180,255,0.55)' },
+  /* Cùng kiểu chữ với BrandSplash.tagline (cỡ nhỏ hơn vì logo Home thấp hơn). */
+  tagline: {
+    marginTop: 10,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    color: '#F2F6FF',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowRadius: 8,
+    textShadowOffset: { width: 0, height: 1 },
+  },
 
   /*
    * Nút phụ: viền sáng bạc, nền tối, quầng sáng nhẹ.

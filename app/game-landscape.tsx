@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useKeepAwake } from 'expo-keep-awake';
 import {
   ActivityIndicator,
   AppState,
@@ -61,6 +62,7 @@ import {
   type DuelSetupState,
   type DuelSummaryData,
 } from '../src/components/DuelOverlays';
+import { RewardContext, rewardKindFor } from '../src/components/RewardGlyph';
 import { TurnResultOverlay, type TurnResult } from '../src/components/TurnResultOverlay';
 import { RaceNobodyOverlay } from '../src/components/RaceNobodyOverlay';
 import { RaceWinnerOverlay } from '../src/components/RaceWinnerOverlay';
@@ -231,6 +233,8 @@ type ActiveQuestion = {
 };
 
 export default function GameLandscapeScreen() {
+  /* K121 (Tony 21/9): màn không tự tắt khi đang chơi / chờ ván - `expo-keep-awake` (chỉ giữ khi màn này còn mount). */
+  useKeepAwake();
   const player = usePlayer();
   const license = useLicense();
   const router = useRouter();
@@ -1289,6 +1293,14 @@ export default function GameLandscapeScreen() {
             /* Nhãn "X, please indicate…" còn chờ thì bỏ - đã chấm xong (K102). */
             setTurnBanner((prev) => (prev?.kind === 'notice' ? null : prev));
             const tries = num('MaxTries');
+            /*
+             * K121 (Tony 21/9): tấm của CHÍNH MÌNH thì không mang `name` - như câu đúng lượt thường:
+             * dòng phụ là "Your second roll please", và lời chào lượt KHÔNG gắn thêm vào tấm (trước đây
+             * hiện cả "It's Amy's second roll" lẫn "Amy, your second roll please" trên máy Amy).
+             * Server mới gửi `PlayerId`; server cũ thì so tên.
+             */
+            const isMine = str('PlayerId') ? same(str('PlayerId'), seat?.playerId ?? '') : !!me && str('Nickname') === me.NickName;
+            const who = isMine ? undefined : str('Nickname');
             const result: TurnResult =
               viewName === 'MainTenSecondChallengePass'
                 ? {
@@ -1297,9 +1309,9 @@ export default function GameLandscapeScreen() {
                     earnedStar: true,
                     /* "Your second/third roll please" - chỉ khi còn lượt tung. */
                     rollAgain: tries === 1 ? 2 : tries === 2 ? 3 : undefined,
-                    name: str('Nickname'),
+                    name: who,
                   }
-                : { kind: 'challengeFail', name: str('Nickname') };
+                : { kind: 'challengeFail', name: who };
             const showing = turnResultRef.current;
             if (showing ? showing.kind !== 'late' : raceWinnerRef.current || earnedCardRef.current) {
               pendingOtherResult.current = result;
@@ -3430,6 +3442,7 @@ export default function GameLandscapeScreen() {
   }
 
   return (
+    <RewardContext.Provider value={rewardKindFor(boardGameId)}>
     <View style={styles.root}>
       {/*
         Nền riêng cho chiều NGANG - `main-background-landscape.png`, bản vẽ
@@ -3889,7 +3902,7 @@ export default function GameLandscapeScreen() {
 
             {turnBanner && !raceWinner && !turnResult && !earnedCard && !dice && !gameOver ? (
               <View style={[styles.turnBanner, turnBanner.mine && styles.turnBannerMine]} pointerEvents="none">
-                <Text style={[styles.turnBannerText, turnBanner.mine && styles.turnBannerTextMine]} numberOfLines={2}>
+                <Text style={[styles.turnBannerText, turnBanner.mine && styles.turnBannerTextMine, turnBanner.kind === 'notice' && styles.turnBannerNotice]}>
                   {turnBanner.text}
                 </Text>
               </View>
@@ -4357,6 +4370,7 @@ export default function GameLandscapeScreen() {
         />
       ) : null}
     </View>
+    </RewardContext.Provider>
   );
 }
 
@@ -4972,6 +4986,8 @@ const styles = StyleSheet.create({
   },
   turnBannerText: { fontSize: 20, fontWeight: '800', letterSpacing: 0.4, color: '#9FD8FF', textAlign: 'center' },
   turnBannerTextMine: { color: '#7CF59A' },
+  /* Nhãn dài ("X, please indicate on your phone…", Tony 21/9: đừng cắt "…") - chữ nhỏ hơn, không giới hạn dòng. */
+  turnBannerNotice: { fontSize: 17, lineHeight: 23 },
 
   notice: {
     position: 'absolute',

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { RewardGlyph } from './RewardGlyph';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -371,29 +372,11 @@ export function countCards(cards: GameCard[]): Record<CardKey, number> {
 
 /* ── người chơi ────────────────────────────────────── */
 
+/** Năm sao / bóng (theo bộ bàn cờ, xem RewardGlyph). */
 export const Stars = ({ filled, size = 10 }: { filled: number; size?: number }) => (
   <View style={{ flexDirection: 'row' }}>
     {[0, 1, 2, 3, 4].map((i) => (
-      <Text
-        key={i}
-        style={{
-          fontSize: size,
-          /*
-           * 1.45 chứ không phải 1.2: glyph ★ thò xuống dưới đường cơ sở, để
-           * lineHeight sát quá thì bị cắt mất chân - thấy rõ ở ô người chơi khi
-           * tăng cỡ sao lên.
-           */
-          lineHeight: size * 1.45,
-          /*
-           * Chưa có: XÁM SÁNG, cùng tông với chấm rỗng của thẻ bài - vàng mờ
-           * dễ bị nhìn thành "sao đã có nhưng tối", xám thì rõ là chưa có.
-           * Đã có: vàng sáng hơn amber gốc cho nổi trên nền tối.
-           */
-          color: i < filled ? '#FFD23F' : 'rgba(200,215,255,0.30)',
-        }}
-      >
-        ★
-      </Text>
+      <RewardGlyph key={i} size={size} filled={i < filled} />
     ))}
   </View>
 );
