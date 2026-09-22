@@ -39,3 +39,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# K124: upload keystore + mat khau Play - khong bao gio commit
+keys/
