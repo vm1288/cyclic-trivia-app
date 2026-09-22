@@ -75,6 +75,8 @@ export default function PurchaseScreen() {
   /** K112: TRY {GAME} → tấm giải thích dùng thử (bước 2 của FreeTrialDialog) → PROCEED → mua. */
   const [trialFor, setTrialFor] = useState<{ info: TrialInfo; plan: StorePlan } | null>(null);
   const [trialNotice, setTrialNotice] = useState<string | null>(null);
+  /** `onPurchaseError` được tạo trước `restore`; giữ qua ref để gọi lại (K126). */
+  const restoreRef = useRef<() => Promise<void>>(async () => {});
   /** K112: mua xong + server kích hoạt luôn → "You're ready to play!" (logo, NEW MATCH / JOIN A MATCH). */
   const [ready, setReady] = useState<StoreGame | null>(null);
   /** Chặn xử lý cùng một purchase hai lần (store phát lại khi nối lại). */
@@ -107,7 +109,11 @@ export default function PurchaseScreen() {
 
       if (!result.isSuccess) {
         handled.current.delete(key);
-        setNotice(result.kind === 'rejected' ? t('purchase.failed') : t('purchase.notConfirmed'));
+        const msg = result.kind === 'rejected' ? t('purchase.failed') : t('purchase.notConfirmed');
+        setNotice(msg);
+        // K126: tấm dùng thử KHÔNG tự đóng khi mua hỏng - thiếu dòng này thì người dùng thấy
+        // PROCEED hết quay rồi đứng im, lời báo lỗi nằm ở màn phía sau (Tony: "stuck tại Proceed").
+        setTrialNotice(msg);
         return;
       }
       try {
@@ -130,6 +136,15 @@ export default function PurchaseScreen() {
       },
       onPurchaseError: (error) => {
         setBusySku(null);
+        /*
+         * K126: đã có gói còn hiệu lực trên tài khoản store (mua rồi mà server chưa đổi ra mã,
+         * hoặc cài lại app) - store từ chối mua lần nữa. Đừng bắt người dùng tự tìm "Restore
+         * purchases": lấy luôn giao dịch đang có và gửi lên server, cùng đường với nút đó.
+         */
+        if (String(error.code ?? '').toLowerCase().includes('already')) {
+          void restoreRef.current();
+          return;
+        }
         // Người dùng tự đóng sheet của store thì không phải lỗi.
         const cancelled = String(error.code ?? '').toLowerCase().includes('cancel');
         const msg = cancelled ? t('purchase.cancelled') : (error.message ?? t('purchase.failed'));
@@ -288,6 +303,7 @@ export default function PurchaseScreen() {
    */
   const restore = async () => {
     setNotice(null);
+    setTrialNotice(null);
     setBusySku('restore');
     try {
       await getAvailablePurchases();
@@ -295,6 +311,7 @@ export default function PurchaseScreen() {
       setBusySku(null);
     }
   };
+  restoreRef.current = restore;
   useEffect(() => {
     if (busySku !== 'restore' && availablePurchases.length === 0) return;
     if (availablePurchases.length === 0) {

@@ -1,0 +1,5 @@
+adb connect 127.0.0.1:5555
+
+adb -s 127.0.0.1:5555 install -r E:\Projects\CyclicTriviaApp\android\app\build\outputs\apk\debug\app-debug.apk
+
+powershell -ExecutionPolicy Bypass -File E:\Projects\CyclicTriviaApp\scripts\start-metro.ps1 -Device 127.0.0.1:5555
