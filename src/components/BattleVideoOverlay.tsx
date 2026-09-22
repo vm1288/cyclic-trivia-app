@@ -21,10 +21,15 @@ const GIVE_UP_MS = 12000;
  */
 const STALL_MS = 4000;
 
+/*
+ * K123 (Tony 22/9): video tải lên từ dashboard "Battle Videos" nằm ở wwwroot của SERVER, CDN không có
+ * (hoặc có sau) → SERVER là nguồn chính, CDN là dự phòng (đảo lại so với K61). Mọi ảnh/bàn cờ vốn đã lấy
+ * từ server nên không thêm phụ thuộc mới; CDN chỉ còn để cứu khi server chậm hoặc thiếu file cũ.
+ */
 export function battleVideoUrl(kind: 'battle' | 'winner', name: string) {
   return {
-    primary: `${CDN}/images/${kind}/${name}`,
-    fallback: `${API_BASE_URL}/images/${kind}/${name}`,
+    primary: `${API_BASE_URL}/images/${kind}/${name}`,
+    fallback: `${CDN}/images/${kind}/${name}`,
   };
 }
 
