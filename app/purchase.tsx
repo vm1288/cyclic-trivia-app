@@ -301,6 +301,15 @@ export default function PurchaseScreen() {
    * Restore: cài lại app / máy mới cùng tài khoản store. Store trả các giao dịch còn
    * hiệu lực; gửi từng cái lên server - token đã có thì server trả lại đúng mã cũ.
    */
+  /*
+   * K126 (Tony 22/9): CHỈ store biết tài khoản còn được dùng thử hay không - Play bỏ hẳn offer
+   * `free-trial` khỏi danh sách khi tài khoản đã tiêu nó. Server chỉ biết licence của CHÍNH NÓ
+   * (`trialUsed`), nên thiếu kiểm này thì app vẫn mời "7-day free trial" rồi Play tính tiền ngay.
+   * Store chưa nối được (dev-client, máy không có Play) thì không kết luận gì - giữ nguyên nút TRY.
+   */
+  const storeTrialGone = (productId: string) =>
+    connected && storeBySku.has(productId) && trialOffer(storeBySku.get(productId))?.paymentMode !== 'free-trial';
+
   const restore = async () => {
     setNotice(null);
     setTrialNotice(null);
@@ -486,7 +495,7 @@ export default function PurchaseScreen() {
             : ownedGame(openGame)
               ? { kind: 'newMatch', onPress: () => void newMatchFor(openGame) }
               : openGame.available && openPlan
-                ? !openGame.trialUsed && openGame.trialDays > 0
+                ? !openGame.trialUsed && openGame.trialDays > 0 && !storeTrialGone(openPlan.productId)
                   ? {
                       // K112 (ảnh mẫu 2): chưa dùng thử → TRY {GAME} → tấm giải thích → PROCEED → mua có dùng thử.
                       kind: 'try',
@@ -504,7 +513,16 @@ export default function PurchaseScreen() {
                 : { kind: 'none' }
         }
         storePrice={openPlan ? (storeBySku.get(openPlan.productId)?.displayPrice ?? null) : null}
-        notice={openGame && !ownedGame(openGame) && openGame.available && openPlan && (!connected || !storeBySku.has(openPlan.productId)) ? t('purchase.storeOffline') : notice}
+        notice={
+          openGame && !ownedGame(openGame) && openGame.available && openPlan
+            ? !connected || !storeBySku.has(openPlan.productId)
+              ? t('purchase.storeOffline')
+              : // K126: đáng lẽ được dùng thử theo server, nhưng store nói tài khoản đã tiêu offer.
+                !openGame.trialUsed && openGame.trialDays > 0 && storeTrialGone(openPlan.productId)
+                ? t('purchase.trialUsedStore')
+                : notice
+            : notice
+        }
         onClose={() => setOpenGame(null)}
       >
         {__DEV__ && openPlan && openGame && !ownedGame(openGame) ? (
