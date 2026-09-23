@@ -119,6 +119,12 @@ export function GameInfoDialog({
               ) : cta.kind === 'none' ? null : (
                 <SheetButton label={t('games.comingSoon')} variant="ghost" disabled style={styles.cta} />
               )}
+              {/*
+                K128: lời nhắn đi kèm NÚT (store ngoại tuyến, tài khoản đã tiêu dùng thử…) phải nằm
+                ngay dưới nút. Trước đây nó ở cuối cột mô tả bên phải, rơi dưới tầm nhìn - đo trên A17
+                23/9 phải cuộn mới thấy, coi như không có.
+              */}
+              {notice ? <Text style={styles.notice}>{notice}</Text> : null}
               {children}
             </View>
             <ScrollView style={[styles.textCol, { maxHeight: Math.max(220, winH * 0.56) }]} contentContainerStyle={styles.textInner}>
@@ -133,7 +139,6 @@ export function GameInfoDialog({
                 {'\n'}
                 {info.ageRange}
               </Text>
-              {notice ? <Text style={styles.notice}>{notice}</Text> : null}
             </ScrollView>
           </View>
     </NeonSheet>
@@ -156,5 +161,5 @@ const styles = StyleSheet.create({
   textCol: { flex: 1 },
   textInner: { gap: 10, paddingVertical: 4 },
   desc: { fontSize: 14, lineHeight: 20, color: '#FFFFFF' },
-  notice: { fontSize: 13.5, lineHeight: 19, color: '#FFD166' },
+  notice: { fontSize: 13, lineHeight: 18, color: '#FFD166', marginTop: 10, textAlign: 'center' },
 });
