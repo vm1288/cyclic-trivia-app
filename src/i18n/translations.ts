@@ -345,7 +345,10 @@ export const en = {
   /** Tấm thưởng thẻ giữa bàn cờ (K86). */
   /** Chép nguyên văn web `CardInfo.cshtml` (K87). */
   'cards.earnedTitle': 'Congratulations!',
-  'cards.earnedBody': '{name}, you’ve collected 5 stars and can now claim a special card!',
+  /* K134 (Tony 23/9): "stars" đi theo bàn cờ - CricTriv là bóng cricket (xem RewardGlyph); "special card" -> "help card". */
+  'cards.earnedBody': '{name}, you’ve collected 5 {unit} and can now claim a help card!',
+  'cards.unitStar': 'stars',
+  'cards.unitBall': 'balls',
   'clock.rollsLeft': '{n} rolls left',
   'clock.oversLeft': '{n} overs left',
   'waiting.overs': '{n} overs',
@@ -426,7 +429,8 @@ export const en = {
   'result.wrongBodyOthers': 'Get ready — you answer next!',
   'result.raceWrong': 'Wrong answer.',
   'result.raceWrongBody': 'Waiting for others...',
-  'result.timeout': "{name}, you're out of time!",
+  /* K134: tấm này người KHÁC xem, nên nói ở ngôi thứ ba (Tony 23/9). */
+  'result.timeout': '{name} is out of time!',
   'result.late': 'got it right first!',
   'result.lateBy': '{name}',
 
@@ -1130,7 +1134,9 @@ const vi: Record<TranslationKey, string> = {
   'cards.usedBy': '{name} dùng {card}',
   'cards.earned': 'Đủ 5 sao! Bạn được thưởng {card}',
   'cards.earnedTitle': 'Chúc mừng!',
-  'cards.earnedBody': '{name}, bạn đã gom đủ 5 sao và được nhận một lá bài đặc biệt!',
+  'cards.earnedBody': '{name}, bạn đã gom đủ 5 {unit} và được nhận một lá bài trợ giúp!',
+  'cards.unitStar': 'sao',
+  'cards.unitBall': 'quả bóng',
   'clock.rollsLeft': 'còn {n} lượt tung',
   'clock.oversLeft': 'còn {n} over',
   'waiting.overs': '{n} over',
@@ -1185,7 +1191,7 @@ const vi: Record<TranslationKey, string> = {
   'result.wrongBodyOthers': 'Sẵn sàng — tới lượt bạn trả lời!',
   'result.raceWrong': 'Sai rồi.',
   'result.raceWrongBody': 'Đang chờ người khác...',
-  'result.timeout': '{name}, bạn hết giờ rồi!',
+  'result.timeout': '{name} đã hết giờ!',
   'result.late': 'chốt câu trước rồi!',
   'result.lateBy': '{name}',
 

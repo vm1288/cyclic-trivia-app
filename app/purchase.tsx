@@ -494,6 +494,9 @@ export default function PurchaseScreen() {
             ? { kind: 'none' }
             : ownedGame(openGame)
               ? { kind: 'newMatch', onPress: () => void newMatchFor(openGame) }
+              /* K134 (Tony 23/9): game Coming Soon đọc được giới thiệu, chỉ không có nút mua / dùng thử. */
+              : !openGame.available
+                ? { kind: 'comingSoon' }
               : openGame.available && openPlan
                 ? !openGame.trialUsed && openGame.trialDays > 0 && !storeTrialGone(openPlan.productId)
                   ? {

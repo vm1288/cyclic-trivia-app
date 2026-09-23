@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { RewardGlyph } from './RewardGlyph';
+import { RewardGlyph, useRewardKind } from './RewardGlyph';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 
 import { CARD_STYLES, type CardKey } from './GameBoardParts';
@@ -15,6 +15,7 @@ import { useT } from '../i18n/I18nProvider';
  */
 export function CardEarnedOverlay({ card, name, ms, onDone }: { card: CardKey; name: string; ms: number; onDone: () => void }) {
   const t = useT();
+  const kind = useRewardKind();   /* K134: chữ đi theo biểu tượng - CricTriv là "balls" */
   const style = CARD_STYLES[card];
   const Icon = style.Icon;
   const scale = useSharedValue(0.6);
@@ -43,7 +44,7 @@ export function CardEarnedOverlay({ card, name, ms, onDone }: { card: CardKey; n
         />
         <View style={styles.stars}>{[0, 1, 2, 3, 4].map((i) => <RewardGlyph key={i} size={16} color="#FFC61E" />)}</View>
         <Text style={styles.title}>{t('cards.earnedTitle')}</Text>
-        <Text style={styles.sub}>{t('cards.earnedBody', { name })}</Text>
+        <Text style={styles.sub}>{t('cards.earnedBody', { name, unit: t(kind === 'ball' ? 'cards.unitBall' : 'cards.unitStar') })}</Text>
         <View style={styles.glyph}>
           <Icon size={44} />
         </View>
