@@ -451,10 +451,12 @@ export default function PurchaseScreen() {
                 <Pressable
                   key={g.sponsorId}
                   onPress={() => setOpenGame(g)}
-                  // K114 (Tony 19/9): game Coming Soon chưa mua/dùng thử được → mờ + không bấm (trừ khi máy đã có license của nó).
-                  disabled={!g.available && !ownedGame(g)}
+                  /*
+                   * K134 (Tony 23/9): game Coming Soon VẪN bấm được để đọc giới thiệu - chỉ không có nút mua /
+                   * dùng thử (xem `cta` bên dưới). Trước đây thẻ bị `disabled` (K114, 19/9) nên không ai xem
+                   * được nội dung game sắp ra.
+                   */
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: !g.available && !ownedGame(g) }}
                   style={({ pressed }) => [styles.card, pressed && styles.pressed, !g.available && !ownedGame(g) && styles.cardOff]}
                 >
                   <View style={styles.logoBox}>
