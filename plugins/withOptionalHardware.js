@@ -20,13 +20,25 @@ const { withAndroidManifest } = require('expo/config-plugins');
  *     print(sorted(set(re.findall(r'android\.hardware[\w.]*', t))))
  *     EOF
  *
- * Phải thấy `android.hardware.microphone` và `android.hardware.camera`.
+ * Phải thấy đủ **năm** tên, và **tất cả đều `required="false"`** trong manifest đã gộp
+ * (`android/app/build/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml`
+ * là bản CHỮ, dễ đọc hơn manifest nhị phân trong AAB).
+ *
+ * ⚠️ Đừng chỉ so danh sách `uses-feature`: thứ làm mất máy là **quyền mới**, vì mỗi quyền kéo
+ * theo một đòi hỏi phần cứng ngầm. So quyền giữa hai bản AAB trước, rồi tra xem quyền mới đòi
+ * phần cứng gì: `RECORD_AUDIO` → micro (K144), `CAMERA` → camera, `BLUETOOTH` → bluetooth (K149).
  */
 const OPTIONAL = [
   'android.hardware.microphone',
   'android.hardware.camera',
   'android.hardware.camera.autofocus',
   'android.hardware.camera.front',
+  /*
+   * K149: `react-native-webrtc` khai thêm quyền `BLUETOOTH` (để đỏi tiếng sang tai nghe SCO), và
+   * quyền đó **ngầm đòi `android.hardware.bluetooth`**. Play báo *"no longer supports 12 devices"*
+   * ở bản v9 chính vì dòng này — máy không có Bluetooth (hộp Android TV, vài máy tính bảng) bị loại.
+   */
+  'android.hardware.bluetooth',
 ];
 
 module.exports = function withOptionalHardware(config) {
