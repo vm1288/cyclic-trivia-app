@@ -15,9 +15,6 @@
     "android": {
       "package": "com.cyclictrivia.app",
       "versionCode": 8,
-      "blockedPermissions": [
-        "android.permission.RECORD_AUDIO"
-      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
         "monochromeImage": "./assets/android-icon-monochrome.png",
@@ -33,6 +30,7 @@
       "expo-router",
       "./plugins/withDevHttps",
       "./plugins/withReleaseSigning",
+      "./plugins/withOptionalHardware",
       [
         "expo-splash-screen",
         {
@@ -57,7 +55,8 @@
           "recordAudioAndroid": false
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      "@config-plugins/react-native-webrtc"
     ]
   }
 }
