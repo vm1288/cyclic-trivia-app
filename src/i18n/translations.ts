@@ -350,7 +350,7 @@ export const en = {
   'cards.unitStar': 'stars',
   'cards.unitBall': 'balls',
   'clock.rollsLeft': '{n} rolls left',
-  'clock.oversLeft': '{n} overs left',
+  'clock.oversLeft': '{n} overs remaining',
   'waiting.overs': '{n} overs',
   'cards.earnedAny': '5 stars! You earned a card',
 
