@@ -255,17 +255,16 @@ export default function HomeScreen() {
   }
 
   /**
-   * Máy đã đăng ký thì mang thương hiệu của SPONSOR, không phải Cyclic.
+   * MÀN HOME LUÔN MANG LOGO CYCLIC - K135 (Tony 24/9).
    *
-   * Và khi đó KHÔNG vẽ thêm chữ: logo sponsor vốn đã là một khối hoàn chỉnh có
-   * sẵn tên riêng bên trong (vd "CricTriv by Cyclic"), ghép thêm dòng "Cyclic"
-   * nữa là thừa và sai thương hiệu.
+   * Trước đây máy đã đăng ký thì màn này đổi sang logo SPONSOR, nên chơi CricTriv xong là
+   * home thành CricTriv: trông như máy chỉ có một game, trong khi Cyclic là nhà chung của
+   * nhiều game. Logo của game nay hiện ở đúng chỗ nó thuộc về - NEW MATCH, CHOOSE YOUR
+   * CHARACTER, phòng chờ và tấm My Games.
    *
-   * `sponsorLogoUri` có thể null dù đã đăng ký (sponsor chưa có logo, hoặc tải
-   * hỏng lúc kích hoạt) - lúc đó vẫn dùng logo Cyclic mặc định.
+   * ⚠️ Đừng "sửa lại cho đồng bộ" bằng cách lấy `license.session.sponsorLogoUri` ở đây.
    */
-  const sponsorLogoUri = activated ? license.session.sponsorLogoUri : null;
-  const showDefaultLockup = !sponsorLogoUri;
+  const showDefaultLockup = true;
 
   /**
    * Nút đầu tiên có BA trạng thái:
@@ -387,7 +386,7 @@ export default function HomeScreen() {
                 biến mất, không có lỗi nào. */}
             <Animated.View style={[styles.logoWrap, floatStyle]}>
               <Image
-                source={sponsorLogoUri ? { uri: sponsorLogoUri } : LOGO_LOCKUP}
+                source={LOGO_LOCKUP}
                 style={[styles.logo, { height: logoHeight }]}
                 resizeMode="contain"
               />

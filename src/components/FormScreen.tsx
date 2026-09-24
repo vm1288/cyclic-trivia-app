@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -28,6 +29,13 @@ type Props = {
    * vừa hết, và cột trái vốn đang trống bên dưới tiêu đề.
    */
   aside?: React.ReactNode;
+  /**
+   * K135 (Tony 24/9): logo của GAME đang chơi, góc trên PHẢI - đối xứng với nút back.
+   *
+   * Góc trái đã có nút back nổi nên logo không đặt được bên đó; để nó trong dòng chảy thì
+   * tiêu đề căn giữa sẽ lệch. Absolute góc phải là chỗ duy nhất còn trống ở cả hai màn.
+   */
+  logoUri?: string | null;
   onBack?: () => void;
 };
 
@@ -43,7 +51,7 @@ type Props = {
  * phím che mất nút submit nếu để mặc định, và người dùng sẽ tưởng nút biến mất.
  * Ở chiều ngang bàn phím còn cao tương đối hơn nhiều, nên phần này càng cần.
  */
-export function FormScreen({ title, subtitle, children, aside, onBack }: Props) {
+export function FormScreen({ title, subtitle, children, aside, logoUri, onBack }: Props) {
   const router = useRouter();
   const t = useT();
 
@@ -68,6 +76,10 @@ export function FormScreen({ title, subtitle, children, aside, onBack }: Props) 
             <Ionicons name="chevron-back" size={24} color={text.primary} />
             <Text style={styles.backText}>{t('common.back')}</Text>
           </Pressable>
+
+          {logoUri ? (
+            <Image source={{ uri: logoUri }} style={styles.gameLogo} resizeMode="contain" />
+          ) : null}
 
           <View style={styles.row}>
             <View style={styles.titleCol}>
@@ -113,6 +125,9 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   backText: { color: text.primary, fontSize: 16 },
+
+  /** Logo game - xem ghi chú ở prop `logoUri`. `pointerEvents` khỏi chặn chạm vào form bên dưới. */
+  gameLogo: { position: 'absolute', top: 4, right: 12, zIndex: 2, width: 96, height: 44 },
 
   /**
    * `paddingTop` chừa chỗ cho nút back nổi phía trên. Không có nó thì tiêu đề

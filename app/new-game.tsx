@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -203,6 +204,14 @@ export default function NewGameScreen() {
           <Text style={styles.backLabel}>{t('common.back').toUpperCase()}</Text>
         </Pressable>
 
+        {/*
+          K135 (Tony 24/9): logo của GAME đang mở ván, góc trên PHẢI - đối xứng với nút back.
+          Góc trái đã có nút back, còn đặt trong hàng tiêu đề thì tiêu đề căn giữa sẽ lệch.
+        */}
+        {session?.sponsorLogoUri ? (
+          <Image source={{ uri: session.sponsorLogoUri }} style={styles.gameLogo} resizeMode="contain" />
+        ) : null}
+
         <View style={styles.stack}>
           {/*
             Tiêu đề nằm NGANG HÀNG với nút back và căn giữa màn hình.
@@ -284,9 +293,16 @@ export default function NewGameScreen() {
                           style={[styles.cardLabel, { color: variant.label }]}
                           numberOfLines={2}
                         >
-                          {/* Nhãn do server cấp ("15 minutes", "Leaderboard
-                              Challenge"); chỉ viết hoa, không tự sửa câu chữ. */}
-                          {item.Time.toUpperCase()}
+                          {/*
+                            Nhãn do server cấp ("15 minutes", "Leaderboard Challenge",
+                            "Limited-over match (25 overs)").
+
+                            K135 (Tony 24/9): BỎ phần trong ngoặc ở MÀN NÀY - thẻ chỉ rộng
+                            nửa cột nên "(25 overs)" đẩy nhãn thành ba dòng rồi bị cắt cụt
+                            ("LIMITED-OVER MATCH (25 OVE…"). Chỉ cắt lúc VẼ, không sửa dữ
+                            liệu server: phòng chờ và màn khác vẫn in nguyên câu.
+                          */}
+                          {item.Time.replace(/\s*\([^)]*\)/g, '').trim().toUpperCase()}
                         </Text>
                       </View>
                     </Pressable>
@@ -390,6 +406,9 @@ const styles = StyleSheet.create({
     boxShadow: '0 0 10px rgba(58,165,255,0.45)',
   },
   backLabel: { color: text.primary, fontSize: 15, fontWeight: '700', letterSpacing: 2.4 },
+
+  /** Logo game - xem ghi chú ở chỗ dựng. */
+  gameLogo: { position: 'absolute', top: 4, right: 16, zIndex: 2, width: 104, height: 46 },
 
   /*
    * `alignSelf: 'stretch'` + `textAlign: 'center'` chứ KHÔNG phải bọc trong

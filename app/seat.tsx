@@ -65,6 +65,8 @@ export default function SeatScreen() {
   /* Tony 21/9: bỏ chọn giới tính - server vẫn đòi trường Gender nên gửi cố định 'male'. */
   const gender = 'male' as const;
   const [taken, setTaken] = useState<string[]>([]);
+  /** K135 (Tony 24/9): logo của GAME đang tham gia, vẽ ở góc trên phải (`FormScreen.logoUri`). */
+  const [gameLogo, setGameLogo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -82,6 +84,9 @@ export default function SeatScreen() {
     // `includeBoard` để lấy `Board.Characters` - danh sách nhân vật của board này.
     const state = await getGameState(seat.gameId, true);
     if (!state.isSuccess) return;
+
+    /* Cùng một `getGameState` đã gọi để biết ai lấy nhân vật nào - không thêm lượt mạng nào. */
+    setGameLogo(state.Sponsor?.LogoUrl ? assetUrl(state.Sponsor.LogoUrl) : null);
 
     const list = state.Board?.Characters ?? [];
     if (list.length > 0) {
@@ -165,6 +170,7 @@ export default function SeatScreen() {
     <FormScreen
       title={t('seat.title')}
       subtitle={t('seat.subtitle')}
+      logoUri={gameLogo}
       /*
        * Tên + giới tính xuống CỘT TRÁI, chừa cả cột phải cho lưới nhân vật.
        *
@@ -248,10 +254,14 @@ export default function SeatScreen() {
         })}
       </View>
 
+      {/*
+        K135 (Tony 24/9): dòng TRẮNG "Tap and hold…" lên trên, dòng VÀNG free-join xuống dưới.
+        Dòng vàng là cảnh báo về hạn dùng - để nó sát nút bấm thì người chơi đọc trước khi bấm.
+      */}
+      <Text style={styles.holdHint}>{t('seat.holdHint')}</Text>
       {seat?.freeJoin ? (
         <Text style={styles.freeJoin}>{t('seat.freeJoin', { used: seat.freeJoin.used, total: seat.freeJoin.total })}</Text>
       ) : null}
-      <Text style={styles.holdHint}>{t('seat.holdHint')}</Text>
       <NeonButton label={t('seat.submit')} color={neon.green} onPress={submit} busy={busy} />
 
       <NeonSheet visible={takenPopup} onClose={() => setTakenPopup(false)} maxWidth={520}>
