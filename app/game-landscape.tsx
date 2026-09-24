@@ -48,6 +48,7 @@ import { DiceRollOverlay } from '../src/components/DiceRollOverlay';
 import { MoveDirectionOverlay } from '../src/components/MoveDirectionOverlay';
 import { FlyingReward } from '../src/components/FlyingReward';
 import { CardEarnedOverlay } from '../src/components/CardEarnedOverlay';
+import { HelpCardsInfoButton, HelpCardsSheet } from '../src/components/HelpCardsSheet';
 import { GameClock } from '../src/components/GameClock';
 import { QuestionOverlay } from '../src/components/QuestionOverlay';
 import { BattleOverlay } from '../src/components/BattleOverlay';
@@ -520,6 +521,8 @@ export default function GameLandscapeScreen() {
    *   duelSummary - tổng kết có tick/cross (gói 84); chiếu xong máy gửi 84 lên (server gate ghế đầu).
    *   duelReward  - người thắng chọn thưởng (gói 96) rồi tấm chuyển điểm/thẻ 4 s.
    */
+  /** K140: tấm ⓘ giải thích bốn lá bài trợ giúp (mockup Tony 24/9). */
+  const [helpCards, setHelpCards] = useState(false);
   const [duelTime, setDuelTime] = useState<{ a: string; b: string } | null>(null);
   const [duel, setDuel] = useState<DuelSetupState | null>(null);
   const [duelSummary, setDuelSummary] = useState<DuelSummaryData | null>(null);
@@ -4253,6 +4256,13 @@ export default function GameLandscapeScreen() {
               ref={cardBox}
               onLayout={() => measureSpot('card', cardBox.current)}
             >
+              {/*
+                K140 (mockup Tony 24/9): "a small info icon next to the help cards section that
+                triggers a popup explaining their function when tapped". Đặt TUYỆT ĐỐI ở góc trên
+                phải khối thẻ - lưới 2×2 không có hàng tiêu đề để chèn vào, mà thêm hàng thì bốn lá
+                bị đẩy xuống (cột phải chỉ cao ~340dp).
+              */}
+              <HelpCardsInfoButton onPress={() => setHelpCards(true)} label={t('helpCards.info')} />
               {[
                 CARD_ORDER.slice(
                   0,
@@ -4414,6 +4424,7 @@ export default function GameLandscapeScreen() {
         trái) sang cột phải, nên phải nằm ngoài cả hai.
       */}
       {earnedCard ? <CardEarnedOverlay card={earnedCard} name={me?.NickName ?? ''} ms={3200} onDone={earnedCardDone} /> : null}
+      <HelpCardsSheet visible={helpCards} onClose={() => setHelpCards(false)} />
 
       {snapshot ? (
         <GameClock
@@ -4926,6 +4937,8 @@ const styles = StyleSheet.create({
 
   handGrid: {
     gap: 5,
+    /* K140: mốc định vị cho nút ⓘ - nó là con `position: 'absolute'` của khối này. */
+    position: 'relative',
   },
 
   handRow: {

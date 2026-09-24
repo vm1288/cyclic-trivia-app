@@ -347,6 +347,22 @@ export const en = {
   'cards.earnedTitle': 'Congratulations!',
   /* K134 (Tony 23/9): "stars" đi theo bàn cờ - CricTriv là bóng cricket (xem RewardGlyph); "special card" -> "help card". */
   'cards.earnedBody': '{name}, you’ve collected 5 {unit} and can now claim a help card!',
+
+  /*
+   * K140 (Tony gửi mockup 24/9): tấm ⓘ giải thích bốn lá bài trợ giúp.
+   * ⚠️ Câu mô tả CHÉP NGUYÊN VĂN từ mockup của Tony - kể cả chỗ "A correct answers award" và
+   * "to randomly changes" (sai ngữ pháp trong bản gốc). Đừng tự sửa; hỏi Tony rồi hãy đổi.
+   */
+  'helpCards.title': 'HELP CARDS',
+  'helpCards.max': 'Max limit: {n}',
+  'helpCards.close': 'Close',
+  'helpCards.info': 'What do the help cards do?',
+  'helpCards.prev': 'Previous card',
+  'helpCards.next': 'Next card',
+  'helpCards.body.Joker': 'Use before a question appears. A correct answers award 4 runs instead of the usual 2.',
+  'helpCards.body.Changer': 'Use before a question appears to randomly changes the current category to a new one.',
+  'helpCards.body.Skipper': 'Swaps the current question for a new one within the same topic.',
+  'helpCards.body.Eliminator': 'Removes one incorrect answer from the options.',
   'cards.unitStar': 'stars',
   'cards.unitBall': 'balls',
   'clock.rollsLeft': '{n} rolls left',
@@ -1135,6 +1151,17 @@ const vi: Record<TranslationKey, string> = {
   'cards.earned': 'Đủ 5 sao! Bạn được thưởng {card}',
   'cards.earnedTitle': 'Chúc mừng!',
   'cards.earnedBody': '{name}, bạn đã gom đủ 5 {unit} và được nhận một lá bài trợ giúp!',
+
+  'helpCards.title': 'LÁ BÀI TRỢ GIÚP',
+  'helpCards.max': 'Tối đa: {n}',
+  'helpCards.close': 'Đóng',
+  'helpCards.info': 'Các lá bài trợ giúp làm gì?',
+  'helpCards.prev': 'Lá trước',
+  'helpCards.next': 'Lá sau',
+  'helpCards.body.Joker': 'Dùng TRƯỚC khi câu hỏi hiện ra. Trả lời đúng được 4 điểm thay vì 2 như thường.',
+  'helpCards.body.Changer': 'Dùng TRƯỚC khi câu hỏi hiện ra để đổi ngẫu nhiên chủ đề hiện tại sang một chủ đề khác.',
+  'helpCards.body.Skipper': 'Đổi câu hỏi đang có sang một câu khác cùng chủ đề.',
+  'helpCards.body.Eliminator': 'Bỏ bớt một đáp án SAI trong các lựa chọn.',
   'cards.unitStar': 'sao',
   'cards.unitBall': 'quả bóng',
   'clock.rollsLeft': 'còn {n} lượt tung',
