@@ -23,7 +23,8 @@ export async function getIceServers(token: string): Promise<IceServer[]> {
     });
     if (!response.ok) return [];
     const data = (await response.json()) as { isSuccess?: boolean; iceServers?: IceServer[] };
-    return data.isSuccess && Array.isArray(data.iceServers) ? data.iceServers : [];
+    if (!data.isSuccess || !Array.isArray(data.iceServers)) return [];
+    return data.iceServers.map(clean);
   } catch {
     /*
      * Hỏng mạng thì trả mảng rỗng chứ không ném: WebRTC vẫn thử nối thẳng được trong cùng mạng
@@ -33,4 +34,22 @@ export async function getIceServers(token: string): Promise<IceServer[]> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * ⚠️ BỎcT KHOÁ `username` / `credential` KHI RỖNG — không được để `null` đi tiếp.
+ *
+ * Mục STUN không có đăng nhập, nhưng WebRTC bên Android cứ thấy **có khoá** là lấy giá trị ra,
+ * gặp `null` thì ném `IllegalArgumentException: username == null`. Cái này làm NỔ nguyên
+ * `new RTCPeerConnection`, tức là **mất sạch cuộc gọi**, chứ không phải chỉ mất một máy chủ ICE
+ * (đã dính thật trên máy ngày 24/9).
+ *
+ * Server đã sửa để không gửi `null` nữa, nhưng vẫn lọc ở đây: app phát hành rồi còn sống rất
+ * lâu sau một bản server, và cái giá của một dòng lọc rẻ hơn cái giá của một cuộc gọi chết.
+ */
+function clean(server: IceServer): IceServer {
+  const out: IceServer = { urls: server.urls };
+  if (server.username) out.username = server.username;
+  if (server.credential) out.credential = server.credential;
+  return out;
 }

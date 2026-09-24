@@ -48,6 +48,10 @@ type Peer = {
   /** Đã nhận `answer` chưa — để xếp hàng ICE tới sớm. */
   remoteReady: boolean;
   pendingIce: unknown[];
+  /** Ta là bên tạo offer cho kết nối này (id nhỏ hơn). Quyết định ai đi thương lượng lại. */
+  iOffer: boolean;
+  /** Có thay đổi tới trong lúc đang thương lượng — làm nốt khi xong vòng này. */
+  renegotiatePending: boolean;
 };
 
 export class CallSession {
@@ -87,8 +91,13 @@ export class CallSession {
         this.publishing = { mic: false, cam: false };
         return this.publishing;
       }
-      /* Stream mới thì mọi kết nối đang mở phải được gắn track. */
-      this.peers.forEach((peer) => this.attachLocal(peer));
+      /*
+       * Stream mới thì mọi kết nối ĐANG MỞ phải được gắn track — và gắn xong PHẢI THƯƠNG
+       * LƯỢNG LẠI (xem {@link renegotiate}).
+       */
+      this.peers.forEach((peer, key) => {
+        if (this.attachLocal(peer)) void this.renegotiate(key, peer);
+      });
     }
 
     this.local?.getAudioTracks().forEach((t) => (t.enabled = mic));
@@ -99,6 +108,23 @@ export class CallSession {
     if (!mic && !cam && this.local) {
       this.local.getTracks().forEach((t) => t.stop());
       this.local = null;
+
+      /*
+       * ⚠️ GỠ HẲN SENDER RA, không chỉ `stop()`. Track đã dừng mà còn nằm trong kết nối thì đầu kia
+       * đứng lại ở **khung hình cuối cùng** — trông như người kia treo máy chứ không phải tắt camera.
+       */
+      this.peers.forEach((peer, key) => {
+        const senders = peer.pc.getSenders().filter((sender) => sender.track);
+        if (senders.length === 0) return;
+        senders.forEach((sender) => {
+          try {
+            peer.pc.removeTrack(sender);
+          } catch {
+            /* kết nối đã đóng */
+          }
+        });
+        void this.renegotiate(key, peer);
+      });
     }
     return this.publishing;
   }
@@ -142,7 +168,7 @@ export class CallSession {
 
   async onSignal(from: string, raw: string) {
     if (this.closed) return;
-    let msg: { sdp?: { type: string; sdp: string }; ice?: unknown };
+    let msg: { sdp?: { type: string; sdp: string }; ice?: unknown; needOffer?: boolean };
     try {
       msg = JSON.parse(raw);
     } catch {
@@ -155,6 +181,12 @@ export class CallSession {
       const opened = await this.open(from, /* offerIfMine */ false);
       if (!opened) return;
       peer = opened;
+    }
+
+    /* Đầu kia vừa thêm/bớt track và nhờ ta offer lại (xem {@link renegotiate}). */
+    if (msg.needOffer) {
+      await this.renegotiate(from, peer);
+      return;
     }
 
     if (msg.sdp) {
@@ -170,6 +202,9 @@ export class CallSession {
         await peer.pc.setLocalDescription(answer);
         this.o.sendSignal(from, JSON.stringify({ sdp: { type: answer.type, sdp: answer.sdp } }));
       }
+
+      /* Vòng vừa xong; nếu có thay đổi đợi sẵn thì làm nốt bây giờ. */
+      if (peer.renegotiatePending) await this.renegotiate(from, peer);
       return;
     }
 
@@ -185,14 +220,57 @@ export class CallSession {
 
   /* ── vòng đời ──────────────────────────────────────────────────────────── */
 
-  private attachLocal(peer: Peer) {
-    if (!this.local) return;
+  /** Gắn track của mình vào một kết nối. Trả về **có thêm track nào không** — có thì phải thương lượng lại. */
+  private attachLocal(peer: Peer): boolean {
+    if (!this.local) return false;
     const senders = peer.pc.getSenders();
+    let added = false;
     this.local.getTracks().forEach((track) => {
       if (!senders.some((s) => s.track?.id === track.id)) {
         peer.pc.addTrack(track, this.local as never);
+        added = true;
       }
     });
+    return added;
+  }
+
+  /**
+   * THƯƠNG LƯỢNG LẠI sau khi thêm hoặc bớt track trên một kết nối ĐÃ DỰNG XONG.
+   *
+   * ⚠️ THIẾU CÁI NÀY LÀ MẤT HÌNH, và mất đúng trong cách dùng thường gặp nhất (đã dính thật
+   * trên hai máy ngày 24/9): A bật camera trước → B chỉ xem nên vẫn mở kết nối để nhận → lúc B
+   * bật camera thì track được thêm vào một kết nối đã offer/answer xong rồi. Không ai offer lại
+   * thì **A KHÔNG BAO GIỜ THẤY B**, tuy mọi thứ vẫn "xanh" ở cả hai bên.
+   *
+   * Ai offer lại: đúng bên đã offer lần đầu (id nhỏ hơn). Bên kia không tự offer — nó nhờ,
+   * bằng `needOffer`. Giữ nguyên một chiều như vậy thì không bao giờ có hai offer đâm nhau.
+   */
+  private async renegotiate(remoteId: string, peer: Peer) {
+    if (this.closed) return;
+    /*
+     * Đang giữa một vòng khác thì ĐẶT CỜ rồi thoát, làm nốt khi vòng đó xong. Bỏ luôn là mất hình
+     * đúng ở người bấm mic rồi bấm camera liền tay — hai thay đổi cách nhau một nhịp.
+     * (Chưa có `localDescription` = vòng đầu chưa chạy; vòng đầu sẽ tự mang track đi.)
+     */
+    if (!peer.pc.localDescription) return;
+    if (peer.pc.signalingState !== 'stable') {
+      peer.renegotiatePending = true;
+      return;
+    }
+    peer.renegotiatePending = false;
+
+    if (!peer.iOffer) {
+      this.o.sendSignal(remoteId, JSON.stringify({ needOffer: true }));
+      return;
+    }
+
+    try {
+      const offer = await peer.pc.createOffer({});
+      await peer.pc.setLocalDescription(offer);
+      this.o.sendSignal(remoteId, JSON.stringify({ sdp: { type: offer.type, sdp: offer.sdp } }));
+    } catch {
+      /* Kết nối rụng giữa chừng - `connectionstatechange` sẽ lo phần báo. */
+    }
   }
 
   private async open(remoteId: string, offerIfMine = true): Promise<Peer | null> {
@@ -208,7 +286,13 @@ export class CallSession {
     }
 
     const pc = new RTCPeerConnection({ iceServers: this.iceServers as never });
-    const peer: Peer = { pc, remoteReady: false, pendingIce: [] };
+    const peer: Peer = {
+      pc,
+      remoteReady: false,
+      pendingIce: [],
+      iOffer: this.o.myId.toLowerCase() < key,
+      renegotiatePending: false,
+    };
     this.peers.set(key, peer);
     this.attachLocal(peer);
 
@@ -235,7 +319,7 @@ export class CallSession {
     });
 
     /* Id nhỏ hơn tạo offer - tất định, không bao giờ hai bên cùng offer. */
-    if (offerIfMine && this.o.myId.toLowerCase() < key) {
+    if (offerIfMine && peer.iOffer) {
       const offer = await pc.createOffer({});
       await pc.setLocalDescription(offer);
       this.o.sendSignal(remoteId, JSON.stringify({ sdp: { type: offer.type, sdp: offer.sdp } }));

@@ -4164,6 +4164,46 @@ export default function GameLandscapeScreen() {
               />
 
               {/*
+                K145 VIDEO CALL — HAI nút riêng (Tony đổi lại 24/9): mic một nút, camera một nút.
+                Cho phép NÓI MÀ KHÔNG LÊN HÌNH, đúng tinh thần "không ép buộc".
+
+                ⚠️ ĐẶT Ở HÀNG MÃ PHÒNG, không phải hàng dưới (Tony 24/9): hàng dưới đã chật,
+                thêm hai nút 50dp vào đó là đẩy **ROLL DICE ra khỏi màn hình**. Hàng mã phòng còn
+                chỗ trống nên dùng cỡ nhỏ 30×28 giống nút ẩn bàn cờ bên cạnh.
+              */}
+              <Pressable
+                onPress={call.toggleMic}
+                accessibilityRole="button"
+                accessibilityState={{ selected: call.mic }}
+                accessibilityLabel={t(call.mic ? 'call.micOff' : 'call.micOn')}
+                hitSlop={8}
+                style={({ pressed }) => [
+                  styles.iconBtn,
+                  styles.callBtn,
+                  call.mic && styles.callBtnOn,
+                  pressed && styles.iconBtnPressed,
+                ]}
+              >
+                <MicIcon size={16} on={call.mic} />
+              </Pressable>
+
+              <Pressable
+                onPress={call.toggleCam}
+                accessibilityRole="button"
+                accessibilityState={{ selected: call.cam }}
+                accessibilityLabel={t(call.cam ? 'call.camOff' : 'call.camOn')}
+                hitSlop={8}
+                style={({ pressed }) => [
+                  styles.iconBtn,
+                  styles.callBtn,
+                  call.cam && styles.callBtnOn,
+                  pressed && styles.iconBtnPressed,
+                ]}
+              >
+                <CamIcon size={16} on={call.cam} />
+              </Pressable>
+
+              {/*
                 ẨN / HIỆN BÀN CỜ (ca **UI-1**).
 
                 ⚠️ Nút menu (ba chấm) bên phải cùng mới chỉ là chỗ trống chưa có
@@ -4406,29 +4446,6 @@ export default function GameLandscapeScreen() {
             <View
               style={styles.bottomRow}
             >
-              {/*
-                K145 VIDEO CALL — HAI nút riêng (Tony đổi lại 24/9): mic một nút, camera một nút.
-                Cho phép NÓI MÀ KHÔNG LÊN HÌNH, đúng tinh thần "không ép buộc".
-                Đặt cạnh nút chat vì cùng là việc "nói chuyện", không phải việc của ván.
-              */}
-              <Pressable
-                onPress={call.toggleMic}
-                accessibilityRole="button"
-                accessibilityLabel={t(call.mic ? 'call.micOff' : 'call.micOn')}
-                style={({ pressed }) => [styles.squareBtn, call.mic && styles.squareBtnOn, pressed && styles.iconBtnPressed]}
-              >
-                <MicIcon size={20} on={call.mic} />
-              </Pressable>
-
-              <Pressable
-                onPress={call.toggleCam}
-                accessibilityRole="button"
-                accessibilityLabel={t(call.cam ? 'call.camOff' : 'call.camOn')}
-                style={({ pressed }) => [styles.squareBtn, call.cam && styles.squareBtnOn, pressed && styles.iconBtnPressed]}
-              >
-                <CamIcon size={20} on={call.cam} />
-              </Pressable>
-
               {/* CHAT - mở khung đè lên cột bàn cờ; chấm đỏ = số tin chưa đọc (thiết kế). */}
               <Pressable
                 onPress={openChat}
@@ -5081,6 +5098,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
 
     gap: 8,
+  },
+
+  /*
+   * Hai nút mic / camera ở hàng mã phòng: mượn kích thước của `iconBtn` (30×28) nhưng đổi
+   * sang xanh — đỏ là màu của nhóm nút điều khiển bàn cờ, cuộc gọi không thuộc nhóm đó.
+   */
+  callBtn: {
+    borderColor: 'rgba(47,143,255,0.6)',
+    backgroundColor: '#081A40',
+  },
+  /* Đang bật: sáng xanh lá để nhìn một cái biết mình đang lên hình / đang mở tiếng. */
+  callBtnOn: {
+    borderColor: '#7CF6A8',
+    backgroundColor: 'rgba(18,72,44,0.85)',
+    boxShadow: '0 0 10px rgba(124,246,168,0.45)',
   },
 
   /* Nút chat đang mở khung: viền sáng hơn để biết cái gì đang phủ bàn cờ. */
