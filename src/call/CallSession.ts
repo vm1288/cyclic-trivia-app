@@ -92,8 +92,13 @@ export class CallSession {
       try {
         this.local = (await mediaDevices.getUserMedia({
           audio: true,
-          /* Ô hiển thị chỉ 50 dp — gửi to hơn là phí pin và băng thông của mọi người. */
-          video: { width: 180, height: 180, frameRate: 15, facingMode: 'user' },
+          /*
+           * Ô hiển thị giờ cao bằng cả khung (74 dp ≈ 200 px thật trên máy 3x), nên 180 là thiếu:
+           * camera chọn mức gần nhất là **176×144** và hình rối hẳn khi phóng to (đọc được trong
+           * `Camera2Session: Using capture format`). 320 cho camera chọn 320×240 hoặc 480×360 — nét
+           * hơn hẳn mà vẫn ~150-250 kbps một luồng, vẫn trong sức của lưới mesh.
+           */
+          video: { width: 320, height: 320, frameRate: 15, facingMode: 'user' },
         })) as MediaStream;
       } catch {
         /* Người dùng từ chối quyền, hoặc máy không có camera/mic. */

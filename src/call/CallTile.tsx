@@ -23,6 +23,7 @@ export function CallTile({
   failed,
   micOff,
   mirror,
+  radius,
 }: {
   size: number;
   stream: MediaStream | null;
@@ -33,11 +34,22 @@ export function CallTile({
   micOff?: boolean;
   /** Ô của chính mình phải LẬT GƯƠNG, nếu không giơ tay phải lại thấy tay trái. */
   mirror?: boolean;
+  /**
+   * Bo góc — **cả bốn góc**, khớp bán kính của khung khi ô ăn sát viền.
+   * (Tony 24/9: hai góc phải cũng phải bo, để vuông nhìn cứng.)
+   */
+  radius?: number;
 }) {
   const box = { width: size, height: size };
 
   return (
-    <View style={[styles.root, box]}>
+    <View
+      style={[
+        styles.root,
+        box,
+        radius === undefined ? null : { borderRadius: radius },
+      ]}
+    >
       {stream ? (
         <RTCView
           streamURL={stream.toURL()}

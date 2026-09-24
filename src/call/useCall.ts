@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MediaStream } from 'react-native-webrtc';
 
 import { CallSession, type CallMember } from './CallSession';
+
+const same = (a: string, b: string) => (a ?? '').toLowerCase() === (b ?? '').toLowerCase();
 import { TYPE_ID } from '../net/gameConnection';
 
 /**
@@ -29,6 +31,8 @@ export type CallApi = {
   toggleCam: () => void;
   /** Có ai đang nói không — dùng để hạ nhạc nền. */
   speaking: boolean;
+  /** Ghế này đang BẬT CAMERA không, theo gói 100. */
+  camOn: (playerId: string | undefined) => boolean;
   /** Màn ván gọi khi nhận gói 100. */
   onState: (members: CallMember[]) => void;
   /** Màn ván gọi khi nhận gói 99. */
@@ -169,10 +173,24 @@ export function useCall({
   }, [enabled, members.length]);
 
   /* ── đường gói tin ĐI VÀO, màn ván gọi khi nhận 99 / 100 ───────────────── */
+  /**
+   * ⚠️ Ô hình phải hỏi HÀM NÀY, đừng chỉ xem `streams` có gì.
+   *
+   * Tắt camera mà vẫn mở mic thì track video vẫn nằm trong kết nối (chỉ `track.enabled = false`,
+   * cố ý để khỏi phải thương lượng lại mỗi lần bật tắt), nên đầu kia giữ nguyên **khung hình
+   * cuối cùng** — trông như người ta đứng hình chứ không phải đã tắt hình (Tony báo 24/9).
+   * Gói 100 mới là nguồn sự thật, và đổi tức thì chứ không chờ thương lượng lại.
+   */
+  const camOn = useCallback(
+    (playerId: string | undefined) =>
+      !!playerId && members.some((m) => same(m.PlayerId, playerId) && m.Cam),
+    [members],
+  );
+
   const onState = useCallback((next: CallMember[]) => setMembers(next ?? []), []);
   const onSignal = useCallback((from: string, data: string) => {
     void session.current?.onSignal(from, data);
   }, []);
 
-  return { members, streams, failed, localStream, mic, cam, toggleMic, toggleCam, speaking, onState, onSignal };
+  return { members, streams, failed, localStream, mic, cam, toggleMic, toggleCam, speaking, camOn, onState, onSignal };
 }

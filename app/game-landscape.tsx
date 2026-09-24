@@ -3701,12 +3701,25 @@ export default function GameLandscapeScreen() {
                   >
                     {/*
                       K145: có video thì video THAY ô nhân vật; không thì giữ nguyên ảnh như trước.
-                      Ô vuông, không lấp cả khung - khung là chữ nhật có tên và điểm (Tony 24/9).
+                      Ô vẫn VUÔNG (Tony 24/9: kéo full khung chữ nhật thì méo mặt), nhưng **có video
+                      thì phóng to sát viền** — cao bằng đúng chiều cao khung, hai góc trái bo theo khung
+                      (Tony 24/9: *"nếu có video thì nên cho video phóng to sát border để thấy rõ hơn"*).
+                      Ô nhân vật và ô báo hỏng giữ cỡ cũ: phóng to một hình vẽ chẳng thêm thông tin gì.
                     */}
-                    {call.streams[p.Id?.toLowerCase()] || call.failed[p.Id?.toLowerCase()] ? (
+                    {(call.camOn(p.Id) && call.streams[p.Id?.toLowerCase()]) || call.failed[p.Id?.toLowerCase()] ? (
                       <CallTile
-                        size={ss(50)}
-                        stream={call.streams[p.Id?.toLowerCase()] ?? null}
+                        size={call.camOn(p.Id) && call.streams[p.Id?.toLowerCase()] ? ss(74) : ss(50)}
+                        radius={call.camOn(p.Id) && call.streams[p.Id?.toLowerCase()] ? ss(11) : undefined}
+                        /*
+                         * ⚠️ THEO CỜ `Cam` CỦA GÓI 100, không phải "có luồng hay không".
+                         *
+                         * Người kia tắt camera mà vẫn mở mic thì track video **vẫn nằm trong kết nối**,
+                         * chỉ ngừng gửi khung hình — ô bên này treo ở **khung cuối cùng**, trông như
+                         * người ta đứng hình chứ không phải đã tắt hình (Tony báo 24/9, máy Zenfone).
+                         * Gói 100 luôn nói rõ ai đang bật camera, nên dùng thẳng cờ đó: đổi tức thì,
+                         * không phải chờ thương lượng lại.
+                         */
+                        stream={call.camOn(p.Id) ? (call.streams[p.Id?.toLowerCase()] ?? null) : null}
                         characterUri={characterImageUrl(p.CharacterId)}
                         failed={!!call.failed[p.Id?.toLowerCase()]}
                         micOff={call.members.some((m) => m.PlayerId?.toLowerCase() === p.Id?.toLowerCase() && !m.Mic)}
@@ -4324,14 +4337,22 @@ export default function GameLandscapeScreen() {
                 ) : null}
 
                 {/* K145: ô của CHÍNH MÌNH - lật gương, nếu không giơ tay phải lại thấy tay trái. */}
-                {call.localStream ? (
-                  <CallTile
-                    size={42}
-                    stream={call.localStream}
-                    characterUri={characterImageUrl(me.CharacterId)}
-                    mirror
-                    micOff={!call.mic}
-                  />
+                {call.localStream && call.cam ? (
+                  /*
+                   * Cùng luật với dải trên: có video thì ăn sát viền trái, cao bằng khung.
+                   * `marginLeft` âm để trừ đúng `paddingHorizontal` của hàng, không thì ô còn hở
+                   * một viền đen bên trái.
+                   */
+                  <View style={{ marginLeft: -8 }}>
+                    <CallTile
+                      size={56}
+                      radius={11}
+                      stream={call.localStream}
+                      characterUri={characterImageUrl(me.CharacterId)}
+                      mirror
+                      micOff={!call.mic}
+                    />
+                  </View>
                 ) : (
                 <Image
                   source={{
