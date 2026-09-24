@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useKeepAwake } from 'expo-keep-awake';
+import { initSounds, releaseSounds, play as playSound, loop as loopSound } from '../src/sound/sounds';
 import {
   ActivityIndicator,
   AppState,
@@ -235,6 +236,21 @@ type ActiveQuestion = {
 export default function GameLandscapeScreen() {
   /* K121 (Tony 21/9): màn không tự tắt khi đang chơi / chờ ván - `expo-keep-awake` (chỉ giữ khi màn này còn mount). */
   useKeepAwake();
+  /*
+   * K137 (Tony 24/9): tiếng của ván - CHỈ ở màn này. Lobby im (Tony chốt: "dùng game-music khi bắt
+   * đầu game thôi, lobby không cần"), nên nhạc nền bật lúc vào màn ván và tắt lúc rời đi. Dọn bằng
+   * `releaseSounds` chứ không chỉ pause: bỏ qua là nhạc còn kêu ở màn Home.
+   */
+  useEffect(() => {
+    let alive = true;
+    void initSounds().then(() => {
+      if (alive) loopSound('gameMusic', true);
+    });
+    return () => {
+      alive = false;
+      releaseSounds();
+    };
+  }, []);
   const player = usePlayer();
   const license = useLicense();
   const router = useRouter();
@@ -711,6 +727,7 @@ export default function GameLandscapeScreen() {
    * Đọc state qua `snapshotRef` vì hàm này được gọi từ closure cũ (setTimeout, onPacket).
    */
   const startMove = (m: { moverId: string; steps: number; direction: string; owesDone: boolean; isMine: boolean }) => {
+    playSound('move');   /* K137: tiếng quân đi, như `characters.js` của web */
     const moverNow = snapshotRef.current?.Players?.find((pl) => pl.Id === m.moverId);
     setPendingMove({
       playerId: m.moverId,
@@ -848,6 +865,7 @@ export default function GameLandscapeScreen() {
        * chốt chống trả lời trùng đang giữ id câu CŨ.
        */
       if (packet.typeID === TYPE_ID.UseCardInQuestion) {
+        playSound('selectCard');   /* K137 */
         const payload = packet.Payload as TurnQuestionPayload | undefined;
         if (!payload?.question?.Id) return;
 
@@ -1104,6 +1122,7 @@ export default function GameLandscapeScreen() {
        * câu hỏi nhảy ra trước khi người chơi kịp thấy mình vừa dùng thẻ gì.
        */
       if (packet.typeID === TYPE_ID.UseCard) {
+        playSound('selectCard');   /* K137 */
         const wait = packet.isChangerCard ? 3000 : 0;
         setTimeout(() => {
           void connection.current?.send(TYPE_ID.ActionDone, {
@@ -1136,6 +1155,20 @@ export default function GameLandscapeScreen() {
       if (packet.typeID === TYPE_ID.CallJavascriptFromServer) {
         const fn = packet.FunctionName;
         const id = turnId.current || snapshot?.Game.CurrentTurnId || '';
+
+        /*
+         * K137: server chỉ định tiếng (`callFromServerPlaySound` của bản web). Năm tên này là TẤT CẢ
+         * những gì server gửi - đã đếm trong mã server; tên lạ thì im, đừng đoán.
+         */
+        if (fn === 'PlaySound') {
+          const which = String(packet.Payload ?? '');
+          if (which === 'playAudioCorrectAnswer') playSound('correct');
+          else if (which === 'playAudioWrongAnswer') playSound('wrongAnswer');
+          else if (which === 'playAudioYourChoice') playSound('yourChoice');
+          else if (which === 'playAudioGiveItUp') playSound('giveItUp');
+          else if (which === 'playAudioChallenge') playSound('challenge');
+          return;
+        }
 
         if (fn === 'ActionDone' || fn === 'ActionDoneWithPayload') {
           void connection.current?.send(TYPE_ID.ActionDone, {
@@ -1403,6 +1436,7 @@ export default function GameLandscapeScreen() {
       }
 
       if (packet.typeID === TYPE_ID.TenSecondsChallengeStart) {
+        playSound('gun');   /* K137: tiếng súng lệnh mở thử thách 10 giây, như web */
         const fromStart = {
           words: Array.isArray(packet.Words) ? (packet.Words as string[]) : [],
           isJudge: packet.IsJudge === true,
@@ -1443,6 +1477,7 @@ export default function GameLandscapeScreen() {
        * nằm ở đây, không nằm ở gói 42. Đã dính đúng vậy lần đầu làm ô này.
        */
       if (packet.typeID === TYPE_ID.TenSecondsChallenge) {
+        loopSound('timerLast', true);   /* K137: đồng hồ 10 giây chạy */
         const pid = typeof packet.PlayerId === 'string' ? packet.PlayerId : '';
         setChallenge((prev) => ({
           phase: 'run',
@@ -1479,6 +1514,9 @@ export default function GameLandscapeScreen() {
        * Server chỉ gửi cho ĐÚNG người vừa gửi gói 42 về.
        */
       if (packet.typeID === TYPE_ID.TenSecondsChallengeCountDown) {
+        /* K137: hết 10 giây - tắt đồng hồ rồi rung chuông, đúng thứ tự của web. */
+        loopSound('timerLast', false);
+        playSound('bell');
         setChallenge((prev) =>
           prev
             ? { ...prev, phase: 'judge' }
@@ -1573,6 +1611,7 @@ export default function GameLandscapeScreen() {
         const type = typeof packet.Type === 'string' ? packet.Type : '';
         const message = typeof packet.Message === 'string' ? packet.Message : '';
         if (!type && !message) return;
+        playSound('curveBall');   /* K137 */
         setCurveBall({
           type,
           message,
@@ -1612,6 +1651,11 @@ export default function GameLandscapeScreen() {
        * nguồn duy nhất thì bảng xếp hạng không thể lệch với bàn cờ phía dưới.
        */
       if (packet.typeID === TYPE_ID.GameOver) {
+        /* K137: nhạc nền tắt TRƯỚC tiếng hết ván, nếu không hai thứ chồng lên nhau (web làm y vậy). */
+        loopSound('gameMusic', false);
+        loopSound('timerLast', false);
+        loopSound('firework', false);
+        playSound('gameOver');
         setGameOver({ message: (packet as { GameOverMessage?: string }).GameOverMessage ?? null });
         setQuestion(null);
         setBattle(null);
@@ -1822,6 +1866,7 @@ export default function GameLandscapeScreen() {
         setDuelReward(null);
         setDuelSummary(null);
         if (aName && bName) {
+          playSound('challenge');   /* K137: tấm "It's duel time", như `showDuelTimeCard` của web */
           setDuelTime({ a: aName, b: bName });
           setTimeout(startVideo, 3000);
         } else {
@@ -3073,6 +3118,7 @@ export default function GameLandscapeScreen() {
     if (turnResult || !pendingEarnedCard.current) return;
     const card = pendingEarnedCard.current;
     pendingEarnedCard.current = null;
+    loopSound('firework', true);   /* K137: pháo hoa kêu suốt lúc tấm 'được một lá' còn trên màn */
     setEarnedCard(card);
   }, [turnResult]);
   useEffect(() => {
@@ -3081,6 +3127,7 @@ export default function GameLandscapeScreen() {
       if (turnResultRef.current) return;
       const card = pendingEarnedCard.current;
       pendingEarnedCard.current = null;
+      loopSound('firework', true);   /* K137: pháo hoa kêu suốt lúc tấm 'được một lá' còn trên màn */
       setEarnedCard(card);
     }, 4000);
     return () => clearInterval(tick);
@@ -3107,12 +3154,14 @@ export default function GameLandscapeScreen() {
 
   const earnedCardDone = useCallback(() => {
     const card = earnedCard;
+    loopSound('firework', false);   /* K137 */
     setEarnedCard(null);
     if (card) fly(card);
   }, [earnedCard]);
 
   /** Bắn một vật bay từ giữa bàn cờ về chỗ của nó. */
   const fly = (reward: 'star' | CardKey) => {
+    if (reward === 'star') playSound('star');   /* K137 */
     measureSpot('board', boardBox.current);
     measureSpot('star', starBox.current);
     measureSpot('card', cardBox.current);

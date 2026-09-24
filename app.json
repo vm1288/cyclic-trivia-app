@@ -53,7 +53,8 @@
           "cameraPermission": "Cyclic uses the camera to scan the room QR code shown on the host's phone.",
           "recordAudioAndroid": false
         }
-      ]
+      ],
+      "expo-audio"
     ]
   }
 }
