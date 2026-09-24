@@ -35,6 +35,9 @@ export type CallApi = {
   onSignal: (from: string, data: string) => void;
 };
 
+/** Nhạc nền chỉ dâng lên lại sau khi im tiếng ngần này — đủ dài để đi qua khoảng lặng giữa hai câu. */
+const SPEAK_HOLD_MS = 1500;
+
 export function useCall({
   myId,
   seatToken,
@@ -59,6 +62,8 @@ export function useCall({
   const [speaking, setSpeaking] = useState(false);
 
   const session = useRef<CallSession | null>(null);
+  /** Lần cuối nghe thấy tiếng người — xem đoạn giữ cờ ở dưới. */
+  const lastHeard = useRef(0);
   const sendRef = useRef(send);
   sendRef.current = send;
   const idsRef = useRef(allPlayerIds);
@@ -151,7 +156,14 @@ export function useCall({
     const id = setInterval(async () => {
       const s = session.current;
       if (!s) return;
-      setSpeaking(await s.someoneSpeaking());
+      if (await s.someoneSpeaking()) lastHeard.current = Date.now();
+      /*
+       * ⚠️ GIỮ CỜ THÊM MỘT NHỊP sau khi hết tiếng. Bỏ độ trễ này thì **khoảng lặng giữa hai
+       * từ** cũng tính là "nói xong", và nhạc nền nhấp nháy hơn chục lần trong một câu — đã đo
+       * được trên hai máy thật 24/9. Tony muốn nhạc lùi *cho đến khi nói xong*, không phải lùi
+       * theo từng âm tiết.
+       */
+      setSpeaking(Date.now() - lastHeard.current < SPEAK_HOLD_MS);
     }, 400);
     return () => clearInterval(id);
   }, [enabled, members.length]);

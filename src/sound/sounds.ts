@@ -78,6 +78,9 @@ const players: Partial<Record<SoundName, AudioPlayer>> = {};
 let muted = false;
 let ready = false;
 
+/** Mức còn lại của nhạc nền khi có người nói: còn nghe thấy, nhưng không đè lời. */
+const DUCK_RATIO = 0.15;
+
 /**
  * Dựng sẵn mọi player. Gọi một lần lúc vào màn ván.
  *
@@ -158,6 +161,24 @@ export function loop(name: SoundName, on: boolean): void {
       p.pause();
       p.seekTo(0);
     }
+  } catch {
+    /* player đã bị gỡ */
+  }
+}
+
+/**
+ * HẠ MỘT TIẾNG ĐANG KÊU XUỐNG MỨC NỀN, không dừng nó (K146).
+ *
+ * ⚠️ ĐỮNG DÙNG {@link loop}`(x, false)` để lách tiếng nói: hàm đó `pause()` **và `seekTo(0)`**,
+ * nên mỗi lần có người mở lời là nhạc nền **quay về từ đầu**. Đo trên máy 24/9: trong một câu
+ * nói bình thường nó tắt/bật hơn chục lần — nghe thành nhạc giật cục chứ không phải nhường lời.
+ */
+export function duck(name: SoundName, on: boolean): void {
+  const p = players[name];
+  if (!p) return;
+  const full = VOLUME[name] ?? 1;
+  try {
+    p.volume = on ? full * DUCK_RATIO : full;
   } catch {
     /* player đã bị gỡ */
   }

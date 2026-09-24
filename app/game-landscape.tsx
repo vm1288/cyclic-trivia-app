@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useKeepAwake } from 'expo-keep-awake';
-import { initSounds, releaseSounds, play as playSound, loop as loopSound, stop as stopSound } from '../src/sound/sounds';
+import { initSounds, releaseSounds, play as playSound, loop as loopSound, stop as stopSound, duck as duckSound } from '../src/sound/sounds';
 import {
   ActivityIndicator,
   AppState,
@@ -2300,14 +2300,21 @@ export default function GameLandscapeScreen() {
   callRef.current = call;
 
   useEffect(() => {
+    loopSound('gameMusic', !inDuel);
+    if (!inDuel) loopSound('timerLast', false);
+  }, [inDuel]);
+
+  useEffect(() => {
     /*
      * K145 (Tony 24/9): "khi có ai nói thì nhạc nền nhỏ xuống hoặc tắt cho đến khi nói xong".
-     * Tắt hẳn chứ không hạ nhỏ: `expo-audio` đổi `volume` giữa chừng nghe rõ tiếng giật, mà khi
-     * đã có người thật nói thì nhạc nền chẳng còn tác dụng gì.
+     *
+     * ⚠️ HẠ ÂM LƯỢNG, KHÔNG TẮT. Bản đầu tắt hẳn bằng `loopSound(..., false)` — hàm đó
+     * `pause()` kèm `seekTo(0)`, nên nhạc nền **quay về từ đầu** mỗi lần. Đo trên hai máy thật
+     * 24/9: trong một câu nói bình thường nó tắt/bật hơn chục lần (khoảng lặng giữa các từ cũng
+     * tính là "hết nói"), nghe thành nhạc giật cục. Độ trễ nhả nằm trong `useCall`.
      */
-    loopSound('gameMusic', !inDuel && !call.speaking);
-    if (!inDuel) loopSound('timerLast', false);
-  }, [inDuel, call.speaking]);
+    duckSound('gameMusic', call.speaking);
+  }, [call.speaking]);
 
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
