@@ -353,6 +353,11 @@ export const en = {
    * ⚠️ Câu mô tả CHÉP NGUYÊN VĂN từ mockup của Tony - kể cả chỗ "A correct answers award" và
    * "to randomly changes" (sai ngữ pháp trong bản gốc). Đừng tự sửa; hỏi Tony rồi hãy đổi.
    */
+  /* K145 video call - hai nút riêng (Tony 24/9): nói mà không lên hình cũng được. */
+  'call.micOn': 'Turn my microphone on',
+  'call.micOff': 'Turn my microphone off',
+  'call.camOn': 'Turn my camera on',
+  'call.camOff': 'Turn my camera off',
   'helpCards.title': 'HELP CARDS',
   'helpCards.max': 'Max limit: {n}',
   'helpCards.close': 'Close',
@@ -1152,6 +1157,10 @@ const vi: Record<TranslationKey, string> = {
   'cards.earnedTitle': 'Chúc mừng!',
   'cards.earnedBody': '{name}, bạn đã gom đủ 5 {unit} và được nhận một lá bài trợ giúp!',
 
+  'call.micOn': 'Bật micro của tôi',
+  'call.micOff': 'Tắt micro của tôi',
+  'call.camOn': 'Bật camera của tôi',
+  'call.camOff': 'Tắt camera của tôi',
   'helpCards.title': 'LÁ BÀI TRỢ GIÚP',
   'helpCards.max': 'Tối đa: {n}',
   'helpCards.close': 'Đóng',

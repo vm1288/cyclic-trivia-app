@@ -318,6 +318,19 @@ export const TYPE_ID = {
    *   gửi `{ Choice: 'points'|'card', CardId, Discard }`. 60 s không chọn là server chọn hộ.
    */
   DuelReward: 96,
+  /*
+   * K145 VIDEO CALL — 97..100. Server chỉ là BƯU TÁ: không đụng media, không đọc `Data`.
+   * Bốn gói này nằm NGOÀI luồng ván: không đổi flow, không có gói trả lời bắt buộc. Xem
+   * `src/call/CallSession.ts` và NEXT_STEPS mục "VIDEO CALL".
+   */
+  /** LÊN `{ Mic, Cam }` — ĐẶT trạng thái, gọi lại bao nhiêu lần cũng được. Hai cờ tắt = rời. */
+  CallJoin: 97,
+  /** LÊN, thân rỗng — tắt hẳn. Server cũng tự phát thay người RỚT kết nối. */
+  CallLeave: 98,
+  /** LÊN `{ To, Data }` → XUỐNG `{ From, Data }`. `Data` là chuỗi đục (SDP/ICE). */
+  CallSignal: 99,
+  /** XUỐNG `{ Members: [{ PlayerId, Mic, Cam }] }` — danh sách ĐẦY ĐỦ, không phải delta. */
+  CallState: 100,
   /**
    * "Ghế này vừa được mở ở một MÁY KHÁC" — gửi cho máy vừa BỊ ĐÁ khỏi slot.
    *

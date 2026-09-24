@@ -50,6 +50,8 @@ import { FlyingReward } from '../src/components/FlyingReward';
 import { CardEarnedOverlay } from '../src/components/CardEarnedOverlay';
 import { HelpCardsInfoButton, HelpCardsSheet } from '../src/components/HelpCardsSheet';
 import { JokerSixOverlay } from '../src/components/JokerSixOverlay';
+import { CallTile, CamIcon, MicIcon } from '../src/call/CallTile';
+import { useCall } from '../src/call/useCall';
 import { GameClock } from '../src/components/GameClock';
 import { QuestionOverlay } from '../src/components/QuestionOverlay';
 import { BattleOverlay } from '../src/components/BattleOverlay';
@@ -569,10 +571,6 @@ export default function GameLandscapeScreen() {
   const inDuelRef = useRef(false);
   inDuelRef.current = inDuel;
   const battleAsking = !!battle && !!question && question.kind === 'battle';
-  useEffect(() => {
-    loopSound('gameMusic', !inDuel);
-    if (!inDuel) loopSound('timerLast', false);
-  }, [inDuel]);
   useEffect(() => {
     loopSound('timerLast', battleAsking);
   }, [battleAsking]);
@@ -1182,6 +1180,18 @@ export default function GameLandscapeScreen() {
        * `PlaySound` và `RemoveAllComponents` là việc thuần UI của bản web, bỏ
        * qua. Battle và 10-sec challenge chưa làm, thêm sau ở ngay đây.
        */
+      /* K145: hai gói của cuộc gọi. Không đụng luật ván - xem `src/call/`. */
+      if (packet.typeID === TYPE_ID.CallState) {
+        callRef.current.onState((packet as { Members?: never[] }).Members ?? []);
+        return;
+      }
+      if (packet.typeID === TYPE_ID.CallSignal) {
+        const from = typeof packet.From === 'string' ? packet.From : '';
+        const data = typeof packet.Data === 'string' ? packet.Data : '';
+        if (from && data) callRef.current.onSignal(from, data);
+        return;
+      }
+
       if (packet.typeID === TYPE_ID.CallJavascriptFromServer) {
         const fn = packet.FunctionName;
         const id = turnId.current || snapshot?.Game.CurrentTurnId || '';
@@ -2274,6 +2284,31 @@ export default function GameLandscapeScreen() {
       });
     },
   });
+
+  /*
+   * K145 VIDEO CALL. Đặt ở đây vì cần `snapshot` (danh sách ghế) và `seat`, mà phải TRƯỚC phần
+   * vẽ. Toàn bộ việc gọi nằm ngoài luật ván - hỏng hết thì ván vẫn chạy.
+   */
+  const call = useCall({
+    myId: seat?.playerId,
+    seatToken: seat?.token,
+    allPlayerIds: (snapshot?.Players ?? []).map((p) => p.Id),
+    send: (typeID, payload) => void connection.current?.send(typeID, payload),
+    enabled: !!seat && !!snapshot,
+  });
+  const callRef = useRef(call);
+  callRef.current = call;
+
+  useEffect(() => {
+    /*
+     * K145 (Tony 24/9): "khi có ai nói thì nhạc nền nhỏ xuống hoặc tắt cho đến khi nói xong".
+     * Tắt hẳn chứ không hạ nhỏ: `expo-audio` đổi `volume` giữa chừng nghe rõ tiếng giật, mà khi
+     * đã có người thật nói thì nhạc nền chẳng còn tác dụng gì.
+     */
+    loopSound('gameMusic', !inDuel && !call.speaking);
+    if (!inDuel) loopSound('timerLast', false);
+  }, [inDuel, call.speaking]);
+
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
   const boardRef = useRef(board);
@@ -3657,6 +3692,19 @@ export default function GameLandscapeScreen() {
                       },
                     ]}
                   >
+                    {/*
+                      K145: có video thì video THAY ô nhân vật; không thì giữ nguyên ảnh như trước.
+                      Ô vuông, không lấp cả khung - khung là chữ nhật có tên và điểm (Tony 24/9).
+                    */}
+                    {call.streams[p.Id?.toLowerCase()] || call.failed[p.Id?.toLowerCase()] ? (
+                      <CallTile
+                        size={ss(50)}
+                        stream={call.streams[p.Id?.toLowerCase()] ?? null}
+                        characterUri={characterImageUrl(p.CharacterId)}
+                        failed={!!call.failed[p.Id?.toLowerCase()]}
+                        micOff={call.members.some((m) => m.PlayerId?.toLowerCase() === p.Id?.toLowerCase() && !m.Mic)}
+                      />
+                    ) : (
                     <Image
                       source={{
                         uri: characterImageUrl(
@@ -3672,6 +3720,7 @@ export default function GameLandscapeScreen() {
                       ]}
                       resizeMode="contain"
                     />
+                    )}
 
                     <View
                       style={[
@@ -4227,6 +4276,16 @@ export default function GameLandscapeScreen() {
                   <TurnPulse radius={12} />
                 ) : null}
 
+                {/* K145: ô của CHÍNH MÌNH - lật gương, nếu không giơ tay phải lại thấy tay trái. */}
+                {call.localStream ? (
+                  <CallTile
+                    size={42}
+                    stream={call.localStream}
+                    characterUri={characterImageUrl(me.CharacterId)}
+                    mirror
+                    micOff={!call.mic}
+                  />
+                ) : (
                 <Image
                   source={{
                     uri: characterImageUrl(
@@ -4238,6 +4297,7 @@ export default function GameLandscapeScreen() {
                   }
                   resizeMode="contain"
                 />
+                )}
 
                 <View
                   style={styles.meInfo}
@@ -4346,6 +4406,29 @@ export default function GameLandscapeScreen() {
             <View
               style={styles.bottomRow}
             >
+              {/*
+                K145 VIDEO CALL — HAI nút riêng (Tony đổi lại 24/9): mic một nút, camera một nút.
+                Cho phép NÓI MÀ KHÔNG LÊN HÌNH, đúng tinh thần "không ép buộc".
+                Đặt cạnh nút chat vì cùng là việc "nói chuyện", không phải việc của ván.
+              */}
+              <Pressable
+                onPress={call.toggleMic}
+                accessibilityRole="button"
+                accessibilityLabel={t(call.mic ? 'call.micOff' : 'call.micOn')}
+                style={({ pressed }) => [styles.squareBtn, call.mic && styles.squareBtnOn, pressed && styles.iconBtnPressed]}
+              >
+                <MicIcon size={20} on={call.mic} />
+              </Pressable>
+
+              <Pressable
+                onPress={call.toggleCam}
+                accessibilityRole="button"
+                accessibilityLabel={t(call.cam ? 'call.camOff' : 'call.camOn')}
+                style={({ pressed }) => [styles.squareBtn, call.cam && styles.squareBtnOn, pressed && styles.iconBtnPressed]}
+              >
+                <CamIcon size={20} on={call.cam} />
+              </Pressable>
+
               {/* CHAT - mở khung đè lên cột bàn cờ; chấm đỏ = số tin chưa đọc (thiết kế). */}
               <Pressable
                 onPress={openChat}
