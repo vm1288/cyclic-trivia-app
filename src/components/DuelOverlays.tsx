@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { play as playSound } from '../sound/sounds';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -145,6 +146,11 @@ export function DuelSetupOverlay({
   const [introSecond, setIntroSecond] = useState(false);
   useEffect(() => {
     if (state.phase !== 'intro') return;
+    /*
+     * K138 (Tony 24/9): tiếng "dramatic" phủ CẢ HAI nhịp của tấm mở màn (mục 1 và 2 trong yêu cầu),
+     * nên bắn MỘT lần ở đầu chứ không bắn lại lúc hiện dòng "The questions".
+     */
+    playSound('duelDramatic');
     setIntroSecond(false);
     const id = setTimeout(() => setIntroSecond(true), Math.max(1000, (state.duration * 1000) / 2));
     return () => clearTimeout(id);
@@ -383,7 +389,7 @@ const PICK_MS = 5000;
 const REVEAL_MS = 4000;
 const RESULT_MS = 4000;
 
-export function DuelSummaryOverlay({ data, onDone }: { data: DuelSummaryData; onDone: () => void }) {
+export function DuelSummaryOverlay({ data, onDone, myId }: { data: DuelSummaryData; onDone: () => void; myId?: string }) {
   const t = useT();
   const same = (a: string, b: string) => (a ?? '').toLowerCase() === (b ?? '').toLowerCase();
   /* Câu phụ: chỉ chiếu lại câu thứ tư (index 3), không mở màn lại. */
@@ -399,6 +405,32 @@ export function DuelSummaryOverlay({ data, onDone }: { data: DuelSummaryData; on
     setRevealed(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.seq]);
+
+  /*
+   * K138 (Tony 24/9) - TIẾNG CỦA PHẦN CÔNG BỐ.
+   *
+   *   mở màn "The answers & results"  -> `duelDramatic` (mục 4)
+   *   nhịp CÔNG BỐ của mỗi câu         -> `duelCorrect` / `duelWrong` (mục 6)
+   *
+   * Đúng/sai theo GÓC NHÌN của máy đang xem: là một trong hai đấu thủ thì nghe kết quả CỦA MÌNH;
+   * người ngoài (và TV khi chủ phòng không đấu) nghe "đúng" nếu có ít nhất một người đúng.
+   * ⚠️ Không bắn ở nhịp CHỌN - lúc đó đáp án đúng còn chưa lộ.
+   */
+  useEffect(() => {
+    if (step === 'intro') { playSound('duelDramatic'); return; }
+    if (typeof step !== 'number' || !revealed) return;
+    const right = (list: string[]) => {
+      const id = list[step] ?? '';
+      return !!id && !!data.correct[step] && same(id, data.correct[step]);
+    };
+    const mine = myId && same(myId, data.challengeId) ? 'challenger'
+      : myId && same(myId, data.incumbentId) ? 'incumbent' : null;
+    const ok = mine === 'challenger' ? right(data.challengeAnswers)
+      : mine === 'incumbent' ? right(data.incumbentAnswers)
+      : right(data.challengeAnswers) || right(data.incumbentAnswers);
+    playSound(ok ? 'duelCorrect' : 'duelWrong');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, revealed, data.seq]);
 
   useEffect(() => {
     let ms = revealed ? REVEAL_MS : PICK_MS;

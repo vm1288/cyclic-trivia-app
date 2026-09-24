@@ -34,7 +34,12 @@ export type SoundName =
   | 'firework'
   | 'tap'
   | 'move'
-  | 'gameMusic';
+  | 'gameMusic'
+  /* K138 (Tony 24/9): ba tiếng RIÊNG của trận battle - Tony gửi file 24/9. */
+  | 'duelDramatic'
+  | 'duelCorrect'
+  | 'duelWrong'
+  | 'duelCheer';
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const FILES: Record<SoundName, number> = {
@@ -56,6 +61,10 @@ const FILES: Record<SoundName, number> = {
   tap: require('../../assets/sounds/tap.mp3'),
   move: require('../../assets/sounds/move.wav'),
   gameMusic: require('../../assets/sounds/game-music.mp3'),
+  duelDramatic: require('../../assets/sounds/duel-dramatic.mp3'),
+  duelCorrect: require('../../assets/sounds/duel-correct.mp3'),
+  duelWrong: require('../../assets/sounds/duel-wrong.mp3'),
+  duelCheer: require('../../assets/sounds/duel-cheer.mp3'),
 };
 /* eslint-enable @typescript-eslint/no-require-imports */
 
@@ -116,6 +125,21 @@ export function play(name: SoundName): void {
   try {
     p.seekTo(0);
     p.play();
+  } catch {
+    /* player đã bị gỡ */
+  }
+}
+
+/**
+ * Dừng hẳn một tiếng đang kêu. Cần cho `duelCheer` (K139): tiếng reo dài 16,7 s còn video người
+ * thắng ngắn hơn, không cắt thì nó reo sang tận lượt sau.
+ */
+export function stop(name: SoundName): void {
+  const p = players[name];
+  if (!p) return;
+  try {
+    p.pause();
+    p.seekTo(0);
   } catch {
     /* player đã bị gỡ */
   }

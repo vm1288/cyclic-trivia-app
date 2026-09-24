@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useKeepAwake } from 'expo-keep-awake';
-import { initSounds, releaseSounds, play as playSound, loop as loopSound } from '../src/sound/sounds';
+import { initSounds, releaseSounds, play as playSound, loop as loopSound, stop as stopSound } from '../src/sound/sounds';
 import {
   ActivityIndicator,
   AppState,
@@ -546,6 +546,27 @@ export default function GameLandscapeScreen() {
     name: string;
     onDone: () => void;
   } | null>(null);
+
+  /*
+   * K138 (Tony 24/9): TRẬN BATTLE CÓ ÂM THANH RIÊNG.
+   *
+   *   - nhạc nền TẮT suốt trận (mục 3: "let's not have the music");
+   *   - lúc đang hỏi thì chạy tiếng ĐỒNG HỒ TÍCH TẮC thay cho nhạc;
+   *   - tiếng đúng/sai thường bị chặn (mục 6) - xem nhánh `PlaySound` bên dưới.
+   *
+   * `inDuelRef` để nhánh xử lý gói (nằm ngoài vòng render) đọc được trạng thái mới nhất.
+   */
+  const inDuel = !!(duelTime || duel || duelSummary || duelReward || battleDice || battleVideo || battle);
+  const inDuelRef = useRef(false);
+  inDuelRef.current = inDuel;
+  const battleAsking = !!battle && !!question && question.kind === 'battle';
+  useEffect(() => {
+    loopSound('gameMusic', !inDuel);
+    if (!inDuel) loopSound('timerLast', false);
+  }, [inDuel]);
+  useEffect(() => {
+    loopSound('timerLast', battleAsking);
+  }, [battleAsking]);
   const battleVideoSeq = useRef(0);
   /**
    * Mốc (ms) mà con xúc xắc đang lăn của vòng phân định sẽ dừng. Gói `tie`/`won`
@@ -1162,6 +1183,12 @@ export default function GameLandscapeScreen() {
          */
         if (fn === 'PlaySound') {
           const which = String(packet.Payload ?? '');
+          /*
+           * K138 (Tony 24/9) mục 6: trong trận battle KHÔNG dùng tiếng đúng/sai thường -
+           * phần công bố có `duelCorrect` / `duelWrong` riêng. `submitAnswerBattle` của server
+           * vẫn gửi `playAudioCorrectAnswer` / `playAudioWrongAnswer` nên phải chặn ở đây.
+           */
+          if (inDuelRef.current && (which === 'playAudioCorrectAnswer' || which === 'playAudioWrongAnswer')) return;
           if (which === 'playAudioCorrectAnswer') playSound('correct');
           else if (which === 'playAudioWrongAnswer') playSound('wrongAnswer');
           else if (which === 'playAudioYourChoice') playSound('yourChoice');
@@ -2133,6 +2160,7 @@ export default function GameLandscapeScreen() {
           WinnerId: winnerId,
         };
         const afterVideo = () => {
+          stopSound('duelCheer');   /* K139: cắt tiếng reo khi video hết - nó dài 16,7 s, video ngắn hơn */
           setBattleVideo(null);
           /* DUEL V8 (K119): không còn tấm "X won the battle" - ngay sau là bước chọn thưởng (gói 96). */
           void name;
@@ -2144,6 +2172,11 @@ export default function GameLandscapeScreen() {
           return;
         }
         battleVideoSeq.current += 1;
+        /*
+         * K139 (Tony 24/9): tiếng reo chạy CÙNG video người thắng - hai thứ TRỘN vào nhau, video
+         * đã có tiếng riêng của nó. Bắn ngay lúc dựng video, cắt ở `afterVideo`.
+         */
+        playSound('duelCheer');
         setBattleVideo({ seq: battleVideoSeq.current, kind: 'winner', name: videoName, onDone: afterVideo });
         return;
       }
@@ -3939,7 +3972,7 @@ export default function GameLandscapeScreen() {
               />
             ) : null}
             {duelSummary && !battleVideo ? (
-              <DuelSummaryOverlay data={duelSummary} onDone={duelSummaryDone} />
+              <DuelSummaryOverlay data={duelSummary} onDone={duelSummaryDone} myId={seat?.playerId} />
             ) : null}
             {duelReward && !battleVideo ? (
               <DuelRewardOverlay state={duelReward} meId={seat?.playerId ?? ''} unit={unitFor} onChoose={sendReward} />
