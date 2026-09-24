@@ -41,6 +41,9 @@ export type CallSessionOptions = {
   onPeerState: (playerId: string, state: 'connecting' | 'connected' | 'failed') => void;
 };
 
+/** Offer gửi lâu hơn ngần này mà chưa có answer thì coi như đã rơi, được phép gửi lại. */
+const OFFER_LOST_MS = 2000;
+
 const same = (a: string, b: string) => (a ?? '').toLowerCase() === (b ?? '').toLowerCase();
 
 type Peer = {
@@ -52,6 +55,10 @@ type Peer = {
   iOffer: boolean;
   /** Có thay đổi tới trong lúc đang thương lượng — làm nốt khi xong vòng này. */
   renegotiatePending: boolean;
+  /** Hàng đợi xử lý tín hiệu của RIÊNG kết nối này — xem {@link onSignal}. */
+  chain: Promise<void>;
+  /** Lúc gửi offer gần nhất — để biết một offer đang bay đã **rơi mất** hay chưa. */
+  offerSentAt: number;
 };
 
 export class CallSession {
@@ -60,6 +67,8 @@ export class CallSession {
   private local: MediaStream | null = null;
   private members: CallMember[] = [];
   private iceServers: unknown[] | null = null;
+  /** Danh sách ghế của lần {@link applyState} gần nhất — để dựng lại kết nối hỏng mà không phải chờ gói mới. */
+  private lastIds: string[] = [];
   private publishing = { mic: false, cam: false };
   private closed = false;
 
@@ -146,6 +155,7 @@ export class CallSession {
   async applyState(members: CallMember[], allPlayerIds: string[]) {
     if (this.closed) return;
     this.members = members ?? [];
+    this.lastIds = allPlayerIds;
 
     const publishes = (id: string) => this.members.some((m) => same(m.PlayerId, id) && (m.Mic || m.Cam));
     const others = allPlayerIds.filter((id) => !same(id, this.o.myId));
@@ -166,6 +176,14 @@ export class CallSession {
 
   /* ── tín hiệu (gói 99) ─────────────────────────────────────────────────── */
 
+  /**
+   * ⚠️ MỖI KẾT NỐI XỬ LÝ TÍN HIỆU TUẦN TỰ, không được chạy chồng nhau.
+   *
+   * Giữa `setRemoteDescription` và `setLocalDescription` có `await`; giữa hai nhịp đó mà một offer
+   * nữa tới thì hai vòng đan vào nhau và vòng sau chết với
+   * *"Failed to set local answer sdp: Called in wrong state: stable"*. Lúc đó kết nối vẫn "xanh"
+   * nhưng **một chiều không có hình** — đã thấy thật trên máy 24/9.
+   */
   async onSignal(from: string, raw: string) {
     if (this.closed) return;
     let msg: { sdp?: { type: string; sdp: string }; ice?: unknown; needOffer?: boolean };
@@ -183,9 +201,46 @@ export class CallSession {
       peer = opened;
     }
 
-    /* Đầu kia vừa thêm/bớt track và nhờ ta offer lại (xem {@link renegotiate}). */
+    const current = peer;
+    current.chain = current.chain.then(() => this.handleSignal(from, current, msg)).catch(() => {
+      /* Một gói hỏng không được làm đứt hàng đợi của những gói sau. */
+    });
+    return current.chain;
+  }
+
+  private async handleSignal(
+    from: string,
+    peer: Peer,
+    msg: { sdp?: { type: string; sdp: string }; ice?: unknown; needOffer?: boolean },
+  ) {
+    if (this.closed) return;
+
+    /*
+     * Đầu kia vừa thêm/bớt track và nhờ ta offer lại (xem {@link renegotiate}).
+     *
+     * Đang có một vòng chạy dở thì **bỏ qua lời nhờ này**, đừng đặt cọc: vòng đang bay đã mang
+     * đủ mọi thứ rồi. Đặt cọc chỉ sinh ra một vòng thứ hai thừa, và hai vòng đan nhau là nguồn
+     * của "một chiều không có hình".
+     */
     if (msg.needOffer) {
-      await this.renegotiate(from, peer);
+      if (peer.pc.signalingState === 'stable') {
+        await this.renegotiate(from, peer);
+      } else if (peer.pc.localDescription && Date.now() - peer.offerSentAt > OFFER_LOST_MS) {
+        /*
+         * ⚠️ OFFER CŨ ĐÃ RƠI — GỬI LẠI CHÍNH NÓ.
+         *
+         * Đầu kia vừa mở lại app: offer ta gửi lúc nó chưa vào đã rơi vào khoảng không, nên ta
+         * kẹt ở `have-local-offer` còn nó kẹt ở chờ. Bỏ qua lời nhờ này là **kẹt vĩnh viễn**
+         * (đã dính thật 24/9). Gửi lại đúng `localDescription` đang có thì đầu kia trả lời được
+         * ngay, không phải dựng lại gì.
+         *
+         * Mốc {@link OFFER_LOST_MS} để phân biệt với offer VẪN ĐANG BAY bình thường — gửi thêm
+         * một bản nữa vào đúng lúc đó chỉ tạo ra một answer thứ hai vô duyên.
+         */
+        const local = peer.pc.localDescription;
+        peer.offerSentAt = Date.now();
+        this.o.sendSignal(from, JSON.stringify({ sdp: { type: local.type, sdp: local.sdp } }));
+      }
       return;
     }
 
@@ -247,26 +302,26 @@ export class CallSession {
    */
   private async renegotiate(remoteId: string, peer: Peer) {
     if (this.closed) return;
+    /* Không phải bên tạo offer thì **nhờ**, không tự offer — giữ offer một chiều, không bao giờ glare. */
+    if (!peer.iOffer) {
+      this.o.sendSignal(remoteId, JSON.stringify({ needOffer: true }));
+      return;
+    }
+
     /*
      * Đang giữa một vòng khác thì ĐẶT CỜ rồi thoát, làm nốt khi vòng đó xong. Bỏ luôn là mất hình
      * đúng ở người bấm mic rồi bấm camera liền tay — hai thay đổi cách nhau một nhịp.
-     * (Chưa có `localDescription` = vòng đầu chưa chạy; vòng đầu sẽ tự mang track đi.)
      */
-    if (!peer.pc.localDescription) return;
     if (peer.pc.signalingState !== 'stable') {
       peer.renegotiatePending = true;
       return;
     }
     peer.renegotiatePending = false;
 
-    if (!peer.iOffer) {
-      this.o.sendSignal(remoteId, JSON.stringify({ needOffer: true }));
-      return;
-    }
-
     try {
       const offer = await peer.pc.createOffer({});
       await peer.pc.setLocalDescription(offer);
+      peer.offerSentAt = Date.now();
       this.o.sendSignal(remoteId, JSON.stringify({ sdp: { type: offer.type, sdp: offer.sdp } }));
     } catch {
       /* Kết nối rụng giữa chừng - `connectionstatechange` sẽ lo phần báo. */
@@ -292,6 +347,8 @@ export class CallSession {
       pendingIce: [],
       iOffer: this.o.myId.toLowerCase() < key,
       renegotiatePending: false,
+      chain: Promise.resolve(),
+      offerSentAt: 0,
     };
     this.peers.set(key, peer);
     this.attachLocal(peer);
@@ -314,7 +371,22 @@ export class CallSession {
          * mạng; thấy ô đen thì tưởng app hỏng. Đây cũng là chỗ đếm tỉ lệ hỏng thật sau này.
          */
         this.o.onPeerState(remoteId, 'failed');
-        this.o.onStream(remoteId, null);
+
+        /*
+         * ⚠️ VÀ DỰNG LẠI HẴN MỘT KẾT NỐI MỚI, đừng cố cứu cái cũ.
+         *
+         * Một `RTCPeerConnection` đã `failed` có thể sống lại sau một lần ICE restart, nhưng
+         * **`track` không bắn lại** — luồng hình về tới nơi mà màn hình không hề hay. Kết quả:
+         * **một chiều có hình, chiều kia không**, và không bên nào báo lỗi (đã dính thật 24/9 khi
+         * mở lại app một máy). Dựng mới thì mọi thứ đi lại từ đầu, không có trạng thái cũ sót.
+         *
+         * Đợi một nhịp rồi mới dựng: mạng rớt thật thì cả hai bên cùng hỏng một lúc, lao vào
+         * dựng ngay là hai bên đạp nhau.
+         */
+        this.close(remoteId);
+        setTimeout(() => {
+          if (!this.closed) void this.applyState(this.members, this.lastIds);
+        }, 3000);
       } else this.o.onPeerState(remoteId, 'connecting');
     });
 
@@ -322,7 +394,18 @@ export class CallSession {
     if (offerIfMine && peer.iOffer) {
       const offer = await pc.createOffer({});
       await pc.setLocalDescription(offer);
+      peer.offerSentAt = Date.now();
       this.o.sendSignal(remoteId, JSON.stringify({ sdp: { type: offer.type, sdp: offer.sdp } }));
+    } else if (offerIfMine) {
+      /*
+       * ⚠️ KHÔNG ĐƯỢC CHỜ SUÔNG Ở ĐÂY. Ta không phải bên tạo offer, nhưng đầu kia có thể
+       * đang giữ một kết nối CŨ tới ta — app ta vừa mở lại, hay vừa rớt mạng rồi vào lại. Khi đó
+       * đầu kia thấy "đã có kết nối rồi" nên không offer nữa, còn ta thì ngồi đợi một offer
+       * không bao giờ tới — **kẹt vĩnh viễn**, hai bên đều "xanh" (đã dính thật 24/9 khi mở
+       * lại app trên một máy). Nhắc một tiếng thì đầu kia offer lại trên chính kết nối cũ của nó;
+       * `ufrag` của ta mới nên đó cũng là một lần ICE restart, đúng thứ cần.
+       */
+      this.o.sendSignal(remoteId, JSON.stringify({ needOffer: true }));
     }
     return peer;
   }
