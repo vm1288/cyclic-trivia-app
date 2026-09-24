@@ -3410,8 +3410,19 @@ export default function GameLandscapeScreen() {
   const useCardInQuestion = async (card: GameCard, secondsLeft: number) => {
     if (!canUseCardInQuestion(card)) return;
 
+    /*
+     * K143 (Tony 24/9): thêm một dòng nói lá này LÀM GÌ. Người chơi bấm nhầm rồi mới biết thì đã
+     * mất lá - hộp cũ chỉ có mỗi "Use X card now?".
+     *
+     * Dùng LẠI đúng câu của tấm HELP CARDS (`helpCards.body.*`, K140) để hai chỗ không bao giờ
+     * lệch nhau. Chỉ Skipper và Eliminator tới được đây (`canUseCardInQuestion` loại lá dùng
+     * TRƯỚC câu hỏi), nhưng tra theo `CardId` nên lá nào cũng có câu đúng của nó.
+     */
+    const cardKey = CARD_ORDER.find((k) => k.toLowerCase() === (card.CardId ?? '').toLowerCase());
+
     const ok = await confirm({
       title: t('card.confirmTitle', { card: card.Name ?? card.CardId ?? '' }),
+      message: cardKey ? t(`helpCards.body.${cardKey}` as 'helpCards.body.Joker') : undefined,
       confirmLabel: t('card.confirmUse'),
       cancelLabel: t('card.confirmSkip'),
     });
