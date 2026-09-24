@@ -130,6 +130,7 @@ export function QuestionOverlay({
   onTimeout,
   locked,
   readOnly = false,
+  revealDelaySeconds = 0,
 }: {
   question: GameQuestion;
   /**
@@ -158,11 +159,30 @@ export function QuestionOverlay({
    * `MainShowSubCategoriesAndQuestions` không có nút nào.
    */
   readOnly?: boolean;
+  /**
+   * K148 (Tony 24/9): GIỮ LẠI ĐÁP ÁN chừng này giây — câu hỏi hiện trước, đọc xong mới thấy các
+   * lựa chọn và SUBMIT sáng lên, **đồng hồ cũng chỉ chạy từ lúc đó**.
+   *
+   * ⚠️ Đồng hồ đếm `durationSeconds - revealDelaySeconds`, KHÔNG phải `durationSeconds`.
+   * Server vẫn đóng bước ở đúng `durationSeconds` kể từ lúc phát câu; đếm đủ duration sau khi
+   * đã trôi 10 giây là **máy còn hiện số mà server đã cắt lượt**. Muốn người chơi vẫn có đủ
+   * chừng ấy giây để trả lời thì nới `Constants.QuestionCountDown` ở server (đã nâng 95 → 105).
+   *
+   * 0 = tắt. **Chỉ câu thường của người tới lượt** mới truyền số > 0 — xem chỗ gọi.
+   */
+  revealDelaySeconds?: number;
 }) {
   const t = useT();
 
-  const [left, setLeft] = useState(durationSeconds);
+  /* Đếm phần CÒN LẠI sau khi đã trừ khoảng giữ đáp án — xem `revealDelaySeconds`. */
+  const answerSeconds = Math.max(1, durationSeconds - revealDelaySeconds);
+  const [left, setLeft] = useState(answerSeconds);
   const [chosen, setChosen] = useState<string | null>(null);
+  /** Đang giữ đáp án (K148): câu hỏi đã hiện, đáp án thì chưa. */
+  const [holding, setHolding] = useState(revealDelaySeconds > 0);
+  /* Đọc trong `setInterval` nên phải là ref, không thì phải dựng lại đồng hồ mỗi lần đổi. */
+  const holdingRef = useRef(holding);
+  holdingRef.current = holding;
 
   /*
    * ⚠️ Một câu hỏi chỉ được gửi ĐÚNG MỘT LẦN.
@@ -180,11 +200,17 @@ export function QuestionOverlay({
   useEffect(() => {
     sent.current = false;
     setChosen(null);
-    setLeft(durationSeconds);
-  }, [question.Id, durationSeconds]);
+    setLeft(answerSeconds);
+    setHolding(revealDelaySeconds > 0);
+    if (revealDelaySeconds <= 0) return;
+    const reveal = setTimeout(() => setHolding(false), revealDelaySeconds * 1000);
+    return () => clearTimeout(reveal);
+  }, [question.Id, answerSeconds, revealDelaySeconds]);
 
   useEffect(() => {
     const tick = setInterval(() => {
+      /* Đang giữ đáp án thì đồng hồ ĐỨNG YÊN — đếm khi chưa ai đọc được đáp án là ăn gian. */
+      if (holdingRef.current) return;
       setLeft((n) => (n > 0 ? n - 1 : 0));
     }, 1000);
 
@@ -220,7 +246,7 @@ export function QuestionOverlay({
 
   const urgent = left <= 5;
   const clockColor = urgent ? '#FF6B78' : boardColors.purple;
-  const canSubmit = !!chosen && !sent.current && !locked && !readOnly;
+  const canSubmit = !!chosen && !sent.current && !locked && !readOnly && !holding;
   /* Chỉ xem: đáp án mờ và không bấm được, như lúc khoá chờ Skipper - nhưng không có chữ "đang đổi câu". */
   const frozen = locked || readOnly;
 
@@ -313,7 +339,12 @@ export function QuestionOverlay({
           <View style={styles.divider} />
 
           <View style={styles.answersCol}>
-            {question.Answers.map((answer, i) => {
+            {/*
+              K148: giữ đáp án lại một nhịp để người chơi ĐỌC CÂU HỎỊI trước (Tony 24/9).
+              Cột vẫn chiếm chỗ như cũ, không thì câu hỏi nhảy sang giữa màn rồi nhảy ngược lại.
+            */}
+            {holding ? <View style={styles.holdFill} /> : null}
+            {holding ? null : question.Answers.map((answer, i) => {
               const picked = chosen === answer.Id;
               const color = picked ? PICKED : ANSWER_COLOR;
 
@@ -494,6 +525,8 @@ const styles = StyleSheet.create({
   divider: { width: 1, backgroundColor: 'rgba(110,140,210,0.5)' },
 
   answersCol: { flex: 1, justifyContent: 'center', gap: 6 },
+  /* K148: chỗ trống giữ nguyên bố cục trong lúc đáp án chưa hiện. */
+  holdFill: { flex: 1 },
   option: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -200,6 +200,16 @@ const ROLL_COOLDOWN_MS = 2000;
  */
 const same = (a: string, b: string) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
 
+/**
+ * K148: câu thường hiện trước chừng này giây rồi đáp án mới ra, đồng hồ cũng chỉ chạy từ lúc đó.
+ *
+ * ⚠️ Khoảng này **trừ vào** thời gian đếm, vì server vẫn đóng bước ở đúng `DurationInSeconds` kể
+ * từ lúc phát câu. Để người chơi vẫn có đủ chừng ấy giây trả lời thì `Constants.QuestionCountDown`
+ * bên server đã nâng 95 → 105 (cùng bản K148). Server cũ thì chỉ còn 85 giây — vẫn chạy đúng,
+ * chỉ ngắn hơn.
+ */
+const QUESTION_REVEAL_SECONDS = 10;
+
 type ActiveQuestion = {
   /**
    * `battle` là loại THỨ BA, thêm 2026-09-10. Cùng khung hiển thị, nhưng đi
@@ -4062,6 +4072,16 @@ export default function GameLandscapeScreen() {
                 onTimeout={timeoutQuestion}
                 locked={question.swapping === true}
                 readOnly={question.readOnly === true}
+                /*
+                 * K148 (Tony 24/9): *"cho question hiện trước rồi 10s sau mới hiện các câu trả lời
+                 * và nút submit … và countdown bắt đầu, chỉ áp dụng cho normal quiz thôi, battle và
+                 * question for turn không áp dụng"*.
+                 *
+                 * `kind` đã tách sẵn ba loại: `race` là câu tranh lượt, `battle` là câu đấu tay đôi,
+                 * `turn` là câu thường. Ghế chỉ xem (`readOnly`) cũng giữ, để màn của người xem
+                 * không hiện đáp án trước màn của người đang trả lời.
+                 */
+                revealDelaySeconds={question.kind === 'turn' ? QUESTION_REVEAL_SECONDS : 0}
               />
             ) : null}
 
