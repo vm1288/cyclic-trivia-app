@@ -49,7 +49,7 @@ import { MoveDirectionOverlay } from '../src/components/MoveDirectionOverlay';
 import { FlyingReward } from '../src/components/FlyingReward';
 import { CardEarnedOverlay } from '../src/components/CardEarnedOverlay';
 import { HelpCardsInfoButton, HelpCardsSheet } from '../src/components/HelpCardsSheet';
-import { JokerSixOverlay } from '../src/components/JokerSixOverlay';
+import { JokerBallOverlay } from '../src/components/JokerBallOverlay';
 import { CallTile, CamIcon, MicIcon } from '../src/call/CallTile';
 import { useCall } from '../src/call/useCall';
 import { GameClock } from '../src/components/GameClock';
@@ -527,10 +527,19 @@ export default function GameLandscapeScreen() {
   /** K140: tấm ⓘ giải thích bốn lá bài trợ giúp (mockup Tony 24/9). */
   const [helpCards, setHelpCards] = useState(false);
   /**
-   * K141 (Tony 24/9): trả lời ĐÚNG khi đang dùng JOKER → chiếu video bóng bay qua vạch biên (6 điểm)
-   * TRƯỚC, chiếu xong mới hiện tấm kết quả như cũ. Giữ nguyên việc phải làm trong hàm này.
+   * K141 (Tony 24/9): trả lời ĐÚNG khi đang dùng JOKER → chiếu video bóng TRƯỚC, chiếu xong mới
+   * hiện tấm kết quả như cũ. Giữ nguyên việc phải làm trong hàm này.
    */
   const [jokerSix, setJokerSix] = useState<null | (() => void)>(null);
+  /**
+   * K147: CurveBall `JokerX3` đã chạy chưa — từ đó trở đi Joker đúng ăn 6 điểm, và video phải là
+   * đoạn bóng **bay qua vạch biên** thay vì bốc một trong ba đoạn bóng ăn 4.
+   *
+   * ⚠️ ĐỌC TỪ CẢ HAI ĐƯỜNG: gói 90 lúc nó vừa xảy ra, VÀ `IsJokerX3` trong state. Chỉ nghe
+   * gói 90 thì ai vào sau hoặc mở lại app sẽ không bao giờ biết, và chiếu nhầm video ăn 4 cho
+   * một cú 6 điểm.
+   */
+  const [jokerX3, setJokerX3] = useState(false);
   const [duelTime, setDuelTime] = useState<{ a: string; b: string } | null>(null);
   const [duel, setDuel] = useState<DuelSetupState | null>(null);
   const [duelSummary, setDuelSummary] = useState<DuelSummaryData | null>(null);
@@ -1658,6 +1667,8 @@ export default function GameLandscapeScreen() {
         const message = typeof packet.Message === 'string' ? packet.Message : '';
         if (!type && !message) return;
         playSound('curveBall');   /* K137 */
+        /* K147: từ giây này trở đi Joker ăn 6 điểm → đổi luôn video. Cờ không bao giờ tắt. */
+        if (type === 'JokerX3') setJokerX3(true);
         setCurveBall({
           type,
           message,
@@ -2927,6 +2938,17 @@ export default function GameLandscapeScreen() {
     const hide = setTimeout(() => setCurveBall(null), Math.max(3, curveBall.seconds) * 1000);
     return () => clearTimeout(hide);
   }, [curveBall]);
+
+  /*
+   * K147: cờ `JokerX3` đọc lại từ state — đường này mới là đường dành cho người **vào sau
+   * hoặc mở lại app**, vì gói 90 chỉ bắn đúng một lần lúc CurveBall xảy ra.
+   *
+   * ⚠️ CHỈ BẬT, KHÔNG BAO GIỜ TẮT: luật đã đổi thì đổi tới hết ván, và server đời cũ không có
+   * trường này — để nó tắt cờ thì một lần lấy state là xóa mất điều vừa biết từ gói 90.
+   */
+  useEffect(() => {
+    if (snapshot?.Game.IsJokerX3) setJokerX3(true);
+  }, [snapshot?.Game.IsJokerX3]);
 
   useEffect(() => {
     if (!raceWinner) return;
@@ -4591,7 +4613,7 @@ export default function GameLandscapeScreen() {
       */}
       {earnedCard ? <CardEarnedOverlay card={earnedCard} name={me?.NickName ?? ''} ms={3200} onDone={earnedCardDone} /> : null}
       <HelpCardsSheet visible={helpCards} onClose={() => setHelpCards(false)} />
-      {jokerSix ? <JokerSixOverlay onDone={jokerSix} /> : null}
+      {jokerSix ? <JokerBallOverlay six={jokerX3} onDone={jokerSix} /> : null}
 
       {snapshot ? (
         <GameClock

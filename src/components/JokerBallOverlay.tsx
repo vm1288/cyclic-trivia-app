@@ -3,14 +3,20 @@ import { StyleSheet, View } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 
 /**
- * VIDEO "SÁU ĐIỂM" SAU KHI TRẢ LỜI ĐÚNG CÓ JOKER (K141, Tony 24/9).
+ * VIDEO BÓNG BAY SAU KHI TRẢ LỜI ĐÚNG CÓ JOKER (K141, mở rộng K147 — Tony 24/9).
  *
- * Yêu cầu: *"AFTER A CORRECT ANSWER WITH A JOKER … khi player submit đáp án đúng sẽ phát video
- * trước và sau đó mới hiện thông báo giải thích đáp án đúng và cộng điểm"*. Nên đây là một tấm
- * CHẶN ĐƯỜNG: chiếu xong (hoặc hỏng, hoặc quá giờ) mới gọi `onDone`, và `onDone` chính là chỗ
- * dựng tấm kết quả như cũ.
+ * Yêu cầu gốc: *"AFTER A CORRECT ANSWER WITH A JOKER … khi player submit đáp án đúng sẽ phát
+ * video trước và sau đó mới hiện thông báo giải thích đáp án đúng và cộng điểm"*. Nên đây là
+ * một tấm CHẶN ĐƯỜNG: chiếu xong (hoặc hỏng, hoặc quá giờ) mới gọi `onDone`, và `onDone` chính
+ * là chỗ dựng tấm kết quả như cũ.
  *
- * ⚠️ File nằm TRONG APK (`assets/videos/joker-six.mp4`, 5,3 MB) chứ không tải từ server như video
+ * <b>HAI BỘ VIDEO (K147):</b>
+ *   bình thường (Joker = 4 điểm) → **bốc ngẫu nhiên 1 trong 3** video bóng ăn 4
+ *   sau CurveBall `JokerX3` (Joker = 6 điểm) → **luôn là** video bóng bay qua vạch biên
+ *
+ * Bốc ngẫu nhiên là cố ý: cùng một đoạn phim lặp lại mỗi lần ai đó dùng Joker thì chán rất nhanh.
+ *
+ * ⚠️ File nằm TRONG APK (`assets/videos/`, ~15 MB cả bốn) chứ không tải từ server như video
  * battle. Lý do: tấm kết quả PHẢI hiện ngay sau đó - tải mạng giữa chừng là người chơi ngồi nhìn
  * màn đen vài giây, mà WiFi hội trường thì không tin được. Đổi video = thay file đó rồi build lại.
  *
@@ -21,10 +27,18 @@ import { VideoView, useVideoPlayer } from 'expo-video';
 /** Video dài ~5 s. Quá mốc này coi như hỏng và đi tiếp - không để ai chờ mãi. */
 const GIVE_UP_MS = 12000;
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const SOURCE = require('../../assets/videos/joker-six.mp4');
+/* eslint-disable @typescript-eslint/no-require-imports */
+/** Joker ăn 6 điểm (sau CurveBall `JokerX3`): bóng bay HẲN QUA vạch biên. */
+const SIX = require('../../assets/videos/joker-six.mp4');
+/** Joker ăn 4 điểm: ba đoạn bóng ăn 4, bốc ngẫu nhiên một. */
+const FOURS = [
+  require('../../assets/videos/joker-four-1.mp4'),
+  require('../../assets/videos/joker-four-2.mp4'),
+  require('../../assets/videos/joker-four-3.mp4'),
+];
+/* eslint-enable @typescript-eslint/no-require-imports */
 
-export function JokerSixOverlay({ onDone }: { onDone: () => void }) {
+export function JokerBallOverlay({ six, onDone }: { six: boolean; onDone: () => void }) {
   const done = useRef(false);
   const finish = () => {
     if (done.current) return;
@@ -34,7 +48,13 @@ export function JokerSixOverlay({ onDone }: { onDone: () => void }) {
   const finishRef = useRef(finish);
   finishRef.current = finish;
 
-  const player = useVideoPlayer(SOURCE, (p) => {
+  /*
+   * ⚠️ BỐC MỘT LẦN RỒI GIỮ. `useVideoPlayer` dựng lại khi nguồn đổi, nên bốc thẳng trong thân
+   * hàm là mỗi lần vẽ lại đổi một phim khác và video nhảy từ đầu.
+   */
+  const source = useRef(six ? SIX : FOURS[Math.floor(Math.random() * FOURS.length)]).current;
+
+  const player = useVideoPlayer(source, (p) => {
     p.loop = false;
     p.muted = false;
     p.play();

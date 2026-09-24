@@ -356,6 +356,13 @@ export type GameSnapshot = {
     /** Ván đã dừng THẬT (đồng hồ đã ngưng, gói 80 đã bắn). */
     IsPauseOnClient: boolean;
     /**
+     * K147: CurveBall `JokerX3` đã chạy chưa — từ đó trở đi Joker đúng ăn 6 điểm.
+     *
+     * ⚠️ Server cũ không có trường này (cờ nằm trong cache, không trong DB), nên `undefined`
+     * là bình thường và đọc là "chưa".
+     */
+    IsJokerX3?: boolean;
+    /**
      * Ai đang tới lượt. `Guid.Empty` khi chưa xác định xong (vòng đua "ai đi
      * trước" chưa có kết quả).
      */
