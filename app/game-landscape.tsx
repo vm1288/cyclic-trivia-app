@@ -49,6 +49,7 @@ import { MoveDirectionOverlay } from '../src/components/MoveDirectionOverlay';
 import { FlyingReward } from '../src/components/FlyingReward';
 import { CardEarnedOverlay } from '../src/components/CardEarnedOverlay';
 import { HelpCardsInfoButton, HelpCardsSheet } from '../src/components/HelpCardsSheet';
+import { JokerSixOverlay } from '../src/components/JokerSixOverlay';
 import { GameClock } from '../src/components/GameClock';
 import { QuestionOverlay } from '../src/components/QuestionOverlay';
 import { BattleOverlay } from '../src/components/BattleOverlay';
@@ -523,6 +524,11 @@ export default function GameLandscapeScreen() {
    */
   /** K140: tấm ⓘ giải thích bốn lá bài trợ giúp (mockup Tony 24/9). */
   const [helpCards, setHelpCards] = useState(false);
+  /**
+   * K141 (Tony 24/9): trả lời ĐÚNG khi đang dùng JOKER → chiếu video bóng bay qua vạch biên (6 điểm)
+   * TRƯỚC, chiếu xong mới hiện tấm kết quả như cũ. Giữ nguyên việc phải làm trong hàm này.
+   */
+  const [jokerSix, setJokerSix] = useState<null | (() => void)>(null);
   const [duelTime, setDuelTime] = useState<{ a: string; b: string } | null>(null);
   const [duel, setDuel] = useState<DuelSetupState | null>(null);
   const [duelSummary, setDuelSummary] = useState<DuelSummaryData | null>(null);
@@ -3122,27 +3128,48 @@ export default function GameLandscapeScreen() {
      * thẳng: mình có phải người tới lượt không.
      */
     const earnedStar = isMyTurn;
-    setTurnResult({
-      kind: 'correct',
-      point: result.point,
-      earnedStar,
-      answerText,
-      /* Rỗng khi câu chưa có giải thích - khổ đầy đủ tự bỏ dòng đó đi. */
-      explain: result.answerExplain ?? '',
-    });
+
+    const announce = () => {
+      setTurnResult({
+        kind: 'correct',
+        point: result.point,
+        earnedStar,
+        answerText,
+        /* Rỗng khi câu chưa có giải thích - khổ đầy đủ tự bỏ dòng đó đi. */
+        explain: result.answerExplain ?? '',
+      });
+
+      /*
+       * Thứ tự bay: SAO trước, THẺ sau. Đủ ngưỡng sao thì server vừa reset sao vừa
+       * thưởng bài trong cùng một lượt, và hai vật bay chồng lên nhau thì rối.
+       */
+      if (earnedStar) fly('star');
+      /*
+       * Đủ 5 sao: sao bay xong → tấm "FIVE STARS! JOKER" giữa bàn cờ 2,6 s → lá bay về ô
+       * (K86, Tony: "phải có thông báo nhận thẻ rồi thẻ mới bay tới chỗ nó đứng"). Tấm kết
+       * quả câu hỏi (3,5 s) tắt trước khi lá bay nên hai thứ không đè nhau.
+       */
+      const card = result.card as CardKey | '';
+      if (card) pendingEarnedCard.current = card;
+    };
 
     /*
-     * Thứ tự bay: SAO trước, THẺ sau. Đủ ngưỡng sao thì server vừa reset sao vừa
-     * thưởng bài trong cùng một lượt, và hai vật bay chồng lên nhau thì rối.
+     * K141 (Tony 24/9): ĐÚNG mà đang dùng JOKER → video bóng bay qua vạch biên trước, rồi mới
+     * công bố. Nhận biết lá đang có hiệu lực y như `handState`: lá dùng TRƯỚC câu hỏi
+     * (`ShowBeforeQuestion`) và đang `IsUsing`. Đừng suy từ `result.point === 4`: điểm còn phụ
+     * thuộc thể thức và luật thưởng, suy sai là chiếu video cho câu thường.
+     *
+     * ⚠️ `setState` với một HÀM bị React hiểu là updater, nên phải bọc `() => fn`.
      */
-    if (earnedStar) fly('star');
-    /*
-     * Đủ 5 sao: sao bay xong → tấm "FIVE STARS! JOKER" giữa bàn cờ 2,6 s → lá bay về ô
-     * (K86, Tony: "phải có thông báo nhận thẻ rồi thẻ mới bay tới chỗ nó đứng"). Tấm kết
-     * quả câu hỏi (3,5 s) tắt trước khi lá bay nên hai thứ không đè nhau.
-     */
-    const card = result.card as CardKey | '';
-    if (card) pendingEarnedCard.current = card;
+    const joker = (me?.Cards ?? []).find((c) => c.CardId === 'Joker');
+    if (joker?.ShowBeforeQuestion === true && joker.IsUsing === true) {
+      setJokerSix(() => () => {
+        setJokerSix(null);
+        announce();
+      });
+      return;
+    }
+    announce();
   };
 
   /**
@@ -4425,6 +4452,7 @@ export default function GameLandscapeScreen() {
       */}
       {earnedCard ? <CardEarnedOverlay card={earnedCard} name={me?.NickName ?? ''} ms={3200} onDone={earnedCardDone} /> : null}
       <HelpCardsSheet visible={helpCards} onClose={() => setHelpCards(false)} />
+      {jokerSix ? <JokerSixOverlay onDone={jokerSix} /> : null}
 
       {snapshot ? (
         <GameClock
