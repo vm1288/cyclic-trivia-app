@@ -52,6 +52,15 @@ Get-Process -Name CyclicTrivia -ErrorAction SilentlyContinue | Stop-Process -For
 | `.ts` / `.tsx` | không cần build, Metro tự nạp |
 | `app.json`, thêm native module | `scripts\build-apk.ps1` (nó chạy prebuild) |
 | thêm/bớt nhân vật | `CyclicTrivia\scripts\build-characters.ps1`, sửa `wwwroot\character-sets.json`, **restart server** |
+> ⚠️ **AAB lên Play: LUÔN chạy `scriptsuild-aab.ps1`, ĐỮNG gọi thẳng `gradlew bundleRelease`.**
+> `bundleRelease` trần vẫn ra file **đã ký đúng upload key** nên nhìn y hệt bản thật, nhưng thiếu
+> `EXPO_PUBLIC_API_URL` → JS nhúng **`http://localhost:5276`**, tức là app cài từ Play sẽ không
+> gọi được server nào. Đã dính thật 24/9 (bản v9/v10 đầu). Kiểm lại sau mỗi lần build:
+>
+> ```bash
+> python -c "import zipfile;z=zipfile.ZipFile('dist/....aab');b=[n for n in z.namelist() if n.endswith('index.android.bundle')][0];d=z.read(b).decode('latin-1');print('prod:', 'trivia-asia.cyclicdigital.com' in d, '| localhost:5276:', 'localhost:5276' in d)"
+> ```
+
 | **gửi cho người khác test** (không Metro, trỏ server thật) | `scripts\build-apk.ps1 -Release -ServerUrl https://trivia-asia.cyclicdigital.com -NoInstall` → `dist\CricTriv-<ngày>.apk`. JS nằm trong APK; ký bằng debug keystore nên cài qua file được, **không** đưa lên Play (K90) |
 
 > ⚠️ Sửa **animation** xong thì force-stop app rồi mở lại. Fast refresh không
