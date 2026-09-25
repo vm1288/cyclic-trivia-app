@@ -14,7 +14,7 @@
     },
     "android": {
       "package": "com.cyclictrivia.app",
-      "versionCode": 10,
+      "versionCode": 11,
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
         "monochromeImage": "./assets/android-icon-monochrome.png",
