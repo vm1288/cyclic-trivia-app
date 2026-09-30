@@ -91,11 +91,22 @@ export function NeonButton({ label, Icon, color, onPress, busy, disabled, sublab
         locations={[0, 0.22, 0.78, 1]}
         style={[styles.rim, { boxShadow: outerGlow(color) }]}
       >
-        <LinearGradient
-          colors={[...buttonBody]}
-          locations={[0, 0.55, 1]}
-          style={[styles.body, { boxShadow: innerGlow(color) }]}
-        >
+        {/*
+          iOS (30/9): gradient mang `boxShadow` thì KHÔNG bị cắt theo borderRadius - thân
+          thành chữ nhật góc vuông và đè mất bốn góc viền. Nên tách: View bo góc + overflow
+          cắt gradient, còn ánh neon hắt vào (inset) nằm ở lớp phủ riêng phía trên.
+        */}
+        <View style={styles.body}>
+          <LinearGradient
+            colors={[...buttonBody]}
+            locations={[0, 0.55, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+          {/* Dưới chữ và icon, như inset boxShadow gốc (vẽ dưới con, trên nền). */}
+          <View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, styles.innerGlow, { boxShadow: innerGlow(color) }]}
+          />
           <Halftone color={color.stroke} />
 
           {Icon && (
@@ -131,7 +142,7 @@ export function NeonButton({ label, Icon, color, onPress, busy, disabled, sublab
           {busy && (
             <ActivityIndicator color={color.stroke} style={!Icon && styles.busyFloating} />
           )}
-        </LinearGradient>
+        </View>
       </LinearGradient>
     </AnimatedPressable>
   );
@@ -149,6 +160,7 @@ const styles = StyleSheet.create({
     gap: 10,
     overflow: 'hidden',
   },
+  innerGlow: { borderRadius: 13 },
   iconWrap: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   labelBlock: { flex: 1 },
   label: {
