@@ -12,6 +12,16 @@
       "ios": {
         "resourceClass": "m-medium"
       }
+    },
+    "ios-dev": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://trivia-asia.cyclicdigital.com"
+      },
+      "ios": {
+        "resourceClass": "m-medium"
+      }
     }
   }
 }
