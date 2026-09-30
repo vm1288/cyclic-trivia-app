@@ -8,6 +8,7 @@ import { ActivityIndicator, Image, LogBox, Platform, Pressable, ScrollView, Styl
 LogBox.ignoreLogs(['[Expo-IAP]', '[expo-iap]']);
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { checkActivationCode, ERR_MAX_DEVICES } from '../src/api/activation';
 import { assetUrl } from '../src/api/game';
 import { fetchStoreGames, fetchStorePlans, submitStorePurchase, type StoreGame, type StorePlan, type StorePurchaseResult } from '../src/api/store';
 import { FreeTrialDialog, type TrialInfo } from '../src/components/FreeTrialDialog';
@@ -16,12 +17,10 @@ import { NeonSheet, SheetButton } from '../src/components/NeonSheet';
 import { useLicense } from '../src/session/LicenseSession';
 import { downloadSponsorLogo } from '../src/session/sponsorLogo';
 import { apiErrorText } from '../src/i18n/apiError';
-import { FormScreen } from '../src/components/FormScreen';
-import { NeonButton } from '../src/components/NeonButton';
 import { StageBackground } from '../src/components/StageBackground';
 import { useT } from '../src/i18n/I18nProvider';
 import { usePlayer } from '../src/session/PlayerSession';
-import { bg, innerGlow, neon, outerGlow, text } from '../src/theme/colors';
+import { bg, neon, text } from '../src/theme/colors';
 
 /**
  * PURCHASE - mua license bằng In-App Purchase của store, thay cho luồng web
@@ -71,7 +70,6 @@ export default function PurchaseScreen() {
   const [busySku, setBusySku] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [done, setDone] = useState<StorePurchaseResult | null>(null);
   /** K112: TRY {GAME} → tấm giải thích dùng thử (bước 2 của FreeTrialDialog) → PROCEED → mua. */
   const [trialFor, setTrialFor] = useState<{ info: TrialInfo; plan: StorePlan } | null>(null);
   const [trialNotice, setTrialNotice] = useState<string | null>(null);
@@ -158,13 +156,62 @@ export default function PurchaseScreen() {
     });
 
   /**
-   * K112: server trả `session` (đã kích hoạt cho máy này) → lưu license, hiện "You're ready to
-   * play!"; không có (server cũ / hết suất máy) → màn mã + REGISTER như K66.
+   * K150 (Tony 30/9): **MUA LÀ VÀO THẮNG — KHÔNG CÒN MÀN NHẬP MÃ NỮA.**
+   *
+   * Trước đây: server trả `session` thì vào thẳng (K112), không trả thì app đẩy sang REGISTER với
+   * mã điền sẵn để người mua bấm ACTIVATE (K66). Nhìn từ phía người vừa trả tiền thì đó là màn
+   * *"Enter the licence code that came with your game"* hỏi lại chính thứ app vừa tự nói ra, trong khi
+   * họ chẳng nhận mã nào cả.
+   *
+   * Giờ: server không kích hoạt sẵn thì **app tự kích hoạt** bằng chính mã vừa nhận, rồi vào thẳng.
+   * Hỏng hẳn (hết suất máy…) thì báo MỘT CÂU, không đưa ô nhập mã ra nữa — mã không phải thứ
+   * người mua đang thiếu.
+   *
+   * ⚠️ Đường MÃ TỪ WEB/EMAIL (vào `/register` từ NEW GAME) **giữ nguyên** — người đó có mã thật
+   * trong tay. Chỉ đường MUA bỏ bước này.
    */
   const landPurchase = async (result: StorePurchaseResult) => {
-    const s = result.session;
+    let s = result.session;
+
+    if (!s?.token && result.code) {
+      /*
+       * Server không kích hoạt sẵn (server cũ, hoặc lúc mua chưa kịp có `deviceId`). Tự gọi
+       * đúng lời gọi mà nút ACTIVATE vẫn gọi — người dùng không phải biết có bước này.
+       */
+      const previous = license.status === 'none' || license.status === 'loading' ? null : license.session;
+      const activated = await checkActivationCode(
+        result.code,
+        license.deviceIdFor(result.code) ?? previous?.deviceId ?? null,
+        previous?.token ?? null,
+      );
+      if (activated.isSuccess) {
+        s = {
+          token: activated.data,
+          expiresAt: activated.expiresAt ?? null,
+          deviceId: activated.deviceId,
+          hostId: activated.HostId,
+          licenseCode: result.code,
+          languageCode: activated.languageCode ?? null,
+          sponsorLogoUrl: activated.sponsorLogoUrl ?? null,
+          sponsorName: activated.sponsorName ?? null,
+          sponsorId: activated.sponsorId ?? null,
+          planTitle: activated.planTitle ?? null,
+          licenseExpiresAt: activated.licenseExpiresAt ?? null,
+        };
+      } else {
+        /* Hết suất máy là ca thực tế nhất: nói rõ ra, đừng để họ đi tìm ô nhập mã. */
+        const msg =
+          activated.errorCode === ERR_MAX_DEVICES
+            ? `${apiErrorText(activated, t)} ${t('register.maxDevicesHint')}`
+            : apiErrorText(activated, t);
+        setNotice(msg);
+        setTrialNotice(msg);
+        return;
+      }
+    }
+
     if (!s?.token) {
-      setDone(result);
+      setNotice(t('purchase.failed'));
       return;
     }
     const sponsorLogoUri = s.sponsorLogoUrl ? await downloadSponsorLogo(s.sponsorLogoUrl) : null;
@@ -395,24 +442,10 @@ export default function PurchaseScreen() {
       }
     : null;
 
-  const goRegister = () => {
-    if (!done) return;
-    router.replace({ pathname: '/register', params: { code: done.code } });
-  };
-
-  if (done) {
-    return (
-      <FormScreen title={t('purchase.successTitle')}>
-        <View style={styles.doneCard}>
-          <Text style={styles.doneCode}>{done.code}</Text>
-          <Text style={styles.doneBody}>
-            {t(done.restored ? 'purchase.successRestored' : 'purchase.successBody', { code: done.code })}
-          </Text>
-        </View>
-        <NeonButton label={t('purchase.continue')} color={neon.green} onPress={goRegister} />
-      </FormScreen>
-    );
-  }
+  /*
+   * K150: tấm "mã license của bạn là … → CONTINUE → REGISTER" đã BỊ BỎ.
+   * Mua xong là vào thẳng; xem {@link landPurchase}.
+   */
 
   /*
    * K111 (Tony 18/9, ảnh mẫu 3): EXPLORE GAMES = lưới game (logo + tagline), game chưa bán có dải
@@ -659,16 +692,4 @@ const styles = StyleSheet.create({
   fine: { flex: 1, color: 'rgba(255,255,255,0.32)', fontSize: 11 },
   restoreText: { color: neon.blue.stroke, fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' },
   dim: { opacity: 0.4 },
-  doneCard: {
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: neon.green.stroke,
-    backgroundColor: '#0A0810',
-    boxShadow: `${outerGlow(neon.green)}, ${innerGlow(neon.green)}`,
-    padding: 18,
-    alignItems: 'center',
-    gap: 8,
-  },
-  doneCode: { color: neon.green.mid, fontSize: 36, fontWeight: '800', letterSpacing: 6, fontVariant: ['tabular-nums'] },
-  doneBody: { color: text.primary, fontSize: 14, lineHeight: 20, textAlign: 'center' },
 });
