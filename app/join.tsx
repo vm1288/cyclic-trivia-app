@@ -25,6 +25,7 @@ import { useLicense } from '../src/session/LicenseSession';
 import { usePlayer } from '../src/session/PlayerSession';
 import { bg, neon, text } from '../src/theme/colors';
 
+import { MODAL_ORIENTATIONS } from '../src/utils/modalOrientations';
 /**
  * Vào ván bằng mã phòng HOẶC quét QR (K108, Tony 18/9 - bố cục theo ảnh mẫu, style giữ nguyên):
  *
@@ -311,7 +312,7 @@ export default function JoinScreen() {
       />
 
       {/* Camera toàn màn hình; thoát bằng nút ✕ hoặc BACK cứng. */}
-      <Modal visible={scanning} animationType="fade" statusBarTranslucent onRequestClose={() => setScanning(false)}>
+      <Modal supportedOrientations={MODAL_ORIENTATIONS} visible={scanning} animationType="fade" statusBarTranslucent onRequestClose={() => setScanning(false)}>
         <View style={styles.scanRoot}>
           <CameraView
             style={styles.camera}

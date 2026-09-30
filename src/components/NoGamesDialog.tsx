@@ -3,6 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useT } from '../i18n/I18nProvider';
 import { text } from '../theme/colors';
 
+import { MODAL_ORIENTATIONS } from '../utils/modalOrientations';
 /**
  * "No Games Found." (K106): máy chưa mua game nào mà bấm SET UP A MATCH hoặc My Games.
  * Chép ảnh mẫu của Tony: tiêu đề, một đoạn với "Explore Games" in đậm, nút EXPLORE GAMES
@@ -11,7 +12,7 @@ import { text } from '../theme/colors';
 export function NoGamesDialog({ visible, onExplore, onClose }: { visible: boolean; onExplore: () => void; onClose: () => void }) {
   const t = useT();
   return (
-    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+    <Modal supportedOrientations={MODAL_ORIENTATIONS} visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button">
         <Pressable style={styles.card} onPress={() => {}}>
           <Text style={styles.title}>{t('games.noneTitle')}</Text>

@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Halftone } from './Halftone';
 
+import { MODAL_ORIENTATIONS } from '../utils/modalOrientations';
 /**
  * Khung tấm nổi dùng chung cho các tấm K107–K111 (Go big!, free trial, unlock, giới thiệu game,
  * nhân vật đã có người) — Tony 18/9: *"bỏ nền đen đi, mockup tôi gửi có nền là demo… hãy phác
@@ -42,7 +43,7 @@ export function NeonSheet({
 }) {
   const insets = useSafeAreaInsets();
   return (
-    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+    <Modal supportedOrientations={MODAL_ORIENTATIONS} visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       <View
         style={[
           styles.backdrop,

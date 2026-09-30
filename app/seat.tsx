@@ -14,6 +14,7 @@ import { useT } from '../src/i18n/I18nProvider';
 import { usePlayer } from '../src/session/PlayerSession';
 import { neon, text } from '../src/theme/colors';
 
+import { MODAL_ORIENTATIONS } from '../src/utils/modalOrientations';
 /**
  * Nhận ghế: đặt tên + chọn nhân vật.
  *
@@ -269,7 +270,7 @@ export default function SeatScreen() {
         <SheetButton label={t('seat.takenCta')} onPress={() => setTakenPopup(false)} style={styles.takenBtn} />
       </NeonSheet>
 
-      <Modal visible={preview !== null} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setPreview(null)}>
+      <Modal supportedOrientations={MODAL_ORIENTATIONS} visible={preview !== null} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setPreview(null)}>
         <Pressable style={styles.previewBackdrop} onPress={() => setPreview(null)} accessibilityRole="button">
           {preview ? (
             <View style={[styles.previewCard, { borderColor: preview.Color, boxShadow: `0 0 40px ${preview.Color}` }]}>

@@ -4,6 +4,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Halftone } from './Halftone';
 
+import { MODAL_ORIENTATIONS } from '../utils/modalOrientations';
 /**
  * Hộp thoại xác nhận dùng chung, thay cho `Alert.alert` của hệ thống.
  *
@@ -97,7 +98,7 @@ function ConfirmDialog({
   const destructive = options?.destructive ?? false;
 
   return (
-    <Modal
+    <Modal supportedOrientations={MODAL_ORIENTATIONS}
       visible={visible}
       transparent
       animationType="fade"

@@ -9,6 +9,7 @@ import { useI18n } from '../i18n/I18nProvider';
 import type { LicenseSession } from '../session/LicenseSession';
 import { text } from '../theme/colors';
 
+import { MODAL_ORIENTATIONS } from '../utils/modalOrientations';
 /**
  * Hai tấm dùng chung một khung (K106, Tony 18/9 - thay `SwitchGameSheet` + mã license):
  *
@@ -71,7 +72,7 @@ export function MyGamesSheet({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" statusBarTranslucent onRequestClose={onClose}>
+    <Modal supportedOrientations={MODAL_ORIENTATIONS} visible={visible} transparent animationType="slide" statusBarTranslucent onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <Pressable style={styles.backdropTouch} onPress={onClose} accessibilityRole="button" />
 

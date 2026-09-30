@@ -3,6 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Halftone } from './Halftone';
 
+import { MODAL_ORIENTATIONS } from '../utils/modalOrientations';
 /**
  * Menu ba chấm của màn ván chơi (K74, Tony chốt 2026-09-14).
  *
@@ -27,7 +28,7 @@ export function GameMenuSheet({
   labels: { endGame: string; cancel: string };
 }) {
   return (
-    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+    <Modal supportedOrientations={MODAL_ORIENTATIONS} visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <Pressable style={styles.backdropTouch} onPress={onClose} accessibilityRole="button" />
 
