@@ -4202,12 +4202,11 @@ export default function GameLandscapeScreen() {
               <Text
                 style={styles.roomText}
                 numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
               >
-                {seat.roomCode
-                  ? t('waiting.room', {
-                      code: seat.roomCode,
-                    })
-                  : t('game.title')}
+                {/* Tony 30/9: chỉ mã phòng, bỏ chữ "Room" - hàng này còn 5 nút nên chữ "Room JYWPPW" bị cắt thành "R…". */}
+                {seat.roomCode ?? t('game.title')}
               </Text>
 
               {/*
@@ -4932,19 +4931,18 @@ const styles = StyleSheet.create({
 
     alignItems: 'center',
 
-    gap: 6,
+    /* 6 -> 3 (30/9): đủ chỗ cho mã phòng 6 ký tự cạnh 5 nút trong cột 224dp. */
+    gap: 3,
   },
 
   roomText: {
     flex: 1,
 
-    fontSize: 13,
+    fontSize: 12,
 
     fontWeight: '700',
 
     color: text.primary,
-
-    letterSpacing: 0.6,
   },
 
   iconBtn: {
