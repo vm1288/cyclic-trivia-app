@@ -6,6 +6,7 @@ import { useT } from '../i18n/I18nProvider';
 import { fill } from './GameBoardParts';
 import { lobbyColors } from './LobbyParts';
 
+import { glowRoom } from '../theme/glow';
 /**
  * "WHO GOES FIRST?" đếm ngược - hiện GIỮA BÀN CỜ từ lúc chủ phòng bấm START tới
  * lúc câu vòng đua tới (K93, Tony 2026-09-14: "đếm ngược phải đồng bộ mọi máy").
@@ -75,6 +76,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   title: {
+    ...glowRoom(16),
     alignSelf: 'stretch',
     textAlign: 'center',
     fontSize: 26,
@@ -93,6 +95,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   count: {
+    ...glowRoom(18),
     fontSize: 44,
     fontWeight: '800',
     color: lobbyColors.amber,

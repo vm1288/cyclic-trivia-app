@@ -13,6 +13,7 @@ import { useT } from '../i18n/I18nProvider';
 import type { LeaderboardRow } from '../api/game';
 import { text } from '../theme/colors';
 
+import { glowRoom } from '../theme/glow';
 /**
  * MÀN XẾP HẠNG cuối ván — **chỉ** thể thức Leaderboard Challenge.
  *
@@ -307,6 +308,7 @@ const styles = StyleSheet.create({
    */
   nameText: { fontWeight: '800', color: '#fff', textAlign: 'center', includeFontPadding: false },
   scoreText: {
+    ...glowRoom(4),
     fontWeight: '900',
     color: '#fff',
     textAlign: 'center',

@@ -20,6 +20,7 @@ import { useT } from '../src/i18n/I18nProvider';
 import type { TranslationKey } from '../src/i18n/translations';
 import { bg, innerGlow, neon, outerGlow, text } from '../src/theme/colors';
 
+import { glowPad, glowRoom } from '../src/theme/glow';
 /**
  * HOW TO PLAY - chép `Views/Public/GameInstruction.cshtml` của bản web (12 trang
  * lật Back/Next), rồi nối thêm 9 trang cho những gì web không nhắc mà app đã có
@@ -649,7 +650,9 @@ const styles = StyleSheet.create({
   placeholderText: { color: '#FFD84D', fontSize: 22, textAlign: 'center', paddingHorizontal: 20 },
 
   title: {
-    marginTop: 10,
+
+    ...glowRoom(10),
+    marginTop: 10 - glowPad(10),
     color: text.primary,
     fontSize: 24,
     fontWeight: '800',
@@ -721,7 +724,8 @@ const styles = StyleSheet.create({
 
   /* ---- hình minh hoạ ---- */
   center: { alignItems: 'center', justifyContent: 'center' },
-  bigNum: { fontSize: 72, fontWeight: '800', lineHeight: 78, textShadowRadius: 18 },
+  bigNum: {
+    ...glowRoom(18), fontSize: 72, fontWeight: '800', lineHeight: 78, textShadowRadius: 18 },
   bigNumLabel: { color: text.muted, fontSize: 11, fontWeight: '700', letterSpacing: 2.5, marginTop: 2 },
 
   die: {
@@ -802,7 +806,8 @@ const styles = StyleSheet.create({
   cardBadgeText: { fontSize: 9, fontWeight: '800' },
 
   starsRow: { flexDirection: 'row', gap: 4 },
-  star: { textShadowColor: 'rgba(255,198,30,0.8)', textShadowRadius: 10 },
+  star: {
+    ...glowRoom(10), textShadowColor: 'rgba(255,198,30,0.8)', textShadowRadius: 10 },
 
   arrows: { flexDirection: 'row', gap: 10 },
   arrow: {
@@ -832,7 +837,8 @@ const styles = StyleSheet.create({
 
   iconRow: { flexDirection: 'row', gap: 12 },
   iconBtn: { width: 56, height: 56, borderRadius: 12, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  trophy: { textShadowColor: 'rgba(255,198,30,0.7)', textShadowRadius: 16 },
+  trophy: {
+    ...glowRoom(16), textShadowColor: 'rgba(255,198,30,0.7)', textShadowRadius: 16 },
 
   resume: {
     borderWidth: 2,

@@ -17,6 +17,7 @@ import Animated, {
 import { useT } from '../i18n/I18nProvider';
 import { DiceCube, DiceFace } from './DiceCube';
 
+import { glowRoom } from '../theme/glow';
 /**
  * Xúc xắc lăn, phủ giữa màn hình.
  *
@@ -263,6 +264,7 @@ const styles = StyleSheet.create({
   result: { alignItems: 'center', gap: 4 },
   label: { fontSize: 11, fontWeight: '700', letterSpacing: 2.6, color: 'rgba(200,170,255,0.7)' },
   value: {
+    ...glowRoom(24),
     fontSize: 46,
     lineHeight: 52,
     fontWeight: '800',

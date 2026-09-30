@@ -16,6 +16,7 @@ import { useT } from '../src/i18n/I18nProvider';
 import { usePlayer } from '../src/session/PlayerSession';
 import { neon, text } from '../src/theme/colors';
 
+import { glowRoom } from '../src/theme/glow';
 /**
  * Phòng chờ của NGƯỜI CHƠI - khác `lobby.tsx`, vốn là phòng chờ của người tổ chức.
  *
@@ -268,6 +269,7 @@ const styles = StyleSheet.create({
   // Chiếm trọn bề ngang + căn giữa: Android đo hụt bề rộng chữ nghiêng rồi cắt
   // cụt nếu để View bọc ngoài tự co (đã dính ở màn NEW GAME).
   title: {
+    ...glowRoom(14),
     alignSelf: 'stretch',
     textAlign: 'center',
     fontSize: 26,
@@ -328,7 +330,8 @@ const styles = StyleSheet.create({
   backLabel: { color: text.primary, fontSize: 16, fontWeight: '700', letterSpacing: 2.4 },
   codeRim: { marginTop: 6, padding: 1.5, borderRadius: 13, backgroundColor: lobbyColors.purple, boxShadow: '0 0 18px rgba(200,107,255,0.6)' },
   codeInner: { height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(48,12,80,0.95)' },
-  codeText: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', letterSpacing: 4, textShadowColor: 'rgba(226,167,255,0.9)', textShadowRadius: 14, textShadowOffset: { width: 0, height: 0 } },
+  codeText: {
+    ...glowRoom(14), fontSize: 24, fontWeight: '800', color: '#FFFFFF', letterSpacing: 4, textShadowColor: 'rgba(226,167,255,0.9)', textShadowRadius: 14, textShadowOffset: { width: 0, height: 0 } },
   gameCard: {
     marginTop: 8,
     flex: 1,

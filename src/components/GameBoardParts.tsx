@@ -22,6 +22,7 @@ import Svg, {
 import { characterImageUrl, type GameCard, type GamePlayer } from '../api/game';
 import { text } from '../theme/colors';
 
+import { glowRoom } from '../theme/glow';
 /**
  * Các mảnh của màn bàn cờ, chuyển từ `designs/GameBoardScreen.tsx`.
  *
@@ -538,6 +539,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   playerName: {
+    ...glowRoom(4),
     fontSize: 10,
     lineHeight: 12,
     fontWeight: '700',

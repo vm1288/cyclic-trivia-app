@@ -16,6 +16,7 @@ import {
   type NeonColor,
 } from '../theme/colors';
 
+import { glowRoom } from '../theme/glow';
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type Props = {
@@ -174,6 +175,7 @@ const styles = StyleSheet.create({
   busyFloating: { position: 'absolute', right: 16 },
   disabled: { opacity: 0.45 },
   chevron: {
+    ...glowRoom(8),
     fontSize: 25,
     lineHeight: 29,
     fontWeight: '800',

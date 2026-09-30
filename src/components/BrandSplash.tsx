@@ -6,6 +6,7 @@ import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withDelay,
 import { StageBackground } from './StageBackground';
 import { bg } from '../theme/colors';
 
+import { glowPad, glowRoom } from '../theme/glow';
 /**
  * Màn chào NGANG lúc mở app (Tony 2026-09-16): nền sân khấu của Home + icon
  * `android-icon-foreground.png` (đã có sẵn chữ "Cyclic") + tagline
@@ -102,9 +103,10 @@ const styles = StyleSheet.create({
   nativeLogo: { width: NATIVE_LOGO_DP, height: NATIVE_LOGO_DP },
   icon: { width: ICON_DP, height: ICON_DP },
   tagline: {
+    ...glowRoom(8),
     position: 'absolute',
     top: '50%',
-    marginTop: TAGLINE_TOP_DP,
+    marginTop: TAGLINE_TOP_DP - glowPad(8),
     left: 24,
     right: 24,
     fontSize: 20,

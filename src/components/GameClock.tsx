@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { useT } from '../i18n/I18nProvider';
 
+import { glowRoom } from '../theme/glow';
 /**
  * Đồng hồ TỔNG của ván (K87, Tony 2026-09-14): nằm TRÊN CÙNG, cùng hàng với thanh trạng thái
  * của điện thoại — màn ngang thì giữa hàng đó trống (giờ bên trái, pin/sóng bên phải), app
@@ -87,7 +88,8 @@ export function GameClock({
 
 const styles = StyleSheet.create({
   bar: { position: 'absolute', top: 0, left: 0, right: 0, alignItems: 'center', justifyContent: 'center', zIndex: 50 },
-  text: { fontSize: 12, fontWeight: '800', letterSpacing: 1, color: '#B9A6FF', textShadowColor: 'rgba(0,0,0,0.6)', textShadowRadius: 3 },
+  text: {
+    ...glowRoom(3), fontSize: 12, fontWeight: '800', letterSpacing: 1, color: '#B9A6FF', textShadowColor: 'rgba(0,0,0,0.6)', textShadowRadius: 3 },
   urgent: { color: '#FF5C6A' },
   paused: { color: 'rgba(198,212,240,0.55)' },
 });

@@ -26,6 +26,7 @@ import { usePlayer } from '../src/session/PlayerSession';
 import { bg, neon, text } from '../src/theme/colors';
 
 import { MODAL_ORIENTATIONS } from '../src/utils/modalOrientations';
+import { glowRoom } from '../src/theme/glow';
 /**
  * Vào ván bằng mã phòng HOẶC quét QR (K108, Tony 18/9 - bố cục theo ảnh mẫu, style giữ nguyên):
  *
@@ -373,15 +374,7 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(140,200,255,0.65)',
     textShadowRadius: 14,
     textShadowOffset: { width: 0, height: 0 },
-    /*
-     * iOS (30/9): quầng sáng bị CẮT theo khung dòng chữ - khung ôm sát chữ thì thành một
-     * hình chữ nhật mờ sau tiêu đề. Nới khung bằng padding >= textShadowRadius, margin âm
-     * bù lại để bố cục không xê dịch.
-     */
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginHorizontal: -16,
-    marginVertical: -12,
+    ...glowRoom(14),
   },
 
   columns: { flex: 1, flexDirection: 'row', alignItems: 'stretch', gap: 18, paddingTop: 6 },

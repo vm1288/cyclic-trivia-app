@@ -32,6 +32,7 @@ import { useLicense } from '../src/session/LicenseSession';
 import { usePlayer } from '../src/session/PlayerSession';
 import { cell, cellGlow, cta, neon, text, type CellVariant } from '../src/theme/colors';
 
+import { glowRoom } from '../src/theme/glow';
 export default function NewGameScreen() {
   const router = useRouter();
   const license = useLicense();
@@ -422,6 +423,7 @@ const styles = StyleSheet.create({
    * Cũng đã bỏ `letterSpacing` âm: nó cộng thêm vào sai số đo trên Android.
    */
   title: {
+    ...glowRoom(14),
     alignSelf: 'stretch',
     textAlign: 'center',
     // Nhỏ hơn bản dọc (42/52): tiêu đề giờ nằm trong hàng cao 44dp cùng nút
@@ -476,6 +478,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chipText: {
+    ...glowRoom(10),
     fontSize: 21,
     fontWeight: '700',
     textShadowRadius: 10,
@@ -502,6 +505,7 @@ const styles = StyleSheet.create({
   },
   ctaDots: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 150 },
   ctaLabel: {
+    ...glowRoom(10),
     fontSize: 21,
     fontWeight: '700',
     letterSpacing: 2.5,

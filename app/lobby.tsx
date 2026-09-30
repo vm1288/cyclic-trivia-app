@@ -45,6 +45,7 @@ import { TYPE_ID } from '../src/net/gameConnection';
 import { useGameState } from '../src/net/useGameState';
 import { neon, text } from '../src/theme/colors';
 
+import { glowRoom } from '../src/theme/glow';
 /**
  * Nhịp hỏi lại danh sách ghế.
  *
@@ -687,6 +688,7 @@ const styles = StyleSheet.create({
   // Chiếm trọn bề ngang + căn giữa, KHÔNG bọc trong View alignItems:'center':
   // Android đo hụt bề rộng chữ nghiêng rồi cắt cụt (đã dính ở màn NEW GAME).
   title: {
+    ...glowRoom(14),
     alignSelf: 'stretch',
     textAlign: 'center',
     // Nhỏ dần theo từng vòng: 30 (bản dọc) -> 26 -> 22. Giờ nó nằm trong hàng
@@ -705,6 +707,7 @@ const styles = StyleSheet.create({
   codeRim: { marginTop: 6, padding: 1.5, borderRadius: 13, boxShadow: '0 0 18px rgba(200,107,255,0.6)' },
   codeInner: { height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   codeText: {
+    ...glowRoom(14),
     fontSize: 24,
     fontWeight: '800',
     color: '#FFFFFF',
@@ -807,6 +810,7 @@ const styles = StyleSheet.create({
     gap: 18,
   },
   overlayTitle: {
+    ...glowRoom(16),
     alignSelf: 'stretch',
     textAlign: 'center',
     fontSize: 30,

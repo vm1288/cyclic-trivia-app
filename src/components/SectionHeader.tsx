@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { section } from '../theme/colors';
 
+import { glowRoom } from '../theme/glow';
 /**
  * Tiêu đề nhóm kiểu `◇ GAME LENGTH ─────── ◇`.
  *
@@ -54,6 +55,7 @@ const styles = StyleSheet.create({
   diamond: { color: section.diamond, fontSize: 9 },
   diamondTrailing: { color: 'rgba(150,190,235,0.6)', fontSize: 8 },
   title: {
+    ...glowRoom(10),
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 2.2,

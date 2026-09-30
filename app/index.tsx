@@ -38,6 +38,7 @@ import { useLicense } from '../src/session/LicenseSession';
 import { usePlayer } from '../src/session/PlayerSession';
 import { innerGlow, neon, outerGlow, text } from '../src/theme/colors';
 
+import { glowPad, glowRoom } from '../src/theme/glow';
 /**
  * Logo dùng MỘT file lockup (hình + chữ "Cyclic" + tagline), vì logo chính thức
  * được cấp ở dạng một khối liền có sẵn hiệu ứng glow - tách ra sẽ mất glow ở
@@ -607,7 +608,8 @@ const styles = StyleSheet.create({
 
   /* Cùng kiểu chữ với BrandSplash.tagline (cỡ nhỏ hơn vì logo Home thấp hơn). */
   tagline: {
-    marginTop: 10,
+    ...glowRoom(8),
+    marginTop: 10 - glowPad(8),
     fontSize: 15,
     lineHeight: 20,
     fontWeight: '600',
@@ -639,6 +641,7 @@ const styles = StyleSheet.create({
   },
   startAnotherPressed: { opacity: 0.65 },
   startAnotherText: {
+    ...glowRoom(8),
     color: '#F2F7FF',
     fontSize: 13,
     fontWeight: '800',
