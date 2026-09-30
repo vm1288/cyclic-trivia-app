@@ -93,7 +93,7 @@ export type StorePurchaseResult = {
   restored: boolean;
   /**
    * K112: app gửi `deviceId` → server kích hoạt luôn và trả phiên (cùng hình ActivationCodeCheck)
-   * → app `license.save` rồi "You're ready to play!". Null = server cũ / hết suất máy → đi REGISTER.
+   * → app `license.save` rồi "You're ready to play!". Null = server cũ / hết suất máy → báo purchase.maxDevicesHint (K150: không còn màn REGISTER).
    */
   session?: {
     token: string;

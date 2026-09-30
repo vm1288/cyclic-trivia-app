@@ -202,7 +202,7 @@ export default function PurchaseScreen() {
         /* Hết suất máy là ca thực tế nhất: nói rõ ra, đừng để họ đi tìm ô nhập mã. */
         const msg =
           activated.errorCode === ERR_MAX_DEVICES
-            ? `${apiErrorText(activated, t)} ${t('register.maxDevicesHint')}`
+            ? `${apiErrorText(activated, t)} ${t('purchase.maxDevicesHint')}`
             : apiErrorText(activated, t);
         setNotice(msg);
         setTrialNotice(msg);

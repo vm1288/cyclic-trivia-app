@@ -228,9 +228,9 @@ export default function NewGameScreen() {
             <View style={styles.centerBlock}>
               <Text style={styles.note}>{t('newGame.noLicence')}</Text>
               <NeonButton
-                label={t('activate.goToRegister')}
+                label={t('games.explore')}
                 color={neon.orange}
-                onPress={() => router.replace('/register')}
+                onPress={() => router.replace('/purchase')}
               />
             </View>
           ) : loading ? (
