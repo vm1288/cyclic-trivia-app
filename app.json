@@ -11,7 +11,10 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.cyclictrivia.app",
-      "buildNumber": "1"
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.cyclictrivia.app",
@@ -64,6 +67,11 @@
           "microphonePermission": "Cyclic uses the microphone so the players in your room can hear you on video chat."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "223bdf69-2c75-4e34-ae0b-51ec27dc9823"
+      }
+    }
   }
 }
