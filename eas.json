@@ -1,0 +1,17 @@
+{
+  "cli": {
+    "version": ">= 20.3.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "ios-device": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://trivia-asia.cyclicdigital.com"
+      },
+      "ios": {
+        "resourceClass": "m-medium"
+      }
+    }
+  }
+}
