@@ -373,6 +373,15 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(140,200,255,0.65)',
     textShadowRadius: 14,
     textShadowOffset: { width: 0, height: 0 },
+    /*
+     * iOS (30/9): quầng sáng bị CẮT theo khung dòng chữ - khung ôm sát chữ thì thành một
+     * hình chữ nhật mờ sau tiêu đề. Nới khung bằng padding >= textShadowRadius, margin âm
+     * bù lại để bố cục không xê dịch.
+     */
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginHorizontal: -16,
+    marginVertical: -12,
   },
 
   columns: { flex: 1, flexDirection: 'row', alignItems: 'stretch', gap: 18, paddingTop: 6 },
