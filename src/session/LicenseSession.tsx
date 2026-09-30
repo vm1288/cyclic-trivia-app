@@ -378,7 +378,9 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
                   ...s,
                   token: result.data,
                   expiresAt: result.expiresAt ?? null,
-                  activated: result.isActivated,
+                  /* Bản dev: licence nạp qua `app/dev-licence.tsx` giữ nguyên "đã kích hoạt" dù server
+                     trả false (chưa gắn email) - không thì máy test mất game sau mỗi lần mở app. */
+                  activated: result.isActivated || (__DEV__ && s.activated),
                   /* Gói/hạn đổi khi gia hạn trong store - làm mới theo (K106). */
                   planTitle: result.planTitle ?? s.planTitle ?? null,
                   sponsorId: result.sponsorId ?? s.sponsorId ?? null,

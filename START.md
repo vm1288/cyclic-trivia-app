@@ -79,6 +79,19 @@ start. `8888` là board CricTriv (oval), `916160` là board chữ nhật.
 
 ---
 
+## Máy test cần licence để làm chủ phòng
+
+Không còn màn nhập mã (K150: khách chỉ có licence bằng cách mua). Bản **dev** có cửa riêng:
+
+```bash
+adb shell am start -a android.intent.action.VIEW -d "cyclic://dev-licence?code=106734"
+```
+
+iPhone: mở `cyclic://dev-licence?code=106734` (WDA `POST /session/{id}/url`). Licence nạp kiểu này luôn
+coi là đã kích hoạt, kể cả khi server trả `isActivated: false`. Bản release không có cửa này.
+
+---
+
 ## Hỏng thì tra ở đâu
 
 Trước hết luôn là hai đường forward. Chúng phải in ra **hai** dòng:
