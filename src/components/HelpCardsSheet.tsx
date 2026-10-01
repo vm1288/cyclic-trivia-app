@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 import { CARD_ORDER, CARD_STYLES, type CardKey } from './GameBoardParts';
-import { NeonSheet, SheetButton } from './NeonSheet';
+import { NeonSheet } from './NeonSheet';
 import { useT } from '../i18n/I18nProvider';
 import { text } from '../theme/colors';
 
@@ -13,7 +13,7 @@ import { text } from '../theme/colors';
  *
  * Yêu cầu trong mockup: *"a small info icon next to the help cards section that triggers a popup
  * explaining their function when tapped"*. Tấm là một BĂNG CHUYỀN: mỗi lần một lá, hai mũi tên
- * trái/phải để lật, dưới lá là "Max limit: N" và câu mô tả, cuối tấm là nút Close.
+ * trái/phải để lật, dưới lá là "Max limit: N" và câu mô tả. Đóng bằng ✕ ở góc (1/10).
  *
  * ⚠️ Lá vẽ bằng ICON + MÀU CÓ SẴN của app (`CARD_STYLES`), không dùng ảnh trong mockup: ảnh đó là
  * bản màu pastel của người thiết kế, lệch hẳn với tông neon tối của app. Muốn đổi sang ảnh thật thì
@@ -34,7 +34,11 @@ export function HelpCardsSheet({ visible, onClose }: { visible: boolean; onClose
   const step = (d: number) => setIndex((i) => (i + d + CARD_ORDER.length) % CARD_ORDER.length);
 
   return (
-    <NeonSheet visible={visible} onClose={onClose} maxWidth={520} style={styles.sheet}>
+    /*
+     * ✕ ở góc thay nút Close ở đáy (Tony 1/10: "Nút close bị mất không scroll đc. Hay mình chuyển
+     * thành nút X ở góc popup") - máy ngang thấp, câu mô tả dài 2 dòng là nút đáy rơi khỏi màn.
+     */
+    <NeonSheet visible={visible} onClose={onClose} maxWidth={520} style={styles.sheet} closeButton>
       <Text style={styles.title}>{t('helpCards.title')}</Text>
 
       {/* Lá bài + hai mũi tên lật, đúng bố cục mockup (chevron trái | lá | chevron phải). */}
@@ -62,7 +66,6 @@ export function HelpCardsSheet({ visible, onClose }: { visible: boolean; onClose
       <Text style={styles.max}>{t('helpCards.max', { n: String(style.max) })}</Text>
       <Text style={styles.body}>{t(`helpCards.body.${key}` as 'helpCards.body.Joker')}</Text>
 
-      <SheetButton label={t('helpCards.close')} onPress={onClose} style={styles.close} />
     </NeonSheet>
   );
 }
@@ -125,7 +128,6 @@ const styles = StyleSheet.create({
   max: { color: '#FFC61E', fontSize: 12.5, fontWeight: '800' },
   body: { color: text.muted, fontSize: 12.5, lineHeight: 17, textAlign: 'center', paddingHorizontal: 6 },
 
-  close: { marginTop: 2, alignSelf: 'stretch' },
 
   /*
    * Nút ⓘ đè lên góc trên PHẢI khối thẻ bài (mockup đặt nó cạnh tên các lá). Tuyệt đối để không
