@@ -85,6 +85,12 @@ export function DiceRollOverlay({
 
   const [face, setFace] = useState(1);
   const settled = value != null && value > 0;
+  /**
+   * Đã HIỆN số kết quả chưa (Tony 1/10: "khi con xúc xắc chưa dừng thì số đã hiện trước").
+   * Server trả số là `settled` ngay, nhưng khối còn hạ cánh `LAND_MS` rồi lật `FLIP_MS` - chỉ
+   * hiện "YOU ROLLED 6" khi mặt vuông đã mở ra hẳn.
+   */
+  const [revealed, setRevealed] = useState(false);
 
   /** Góc xoay của khối, tính bằng độ và cứ tăng lên mãi. */
   const spin = useSharedValue(0);
@@ -114,6 +120,24 @@ export function DiceRollOverlay({
   useEffect(() => {
     enter.value = withTiming(1, { duration: 360, easing: Easing.out(Easing.quad) });
   }, [enter]);
+
+  useEffect(() => {
+    if (!settled) {
+      setRevealed(false);
+      return;
+    }
+    const timer = setTimeout(() => setRevealed(true), LAND_MS + FLIP_MS);
+    return () => clearTimeout(timer);
+  }, [settled]);
+
+  useEffect(() => {
+    if (!settled) {
+      setRevealed(false);
+      return;
+    }
+    const timer = setTimeout(() => setRevealed(true), LAND_MS + FLIP_MS);
+    return () => clearTimeout(timer);
+  }, [settled]);
 
   useEffect(() => {
     if (!settled) {
@@ -222,13 +246,13 @@ export function DiceRollOverlay({
 
       <View style={styles.result}>
         <Text style={styles.label}>
-          {settled
+          {revealed
             ? rolledBy
               ? t('dice.rolledBy', { name: rolledBy.toUpperCase() })
               : t('dice.rolled')
             : t('dice.rolling')}
         </Text>
-        {settled ? <Text style={styles.value}>{value}</Text> : null}
+        {revealed ? <Text style={styles.value}>{value}</Text> : null}
       </View>
     </Animated.View>
   );
