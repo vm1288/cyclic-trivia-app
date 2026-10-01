@@ -19,10 +19,17 @@ export type UnlockInfo = GameInfo;
 
 export function UnlockDialog({
   info,
+  freeJoinsTotal,
   onPurchase,
   onClose,
 }: {
   info: UnlockInfo | null;
+  /**
+   * Tới vì HẾT lượt vào miễn phí (Tony 1/10, mockup "When free joins and the 7-day trial are both
+   * exhausted"): câu "You've used all your 3 free match joins for {game}…" + nút PURCHASE.
+   * Không truyền thì giữ câu "You haven't unlocked {game} yet" + UNLOCK NOW.
+   */
+  freeJoinsTotal?: number | null;
   onPurchase: (info: UnlockInfo) => void;
   onClose: () => void;
 }) {
@@ -38,8 +45,12 @@ export function UnlockDialog({
   }
   return (
     <NeonSheet visible onClose={onClose} maxWidth={560} closeButton>
-      <Text style={styles.body}>{t('unlock.notYet', { game: info.gameName })}</Text>
-      <SheetButton label={t('unlock.cta')} onPress={() => setStep(2)} />
+      <Text style={styles.body}>
+        {freeJoinsTotal
+          ? t('unlock.usedAll', { game: info.gameName, total: String(freeJoinsTotal) })
+          : t('unlock.notYet', { game: info.gameName })}
+      </Text>
+      <SheetButton label={t(freeJoinsTotal ? 'unlock.purchase' : 'unlock.cta')} onPress={() => setStep(2)} />
     </NeonSheet>
   );
 }

@@ -16,6 +16,7 @@ import {
 } from '../src/api/room';
 import { FreeTrialDialog, type TrialInfo } from '../src/components/FreeTrialDialog';
 import { UnlockDialog, type UnlockInfo } from '../src/components/UnlockDialog';
+import { storeTrialGone } from '../src/api/storeTrial';
 import { NeonButton } from '../src/components/NeonButton';
 import { NeonField } from '../src/components/NeonField';
 import { StageBackground } from '../src/components/StageBackground';
@@ -112,12 +113,20 @@ export default function JoinScreen() {
 
       const hostIds = license.all.filter((g) => g.activated).map((g) => g.hostId);
       const seat = await claimSeat(normalised, player.deviceId, hostIds);
-      setBusy(false);
 
       if (!seat.isSuccess) {
         if (seat.errorCode === 'free_joins_used') {
           const body = (seat.data ?? {}) as FreeJoinsUsedBody;
-          if (body.Trial?.Available) {
+          /*
+           * Tony 1/10 (lỗi 4): server bảo "còn dùng thử" nhưng tài khoản store đã tiêu nó rồi →
+           * hỏi store trước; store nói hết thì đi thẳng tấm UNLOCK NOW (mockup "Purchase").
+           */
+          const trialGone =
+            body.Trial?.Available && body.Trial.ProductId && body.Unlock
+              ? await storeTrialGone(body.Trial.ProductId)
+              : null;
+          setBusy(false);
+          if (body.Trial?.Available && trialGone !== true) {
             setTrialTotal(body.FreeJoinsTotal ?? 3);
             setTrial({
               days: body.Trial.Days,
@@ -129,6 +138,7 @@ export default function JoinScreen() {
             return;
           }
           if (body.Unlock) {
+            setTrialTotal(body.FreeJoinsTotal ?? 3);
             setUnlock({
               sponsorId: body.Trial?.SponsorId ?? '',
               gameName: body.Trial?.GameName ?? t('games.unnamed'),
@@ -145,9 +155,11 @@ export default function JoinScreen() {
           }
           setExhausted(true);
         }
+        setBusy(false);
         setError(apiErrorText(seat, t));
         return;
       }
+      setBusy(false);
 
       await player.saveSeat({
         gameId: seat.GameId,
@@ -305,6 +317,7 @@ export default function JoinScreen() {
 
       <UnlockDialog
         info={unlock}
+        freeJoinsTotal={trialTotal}
         onClose={() => setUnlock(null)}
         onPurchase={(info) => {
           setUnlock(null);

@@ -146,6 +146,8 @@ export const en = {
   'purchase.trialUsedStore': 'Your store account has already used the free trial for this game, so you will be charged right away.',
 
   'unlock.notYet': "You haven't unlocked {game} yet. Purchase the game now to continue joining matches, creating new games, and playing with your friends without limits!",
+  'unlock.usedAll':
+    "You've used all your {total} free match joins for {game}. Purchase the game now to continue joining matches, creating new games, and playing with your friends without limits!",
   'unlock.cta': 'UNLOCK NOW',
   'unlock.purchase': 'PURCHASE',
   'unlock.price': '{price} {per}',
@@ -962,6 +964,8 @@ const vi: Record<TranslationKey, string> = {
   'purchase.trialUsedStore': 'Tài khoản store của bạn đã dùng thử game này rồi, nên sẽ tính phí ngay.',
 
   'unlock.notYet': 'Bạn chưa mở khoá {game}. Mua game ngay để tiếp tục vào ván, mở ván mới và chơi cùng bạn bè không giới hạn!',
+  'unlock.usedAll':
+    'Bạn đã dùng hết {total} lượt vào ván miễn phí của {game}. Mua game ngay để tiếp tục vào ván, mở ván mới và chơi cùng bạn bè không giới hạn!',
   'unlock.cta': 'MỞ KHOÁ NGAY',
   'unlock.purchase': 'MUA',
   'unlock.price': '{price} {per}',
