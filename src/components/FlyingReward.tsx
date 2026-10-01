@@ -32,13 +32,33 @@ type Props = {
   /** `star` hoặc tên lá bài (`Joker`, `Skipper`...). */
   reward: 'star' | CardKey;
   onDone: () => void;
+  /**
+   * Gọi ngay TRƯỚC lúc vật chạm đích (Tony 1/10: ô đích phải sáng đúng lúc bóng tới). Hẹn từ chính
+   * luồng hoạt ảnh nên khớp với đường bay; sớm `ARRIVE_LEAD_MS` để bù độ trễ sang luồng JS.
+   */
+  onArrive?: () => void;
 };
 
 /** Cỡ của vật bay - đủ to để thấy, đủ nhỏ để không che mất bàn cờ. */
 const SIZE = 46;
 
-export function FlyingReward({ from, to, reward, onDone }: Props) {
+/** Nảy tại chỗ trước khi bay (ms). */
+const LIFT_MS = 560;
+/** Thời gian bay tới đích (ms). */
+const TRAVEL_MS = 620;
+/**
+ * Báo `onArrive` sớm bao nhiêu so với lúc chạm đích. Đo trên A17 (1/10, quay màn hình): chờ `onDone`
+ * thì ô sáng sau ~0,3 s (bóng đã tan); báo sớm 150 ms vẫn trễ ~0,2 s. 300 ms thì ô sáng đúng lúc bóng chạm.
+ */
+const ARRIVE_LEAD_MS = 300;
+
+/** Từ lúc phóng tới lúc vật chạm đích - lưới an toàn cho màn ván nếu vật bay không vẽ được. */
+export const FLY_ARRIVE_MS = LIFT_MS + TRAVEL_MS;
+
+export function FlyingReward({ from, to, reward, onDone, onArrive }: Props) {
   const progress = useSharedValue(0);
+  /** Chỉ để hẹn giờ `onArrive` trên luồng hoạt ảnh - không vẽ gì. */
+  const arrive = useSharedValue(0);
   const pop = useSharedValue(0);
 
   useEffect(() => {
@@ -52,12 +72,20 @@ export function FlyingReward({ from, to, reward, onDone }: Props) {
     );
 
     progress.value = withDelay(
-      560,
-      withTiming(1, { duration: 620, easing: Easing.inOut(Easing.cubic) }, (finished) => {
+      LIFT_MS,
+      withTiming(1, { duration: TRAVEL_MS, easing: Easing.inOut(Easing.cubic) }, (finished) => {
         if (finished) runOnJS(onDone)();
       }),
     );
-  }, [progress, pop, onDone]);
+    if (onArrive) {
+      arrive.value = withDelay(
+        LIFT_MS + TRAVEL_MS - ARRIVE_LEAD_MS,
+        withTiming(1, { duration: 0 }, (finished) => {
+          if (finished) runOnJS(onArrive)();
+        }),
+      );
+    }
+  }, [progress, pop, arrive, onDone, onArrive]);
 
   const style = useAnimatedStyle(() => {
     const p = progress.value;

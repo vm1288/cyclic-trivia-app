@@ -46,7 +46,7 @@ import { BoardCanvas, HOP_MS, type PendingMove } from '../src/components/BoardCa
 import { CardChoiceOverlay } from '../src/components/CardChoiceOverlay';
 import { DiceRollOverlay } from '../src/components/DiceRollOverlay';
 import { MoveDirectionOverlay } from '../src/components/MoveDirectionOverlay';
-import { FlyingReward } from '../src/components/FlyingReward';
+import { FLY_ARRIVE_MS, FlyingReward } from '../src/components/FlyingReward';
 import { CardEarnedOverlay } from '../src/components/CardEarnedOverlay';
 import { HelpCardsInfoButton, HelpCardsSheet } from '../src/components/HelpCardsSheet';
 import { JokerBallOverlay } from '../src/components/JokerBallOverlay';
@@ -137,6 +137,12 @@ const DEMO_JUMP = false;
  * Bề ngang cột phải.
  */
 const SIDE_WIDTH = 224;
+
+/**
+ * Bóng thứ năm chạm ô: hiện đủ 5 quả bao lâu rồi mới về 0 (số server đã reset). Tấm kết quả đứng
+ * 3,5 s, bóng chạm ô ~1,2 s sau khi tấm lên → ~2,3 s nữa là tới tấm "FIVE STARS!" (K86).
+ */
+const FULL_STARS_HOLD_MS = 2300;
 
 /**
  * Luôn có tối đa 5 vị trí player phụ.
@@ -471,6 +477,15 @@ export default function GameLandscapeScreen() {
 
   /** Sao / thẻ đang bay từ giữa bàn cờ về chỗ của nó. */
   const [flying, setFlying] = useState<{ id: number; reward: 'star' | CardKey } | null>(null);
+  /**
+   * Số bóng dưới tên GIỮ Ở SỐ CŨ trong lúc quả bóng đang bay (Tony 1/10: "trước khi ball bay
+   * tới vị trí thì ball dưới tên đã sáng lên rồi"). `me.Stars` đổi ngay khi gói tin tới, nên
+   * chụp số lúc bấm trả lời (`starsAtAnswer`) rồi hiện số đó cho tới khi quả bóng chạm đích.
+   */
+  const [heldStars, setHeldStars] = useState<number | null>(null);
+  const starsAtAnswer = useRef<number | null>(null);
+  /** Lần giữ số mới nhất - hẹn giờ của lần cũ không được xoá lần mới. */
+  const starHoldToken = useRef(0);
   /** Tấm "đủ 5 sao, được thưởng {lá}" - hết tấm thì lá bay về ô của nó (K86). */
   const [earnedCard, setEarnedCard] = useState<CardKey | null>(null);
 
@@ -2547,6 +2562,9 @@ export default function GameLandscapeScreen() {
   const others = players.filter(
     (p) => p.Id !== seat?.playerId,
   );
+  /** Số bóng mới nhất từ server - đọc trong callback ổn định (`releaseStars`). */
+  const meStarsRef = useRef(0);
+  meStarsRef.current = me?.Stars ?? 0;
 
   const currentTurnPlayerId =
     snapshot?.Game.CurrentTurnPlayerId ?? '';
@@ -3296,9 +3314,49 @@ export default function GameLandscapeScreen() {
     if (card) fly(card);
   }, [earnedCard]);
 
+  /** Bóng chạm ô dưới tên → bật số thật (ổn định tham chiếu để effect của vật bay không chạy lại). */
+  const releaseStars = useCallback(() => {
+    const before = starsAtAnswer.current;
+    /*
+     * Bóng thứ NĂM: server đã đưa về 0 (đủ 5 thì đổi lấy lá bài, K86) → nhảy thẳng 4 → 0, người chơi
+     * không bao giờ thấy đủ 5 quả (đo trên A17 1/10). Cho hiện đủ 5 quả lúc bóng chạm, về 0 sau
+     * `FULL_STARS_HOLD_MS` - khoảng lúc tấm "FIVE STARS!" lên.
+     */
+    if (before != null && meStarsRef.current < before) {
+      setHeldStars(Math.min(before + 1, 5));
+      const token = ++starHoldToken.current;
+      setTimeout(() => {
+        if (starHoldToken.current === token) setHeldStars(null);
+      }, FULL_STARS_HOLD_MS);
+      return;
+    }
+    starHoldToken.current++;
+    setHeldStars(null);
+  }, []);
+  /*
+   * ⚠️ Phải ổn định tham chiếu: `FlyingReward` khởi động đường bay trong effect phụ thuộc `onDone`.
+   * Hàm viết tại chỗ đổi mỗi lần màn này vẽ lại - mà ô sáng giữa đường bay (`releaseStars`) chính
+   * là một lần vẽ lại.
+   */
+  const flyDone = useCallback(() => setFlying(null), []);
+
   /** Bắn một vật bay từ giữa bàn cờ về chỗ của nó. */
   const fly = (reward: 'star' | CardKey) => {
-    if (reward === 'star') playSound('star');   /* K137 */
+    if (reward === 'star') {
+      playSound('star');   /* K137 */
+      if (starsAtAnswer.current != null) {
+        setHeldStars(starsAtAnswer.current);
+        /*
+         * Ô sáng khi bóng CHẠM ô - `FlyingReward.onArrive` báo (hẹn trên luồng hoạt ảnh, khớp đường
+         * bay). Hẹn giờ ở đây chỉ là lưới an toàn khi vật bay không vẽ được (chưa đo được chỗ);
+         * `starHoldToken` để nó không xoá mất lúc đang hiện đủ 5 quả.
+         */
+        const token = ++starHoldToken.current;
+        setTimeout(() => {
+          if (starHoldToken.current === token) setHeldStars(null);
+        }, FLY_ARRIVE_MS + 1000);
+      }
+    }
     measureSpot('board', boardBox.current);
     measureSpot('star', starBox.current);
     measureSpot('card', cardBox.current);
@@ -3316,6 +3374,7 @@ export default function GameLandscapeScreen() {
     const current = question;
     setQuestion(null);
     if (!current || !seat) return;
+    starsAtAnswer.current = me?.Stars ?? null;
 
     /*
      * ⚠️ Hai loại câu hỏi đi HAI endpoint khác nhau. Gửi nhầm đường thì server
@@ -4428,7 +4487,7 @@ export default function GameLandscapeScreen() {
                     onLayout={() => measureSpot('star', starBox.current)}
                   >
                     <Stars
-                      filled={me.Stars}
+                      filled={heldStars ?? me.Stars}
                       size={14}
                     />
 
@@ -4667,7 +4726,8 @@ export default function GameLandscapeScreen() {
             spot.current.board
           }
           reward={flying.reward}
-          onDone={() => setFlying(null)}
+          onArrive={flying.reward === 'star' ? releaseStars : undefined}
+          onDone={flyDone}
         />
       ) : null}
     </View>
