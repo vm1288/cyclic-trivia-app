@@ -176,6 +176,8 @@ export function submitNickname(
     gender: string;
     characterId: string;
     deviceId: string;
+    /** Mockup V6: token hồ sơ - ghế mang ProfileId; ván Leaderboard server ép tên = nickname hồ sơ. */
+    profileToken?: string | null;
   },
   token: string,
 ): Promise<ApiResult<{ data: string }>> {
@@ -189,6 +191,7 @@ export function submitNickname(
       // Rỗng = lần đặt đầu tiên. Server chỉ dùng trường này để bỏ qua bước
       // kiểm trùng tên khi người chơi ĐỔI tên của chính mình.
       oldNickname: '',
+      profileToken: params.profileToken ?? null,
     },
     token,
   );

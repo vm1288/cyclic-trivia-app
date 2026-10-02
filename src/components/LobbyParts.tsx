@@ -203,7 +203,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(8,10,28,0.9)',
   },
-  name: { fontSize: 15, fontWeight: '700', color: text.primary, maxWidth: 96 },
+  /* 160: vừa nickname 12 ký tự ("QuickZebra59", Tony 2/10); co lại nếu hàng hẹp. */
+  name: { fontSize: 15, fontWeight: '700', color: text.primary, maxWidth: 160, flexShrink: 1 },
   nameEmpty: { color: lobbyColors.dim, fontWeight: '400' },
   spacer: { flex: 1 },
 

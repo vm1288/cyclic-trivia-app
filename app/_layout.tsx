@@ -10,6 +10,7 @@ import { ConfirmProvider } from '../src/components/ConfirmDialog';
 import { I18nProvider } from '../src/i18n/I18nProvider';
 import { LicenseProvider } from '../src/session/LicenseSession';
 import { PlayerProvider } from '../src/session/PlayerSession';
+import { ProfileProvider } from '../src/session/ProfileSession';
 import { RenewalReminders } from '../src/session/RenewalReminders';
 import { bg } from '../src/theme/colors';
 
@@ -57,6 +58,8 @@ export default function RootLayout() {
             NGOÀI mọi thứ phụ thuộc vào license - đặt ở đây để cả hai đường
             vào (chủ phòng và khách) đọc chung một kho ghế. */}
         <PlayerProvider>
+          {/* Mockup V6: hồ sơ người chơi xuyên ván - cần id máy của PlayerProvider. */}
+          <ProfileProvider>
           <I18nProvider>
             {/* Tony 2/10: nhắc 1 ngày trước khi store tự gia hạn - cần cả license lẫn câu chữ đã dịch. */}
             <RenewalReminders />
@@ -72,6 +75,7 @@ export default function RootLayout() {
               />
             </ConfirmProvider>
           </I18nProvider>
+          </ProfileProvider>
         </PlayerProvider>
       </LicenseProvider>
       {splash ? <BrandSplash onDone={splashDone} /> : null}

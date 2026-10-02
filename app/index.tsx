@@ -31,11 +31,13 @@ import {
   JoinIcon,
   NewGameIcon,
 } from '../src/components/NeonIcons';
+import { NeonSheet, SheetButton } from '../src/components/NeonSheet';
 import { NoGamesDialog } from '../src/components/NoGamesDialog';
 import { StageBackground } from '../src/components/StageBackground';
 import { useT } from '../src/i18n/I18nProvider';
 import { useLicense } from '../src/session/LicenseSession';
 import { usePlayer } from '../src/session/PlayerSession';
+import { useProfile } from '../src/session/ProfileSession';
 import { innerGlow, neon, outerGlow, text } from '../src/theme/colors';
 
 import { glowPad, glowRoom } from '../src/theme/glow';
@@ -73,6 +75,7 @@ export default function HomeScreen() {
   /* Nút "My Games" đặt tuyệt đối nên tự cộng tai thỏ/thanh trạng thái (absolute bỏ qua padding của SafeAreaView). */
   const insets = useSafeAreaInsets();
   const license = useLicense();
+  const profile = useProfile();
   const player = usePlayer();
   const t = useT();
   const confirm = useConfirm();
@@ -291,11 +294,6 @@ export default function HomeScreen() {
     setSheet('choose');
   };
 
-  const openMyGames = () => {
-    if (license.all.filter((g) => g.activated).length === 0) { setNoGames(true); return; }
-    setSheet('manage');
-  };
-
   /** Huỷ gói = quản lý trên store; app chỉ dẫn tới trang đăng ký của store. */
   const cancelSubscription = async () => {
     const store = t(Platform.OS === 'ios' ? 'purchase.storeApple' : 'purchase.storeGoogle');
@@ -496,15 +494,29 @@ export default function HomeScreen() {
           </ScrollView>
         </View>
 
-        {/* Nút nhỏ "My Games" góc trên trái, ĐÈ lên vùng logo - không chiếm hàng, logo không bị đẩy (K106). */}
-        <Pressable
-          onPress={openMyGames}
-          accessibilityRole="button"
-          hitSlop={8}
-          style={({ pressed }) => [styles.myGames, { top: insets.top + 8, left: insets.left + 18 }, pressed && styles.pressed]}
-        >
-          <Text style={styles.myGamesText}>{t('home.myGames')}</Text>
-        </Pressable>
+        {/*
+          Hai nút nhỏ góc trên trái, ĐÈ lên vùng logo - không chiếm hàng, logo không bị đẩy (K106).
+          Mockup V6 (Tony 2/10): "My Games" cũ thành Profile (trong đó có Subscriptions = My Games cũ)
+          + Leaderboards (xem bảng xếp hạng lúc nào cũng được).
+        */}
+        <View style={[styles.topPills, { top: insets.top + 8, left: insets.left + 18 }]}>
+          <Pressable
+            onPress={() => router.push('/profile')}
+            accessibilityRole="button"
+            hitSlop={8}
+            style={({ pressed }) => [styles.myGames, pressed && styles.pressed]}
+          >
+            <Text style={styles.myGamesText}>{t('home.profile')}</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/leaderboards')}
+            accessibilityRole="button"
+            hitSlop={8}
+            style={({ pressed }) => [styles.myGames, styles.lbPill, pressed && styles.pressed]}
+          >
+            <Text style={styles.myGamesText}>{t('home.leaderboards')}</Text>
+          </Pressable>
+        </View>
       </SafeAreaView>
 
       <MyGamesSheet
@@ -529,6 +541,29 @@ export default function HomeScreen() {
           router.push('/purchase');
         }}
       />
+
+      {/* Mockup V6 slide 3: lần đầu mở app - hồ sơ khách tên ngẫu nhiên đã được tạo. */}
+      <NeonSheet visible={profile.welcome && !!profile.profile} onClose={profile.dismissWelcome} maxWidth={560}>
+        <Text style={styles.welcomeTitle}>{t('welcome.title')}</Text>
+        <View style={styles.welcomeBody}>
+          <Text style={styles.welcomeText}>{t('welcome.created')}</Text>
+          <Text style={styles.welcomeName}>{profile.profile?.nickName}</Text>
+          <Text style={styles.welcomeText}>{'\u2022 '}{t('welcome.changeName')}</Text>
+          <Text style={styles.welcomeText}>{'\u2022 '}{t('welcome.linkEmail')}</Text>
+          <Text style={[styles.welcomeText, styles.welcomeGap]}>{t('welcome.haveAccount')}</Text>
+        </View>
+        <View style={styles.welcomeBtns}>
+          <SheetButton label={t('welcome.useThis')} onPress={profile.dismissWelcome} />
+          <SheetButton
+            label={t('welcome.login')}
+            variant="ghost"
+            onPress={() => {
+              profile.dismissWelcome();
+              router.push('/account-email?mode=login');
+            }}
+          />
+        </View>
+      </NeonSheet>
 
       <NoGamesDialog
         visible={noGames}
@@ -659,7 +694,6 @@ const styles = StyleSheet.create({
   // bốn nút neon ngay trên nó.
   /* Nút nhỏ góc trên trái, tuyệt đối để không đẩy logo (K106). `top/left` tính từ SafeAreaView. */
   myGames: {
-    position: 'absolute',
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 14,
@@ -669,4 +703,12 @@ const styles = StyleSheet.create({
     boxShadow: '0 0 10px rgba(160,200,255,0.30)',
   },
   myGamesText: { color: '#F2F7FF', fontSize: 12.5, fontWeight: '800', letterSpacing: 1 },
+  topPills: { position: 'absolute', flexDirection: 'row', gap: 10 },
+  lbPill: { borderColor: 'rgba(63,224,255,0.75)', boxShadow: '0 0 10px rgba(63,224,255,0.30)' },
+  welcomeTitle: { color: '#FFFFFF', fontSize: 22, fontWeight: '800', textAlign: 'center' },
+  welcomeBody: { alignSelf: 'stretch', gap: 6 },
+  welcomeText: { color: '#E8ECFF', fontSize: 15, lineHeight: 21 },
+  welcomeName: { color: '#FFFFFF', fontSize: 18, fontWeight: '800', marginBottom: 6 },
+  welcomeGap: { marginTop: 8 },
+  welcomeBtns: { flexDirection: 'row', gap: 14, flexWrap: 'wrap', justifyContent: 'center' },
 });

@@ -12,6 +12,7 @@ import { SectionHeader } from '../src/components/SectionHeader';
 import { apiErrorText } from '../src/i18n/apiError';
 import { useT } from '../src/i18n/I18nProvider';
 import { usePlayer } from '../src/session/PlayerSession';
+import { useProfile } from '../src/session/ProfileSession';
 import { neon, text } from '../src/theme/colors';
 
 import { MODAL_ORIENTATIONS } from '../src/utils/modalOrientations';
@@ -23,14 +24,19 @@ import { MODAL_ORIENTATIONS } from '../src/utils/modalOrientations';
  * token đã nằm trong `usePlayer().seat` rồi.
  *
  * Luật chép theo bản web (`player-views/SetNicknameView.js`), đừng nới ra:
- * tên bắt buộc, **tối đa 10 ký tự**, giới tính mặc định "male".
+ * tên bắt buộc, **tối đa 12 ký tự** (Tony 2/10: vừa tên tự cấp "SwiftTiger27"), giới tính mặc định "male".
+ *
+ * Mockup V6 (Tony 2/10): ô tên ĐIỀN SẴN nickname hồ sơ. Ván thường đổi được tên riêng cho ván đó;
+ * ván LEADERBOARD thì khoá đúng nickname (server cũng ép, xem `SetNickname`) - bảng xếp hạng mới
+ * không còn hai tên cho cùng một người.
  */
 
-const NICKNAME_MAX = 10;
+const NICKNAME_MAX = 12;
 
 export default function SeatScreen() {
   const router = useRouter();
   const player = usePlayer();
+  const profile = useProfile();
   const t = useT();
   const params = useLocalSearchParams<{ next?: string }>();
 
@@ -48,6 +54,8 @@ export default function SeatScreen() {
   const next = params.next === '/lobby' ? '/lobby' : '/waiting';
 
   const [nickname, setNickname] = useState('');
+  /** Ván Leaderboard: tên = nickname hồ sơ, không sửa. */
+  const [nameLocked, setNameLocked] = useState(false);
   /*
    * Danh sách nhân vật LẤY TỪ SERVER, không hardcode.
    *
@@ -88,6 +96,7 @@ export default function SeatScreen() {
 
     /* Cùng một `getGameState` đã gọi để biết ai lấy nhân vật nào - không thêm lượt mạng nào. */
     setGameLogo(state.Sponsor?.LogoUrl ? assetUrl(state.Sponsor.LogoUrl) : null);
+    setNameLocked((state.Game?.TotalRollDice ?? 0) > 0 && (state.Game?.DurationMinutes ?? 0) === 0);
 
     const list = state.Board?.Characters ?? [];
     if (list.length > 0) {
@@ -106,6 +115,13 @@ export default function SeatScreen() {
   useEffect(() => {
     void loadTaken();
   }, [loadTaken]);
+
+  /* Điền sẵn nickname hồ sơ (chưa gõ gì); ván Leaderboard thì luôn đúng nickname. */
+  const profileName = profile.profile?.nickName ?? '';
+  useEffect(() => {
+    if (!profileName) return;
+    setNickname((current) => (nameLocked || !current ? profileName : current));
+  }, [profileName, nameLocked]);
 
   // Nhân vật mặc định đang bị lấy mất thì nhảy sang cái còn trống đầu tiên,
   // để nút gửi không bao giờ ở trạng thái chắc chắn trượt.
@@ -132,7 +148,7 @@ export default function SeatScreen() {
     setBusy(true);
 
     const result = await submitNickname(
-      { nickname: trimmed, gender, characterId, deviceId: player.deviceId },
+      { nickname: trimmed, gender, characterId, deviceId: player.deviceId, profileToken: profile.token },
       seat.token,
     );
 
@@ -201,8 +217,9 @@ export default function SeatScreen() {
              */
             returnKeyType="done"
             blurOnSubmit
-            editable={!busy}
+            editable={!busy && !nameLocked}
           />
+          {nameLocked ? <Text style={styles.lockedHint}>{t('seat.nameLocked')}</Text> : null}
 
         </>
       }
@@ -286,6 +303,7 @@ export default function SeatScreen() {
 
 const styles = StyleSheet.create({
   hint: { color: text.muted, fontSize: 13, lineHeight: 19, textAlign: 'center' },
+  lockedHint: { color: text.muted, fontSize: 12, lineHeight: 17, marginTop: 6 },
 
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
