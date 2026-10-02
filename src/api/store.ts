@@ -107,6 +107,9 @@ export type StorePurchaseResult = {
     sponsorId: string | null;
     planTitle: string | null;
     licenseExpiresAt: string | null;
+    /** Tony 2/10: store sẽ tự gia hạn (đang bật, chưa tắt) - app hẹn thông báo nhắc. */
+    renews?: boolean;
+    inTrial?: boolean;
   } | null;
 };
 

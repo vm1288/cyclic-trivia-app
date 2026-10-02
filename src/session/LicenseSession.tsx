@@ -86,6 +86,10 @@ export type LicenseSession = {
   planTitle?: string | null;
   /** Ngày gia hạn / hết hạn gói (ISO) - màn My Games (K106). */
   licenseExpiresAt?: string | null;
+  /** Tony 2/10: store sẽ TỰ gia hạn licence này (server `renews`) - hẹn thông báo nhắc 1 ngày trước. */
+  renews?: boolean;
+  /** Hạn hiện tại là cuối kỳ dùng thử (server `inTrial`) - đổi câu nhắc. */
+  inTrial?: boolean;
   /**
    * Đường dẫn file logo sponsor ĐÃ TẢI VỀ MÁY (file:// ...), không phải URL
    * trên server. Xem `sponsorLogo.ts` để biết vì sao tải về.
@@ -385,6 +389,8 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
                   planTitle: result.planTitle ?? s.planTitle ?? null,
                   sponsorId: result.sponsorId ?? s.sponsorId ?? null,
                   licenseExpiresAt: result.licenseExpiresAt ?? s.licenseExpiresAt ?? null,
+                  renews: result.renews ?? s.renews,
+                  inTrial: result.inTrial ?? s.inTrial,
                 }
               : s,
           ),

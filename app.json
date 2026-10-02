@@ -53,6 +53,13 @@
       "expo-video",
       "expo-iap",
       [
+        "expo-notifications",
+        {
+          "icon": "./assets/android-icon-monochrome.png",
+          "color": "#070B1F"
+        }
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "Cyclic uses the camera to scan the room QR code and to show you on video chat with the players in your room.",

@@ -197,6 +197,8 @@ export default function PurchaseScreen() {
           sponsorId: activated.sponsorId ?? null,
           planTitle: activated.planTitle ?? null,
           licenseExpiresAt: activated.licenseExpiresAt ?? null,
+          renews: activated.renews,
+          inTrial: activated.inTrial,
         };
       } else {
         /* Hết suất máy là ca thực tế nhất: nói rõ ra, đừng để họ đi tìm ô nhập mã. */
@@ -227,6 +229,8 @@ export default function PurchaseScreen() {
       sponsorId: s.sponsorId ?? null,
       planTitle: s.planTitle ?? null,
       licenseExpiresAt: s.licenseExpiresAt ?? null,
+      renews: s.renews,
+      inTrial: s.inTrial,
       sponsorLogoUri,
     });
     setOpenGame(null);

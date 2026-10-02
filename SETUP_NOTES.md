@@ -433,3 +433,23 @@ Không còn module native nào cho TV trong app. `react-native-google-cast` gỡ
 nhập mã 4 số ở hộp Go big!). Prebuild sau khi gỡ = `android/` không còn hai module đó; APK cũ (trước 20/9
 khuya) vẫn chạy bình thường, chỉ hộp Go big! là bản cũ. Nếu thấy lỗi build nhắc tới `RNExternalDisplay`
 hay `googlecast`: xoá `android/` rồi `npx expo prebuild --platform android` (build-apk.ps1 tự làm).
+
+---
+
+## ⚠️ Cài APK dev MỚI trên A17 khi Metro chạy cổng 8083 (2/10)
+
+Cổng 8081 của PC là Metro của dự án khác, nên Metro Cyclic chạy 8083 với `adb reverse tcp:8081 tcp:8083`.
+APK vừa cài lại thì dev client quên server cũ, và mất một vòng debug vì ba bẫy chồng nhau:
+
+- Manifest Metro trả về URL bundle theo **IP LAN** (`192.168.x.x:8083`), mà PC chặn LAN → "Unable to load script".
+- `--localhost` thì Metro **chỉ nghe `[::1]`** (IPv6), còn `adb reverse` nối tới `127.0.0.1` → "unexpected end of stream".
+- Bundle URL mang cổng **8083**, nên phải reverse cả 8083, không chỉ 8081.
+
+Cách chạy được:
+
+```bash
+REACT_NATIVE_PACKAGER_HOSTNAME=127.0.0.1 npx expo start --port 8083 --dev-client
+adb -s R5GL607M1TW reverse tcp:8083 tcp:8083
+adb -s R5GL607M1TW reverse tcp:5276 tcp:5276
+adb -s R5GL607M1TW shell am start -a android.intent.action.VIEW -d "cyclic://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8083"
+```

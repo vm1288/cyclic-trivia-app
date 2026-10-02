@@ -10,6 +10,7 @@ import { ConfirmProvider } from '../src/components/ConfirmDialog';
 import { I18nProvider } from '../src/i18n/I18nProvider';
 import { LicenseProvider } from '../src/session/LicenseSession';
 import { PlayerProvider } from '../src/session/PlayerSession';
+import { RenewalReminders } from '../src/session/RenewalReminders';
 import { bg } from '../src/theme/colors';
 
 /*
@@ -57,6 +58,8 @@ export default function RootLayout() {
             vào (chủ phòng và khách) đọc chung một kho ghế. */}
         <PlayerProvider>
           <I18nProvider>
+            {/* Tony 2/10: nhắc 1 ngày trước khi store tự gia hạn - cần cả license lẫn câu chữ đã dịch. */}
+            <RenewalReminders />
             {/* ConfirmProvider nằm TRONG I18nProvider để chỗ gọi truyền được câu
                 chữ đã dịch, và bọc ngoài Stack để hộp thoại phủ lên mọi màn. */}
             <ConfirmProvider>
