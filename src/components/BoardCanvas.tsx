@@ -2,6 +2,8 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import Animated, {
   Easing,
+  runOnJS,
+  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -20,6 +22,7 @@ import {
   type GamePlayer,
 } from '../api/game';
 import { useT } from '../i18n/I18nProvider';
+import { play as playSound } from '../sound/sounds';
 
 /**
  * Bàn cờ trong ván. HAI loại, và chúng lấy toạ độ từ hai nguồn khác hẳn nhau:
@@ -288,6 +291,11 @@ const HOP_RISE = 0.55;
  */
 export const HOP_MS = 320;
 
+/** Gọi qua `runOnJS` từ luồng hoạt ảnh - phải là hàm ở cấp module. */
+function playMoveSound() {
+  playSound('move');
+}
+
 /**
  * Nháy mắt: đảo giữa khung `-0` (mắt mở) và `-1` (mắt nhắm).
  *
@@ -367,6 +375,14 @@ function BoardCharacter({
 }) {
   const progress = useSharedValue(targetIndex);
   const previous = useRef(targetIndex);
+  /**
+   * Tiếng quân đi MỖI Ô (Tony 1/10: "tung ra 3 thì chỉ ô đầu có tiếng"). Web phát `move` mỗi lần
+   * quân đáp xuống một ô (`characters.js`, sau mỗi nhịp nhảy); app trước đây chỉ phát một lần lúc
+   * bắt đầu đi. Đáp ô = `progress` vượt qua một số nguyên. Chỉ kêu với nước đi THẬT (`walkSigned`),
+   * không kêu ở vòng nhảy thử của màn hướng dẫn hay khi nạp lại trạng thái.
+   */
+  const stepDir = useSharedValue(1);
+  const stepSound = useSharedValue(false);
 
   useEffect(() => {
     const from = previous.current;
@@ -384,12 +400,23 @@ function BoardCharacter({
     const forward = ((to - from) % n + n) % n;
     const delta = walkSigned ? to - from : forward;
 
+    stepDir.value = delta >= 0 ? 1 : -1;
+    stepSound.value = !!walkSigned;
     progress.value = from;
     progress.value = withTiming(from + delta, {
       duration: HOP_MS * Math.max(1, Math.abs(delta)),
       easing: Easing.linear,
     });
-  }, [targetIndex, path.length, progress, walkSigned]);
+  }, [targetIndex, path.length, progress, walkSigned, stepDir, stepSound]);
+
+  useAnimatedReaction(
+    () => (stepDir.value > 0 ? Math.floor(progress.value + 1e-4) : Math.ceil(progress.value - 1e-4)),
+    (square, before) => {
+      if (before === null || square === before || !stepSound.value) return;
+      runOnJS(playMoveSound)();
+    },
+    [],
+  );
 
   /*
    * Nháy mắt, chạy mãi và ĐỘC LẬP với nước đi.

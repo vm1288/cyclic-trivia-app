@@ -605,9 +605,24 @@ export default function GameLandscapeScreen() {
   const inDuelRef = useRef(false);
   inDuelRef.current = inDuel;
   const battleAsking = !!battle && !!question && question.kind === 'battle';
+  /**
+   * Đồng hồ 10 giây của thử thách đang chạy (gói 30 → tự hết sau `CountdownSeconds`). Cùng với
+   * `battleAsking` là HAI nguồn duy nhất của tiếng tích tắc - một effect bật/tắt, không bật/tắt
+   * rải rác theo gói tin (trước đây máy người chơi bật mà không ai tắt, Tony 1/10).
+   */
+  const [challengeTicking, setChallengeTicking] = useState(false);
+  const challengeTickToken = useRef(0);
+  /* Thử thách đóng (bỏ qua, có phán quyết, hết ván…) thì đồng hồ của nó cũng thôi. */
   useEffect(() => {
-    loopSound('timerLast', battleAsking);
-  }, [battleAsking]);
+    if (!challenge || challenge.phase !== 'run') {
+      challengeTickToken.current++;
+      setChallengeTicking(false);
+    }
+  }, [challenge]);
+  const ticking = battleAsking || challengeTicking;
+  useEffect(() => {
+    loopSound('timerLast', ticking);
+  }, [ticking]);
   const battleVideoSeq = useRef(0);
   /**
    * Mốc (ms) mà con xúc xắc đang lăn của vòng phân định sẽ dừng. Gói `tie`/`won`
@@ -789,7 +804,7 @@ export default function GameLandscapeScreen() {
    * Đọc state qua `snapshotRef` vì hàm này được gọi từ closure cũ (setTimeout, onPacket).
    */
   const startMove = (m: { moverId: string; steps: number; direction: string; owesDone: boolean; isMine: boolean }) => {
-    playSound('move');   /* K137: tiếng quân đi, như `characters.js` của web */
+    /* Tiếng quân đi phát MỖI Ô lúc quân đáp xuống - ở `BoardCanvas` (Tony 1/10), không phải ở đây. */
     const moverNow = snapshotRef.current?.Players?.find((pl) => pl.Id === m.moverId);
     setPendingMove({
       playerId: m.moverId,
@@ -1516,7 +1531,12 @@ export default function GameLandscapeScreen() {
       }
 
       if (packet.typeID === TYPE_ID.TenSecondsChallengeStart) {
-        playSound('gun');   /* K137: tiếng súng lệnh mở thử thách 10 giây, như web */
+        /*
+         * Tony 1/10 (lỗi tiếng 1): lúc HIỆN ĐỀ là tiếng `challenge`, KHÔNG phải tiếng súng - súng là
+         * lúc trọng tài bấm Start (gói 30, như `handleTenSecondsChallenge` của web). Lệnh
+         * `playAudioChallenge` của server chỉ tới máy chủ phòng, nên các máy khác tự phát ở đây.
+         */
+        playSound('challenge');
         const fromStart = {
           words: Array.isArray(packet.Words) ? (packet.Words as string[]) : [],
           isJudge: packet.IsJudge === true,
@@ -1557,7 +1577,19 @@ export default function GameLandscapeScreen() {
        * nằm ở đây, không nằm ở gói 42. Đã dính đúng vậy lần đầu làm ô này.
        */
       if (packet.typeID === TYPE_ID.TenSecondsChallenge) {
-        loopSound('timerLast', true);   /* K137: đồng hồ 10 giây chạy */
+        playSound('gun');   /* K137: súng lệnh lúc trọng tài bấm Start, như web */
+        const seconds =
+          typeof packet.CountdownSeconds === 'number' && packet.CountdownSeconds > 0 ? packet.CountdownSeconds : 10;
+        /*
+         * Tony 1/10 (lỗi tiếng 2): tích tắc trên máy NGƯỜI CHƠI kêu mãi sang cả lượt sau. Gói 43 (hết
+         * giờ) chỉ tới máy TRỌNG TÀI, nên máy khác không bao giờ được bảo tắt. Mọi máy tự tắt sau
+         * đúng số giây đếm (+300 ms web chờ trước khi chạy đồng hồ).
+         */
+        const token = ++challengeTickToken.current;
+        setChallengeTicking(true);
+        setTimeout(() => {
+          if (challengeTickToken.current === token) setChallengeTicking(false);
+        }, seconds * 1000 + 300);
         const pid = typeof packet.PlayerId === 'string' ? packet.PlayerId : '';
         setChallenge((prev) => ({
           phase: 'run',
@@ -1595,7 +1627,8 @@ export default function GameLandscapeScreen() {
        */
       if (packet.typeID === TYPE_ID.TenSecondsChallengeCountDown) {
         /* K137: hết 10 giây - tắt đồng hồ rồi rung chuông, đúng thứ tự của web. */
-        loopSound('timerLast', false);
+        challengeTickToken.current++;
+        setChallengeTicking(false);
         playSound('bell');
         setChallenge((prev) =>
           prev
@@ -2337,7 +2370,7 @@ export default function GameLandscapeScreen() {
 
   useEffect(() => {
     loopSound('gameMusic', !inDuel);
-    if (!inDuel) loopSound('timerLast', false);
+    /* Tích tắc do effect `ticking` lo (battle hết → `battleAsking` false) - đừng tắt riêng ở đây. */
   }, [inDuel]);
 
   useEffect(() => {
