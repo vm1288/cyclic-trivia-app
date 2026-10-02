@@ -2,8 +2,6 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import Animated, {
   Easing,
-  runOnJS,
-  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -291,7 +289,6 @@ const HOP_RISE = 0.55;
  */
 export const HOP_MS = 320;
 
-/** Gọi qua `runOnJS` từ luồng hoạt ảnh - phải là hàm ở cấp module. */
 function playMoveSound() {
   playSound('move');
 }
@@ -375,14 +372,6 @@ function BoardCharacter({
 }) {
   const progress = useSharedValue(targetIndex);
   const previous = useRef(targetIndex);
-  /**
-   * Tiếng quân đi MỖI Ô (Tony 1/10: "tung ra 3 thì chỉ ô đầu có tiếng"). Web phát `move` mỗi lần
-   * quân đáp xuống một ô (`characters.js`, sau mỗi nhịp nhảy); app trước đây chỉ phát một lần lúc
-   * bắt đầu đi. Đáp ô = `progress` vượt qua một số nguyên. Chỉ kêu với nước đi THẬT (`walkSigned`),
-   * không kêu ở vòng nhảy thử của màn hướng dẫn hay khi nạp lại trạng thái.
-   */
-  const stepDir = useSharedValue(1);
-  const stepSound = useSharedValue(false);
 
   useEffect(() => {
     const from = previous.current;
@@ -400,23 +389,25 @@ function BoardCharacter({
     const forward = ((to - from) % n + n) % n;
     const delta = walkSigned ? to - from : forward;
 
-    stepDir.value = delta >= 0 ? 1 : -1;
-    stepSound.value = !!walkSigned;
     progress.value = from;
     progress.value = withTiming(from + delta, {
       duration: HOP_MS * Math.max(1, Math.abs(delta)),
       easing: Easing.linear,
     });
-  }, [targetIndex, path.length, progress, walkSigned, stepDir, stepSound]);
 
-  useAnimatedReaction(
-    () => (stepDir.value > 0 ? Math.floor(progress.value + 1e-4) : Math.ceil(progress.value - 1e-4)),
-    (square, before) => {
-      if (before === null || square === before || !stepSound.value) return;
-      runOnJS(playMoveSound)();
-    },
-    [],
-  );
+    /*
+     * Tiếng quân đi MỖI Ô (Tony 1/10: "tung ra 3 thì chỉ ô đầu có tiếng"). Web phát `move` mỗi lần
+     * quân đáp xuống một ô (`characters.js`, sau mỗi nhịp nhảy); app trước đây chỉ phát một lần lúc
+     * bắt đầu đi. Quân đi đều `HOP_MS` một ô nên hẹn đúng |delta| tiếng, mỗi tiếng một nhịp đáp.
+     * Chỉ với nước đi THẬT (`walkSigned`) - không kêu ở vòng nhảy thử hay khi nạp lại trạng thái.
+     *
+     * ⚠️ Đừng suy "đáp ô" từ `progress` vượt số nguyên: nó không chuẩn hoá về vòng (21 → 1 đầu nước
+     * đi) và dao động quanh số nguyên lúc khởi động - đo trên A17 2/10 đi 3 ô kêu 5 tiếng.
+     */
+    if (!walkSigned || delta === 0) return;
+    const timers = Array.from({ length: Math.abs(delta) }, (_, i) => setTimeout(playMoveSound, HOP_MS * (i + 1)));
+    return () => timers.forEach(clearTimeout);
+  }, [targetIndex, path.length, progress, walkSigned]);
 
   /*
    * Nháy mắt, chạy mãi và ĐỘC LẬP với nước đi.

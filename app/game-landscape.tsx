@@ -611,6 +611,9 @@ export default function GameLandscapeScreen() {
    * rải rác theo gói tin (trước đây máy người chơi bật mà không ai tắt, Tony 1/10).
    */
   const [challengeTicking, setChallengeTicking] = useState(false);
+  /** Thử thách hiện tại - nhánh xử lý gói (ngoài vòng render) đọc để không phát lại tiếng (bên dưới). */
+  const challengeRef = useRef(challenge);
+  challengeRef.current = challenge;
   const challengeTickToken = useRef(0);
   /* Thử thách đóng (bỏ qua, có phán quyết, hết ván…) thì đồng hồ của nó cũng thôi. */
   useEffect(() => {
@@ -1535,8 +1538,10 @@ export default function GameLandscapeScreen() {
          * Tony 1/10 (lỗi tiếng 1): lúc HIỆN ĐỀ là tiếng `challenge`, KHÔNG phải tiếng súng - súng là
          * lúc trọng tài bấm Start (gói 30, như `handleTenSecondsChallenge` của web). Lệnh
          * `playAudioChallenge` của server chỉ tới máy chủ phòng, nên các máy khác tự phát ở đây.
+         * Đề ĐANG hiện thì thôi: máy nối lại (rớt mạng) được server phát lại gói này (`HostResume`),
+         * đo trên A17 2/10 - nghe lần hai là tưởng một thử thách mới.
          */
-        playSound('challenge');
+        if (challengeRef.current?.phase !== 'assign') playSound('challenge');
         const fromStart = {
           words: Array.isArray(packet.Words) ? (packet.Words as string[]) : [],
           isJudge: packet.IsJudge === true,
