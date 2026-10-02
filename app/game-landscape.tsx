@@ -310,6 +310,9 @@ export default function GameLandscapeScreen() {
    * `/api/game/{id}/state` - state không có câu hỏi.
    */
   const [question, setQuestion] = useState<ActiveQuestion | null>(null);
+  /* Cho handler gói 93 (đóng trong closure cũ) biết máy này có đang tự trả lời câu nào không. */
+  const questionRef = useRef(question);
+  questionRef.current = question;
 
   /**
    * Hỏi hướng đi, tới qua gói `AskMoveDirection` (52) ngay sau khi tung xúc xắc.
@@ -2309,7 +2312,9 @@ export default function GameLandscapeScreen() {
        *
        *   đúng                 -> tấm "X got it right! +N runs" (sao ★ nếu là người tới lượt)
        *   người tới lượt sai   -> nhãn trên câu tranh trả lời, không tấm riêng (xem `stealBanner`)
-       *   người tranh mà sai   -> server không gửi (web cũng chỉ báo riêng cho họ)
+       *   người tranh mà sai   -> tấm đỏ "X got it wrong!" không dòng dưới (Tony 2/10: trước đây
+       *                           server không gửi, người tới lượt + TV không biết gì). Máy
+       *                           đang tự trả lời câu tranh (3+ người) thì bỏ qua, đừng che câu.
        *
        * Đang hiện tấm 'late' ("X got it right first") -> THAY bằng tấm này (có điểm),
        * không xếp hàng: gói 45 tới trước gói 93 vài chục mili giây, hai tấm nối nhau
@@ -2324,7 +2329,12 @@ export default function GameLandscapeScreen() {
         /* GƯƠNG BÀN CỜ (K99): khung chỉ-xem của câu này xong việc - đúng thì tấm kết quả, sai thì câu tranh tới ngay. */
         setQuestion((prev) => (prev?.readOnly ? null : prev));
         if (packet.IsCorrect !== true) {
-          if (packet.IsMainPlayer !== true || !name) return;
+          if (!name) return;
+          if (packet.IsMainPlayer !== true) {
+            if (questionRef.current && !questionRef.current.readOnly) return;
+            setTurnResult({ kind: packet.IsTimeout === true ? 'timeout' : 'wrong', name, main: false });
+            return;
+          }
           setStealBanner(
             t(packet.IsTimeout === true ? 'question.stealTimeout' : 'question.stealWrong', { name }),
           );
@@ -3541,10 +3551,20 @@ export default function GameLandscapeScreen() {
     const myTurn = snapshot?.Game.CurrentTurnPlayerId === mine.Id;
 
     if (question && now - questionAt.current > 5000) {
+      /*
+       * Tony 2/10: "người chính chưa submit mà sau vài chục giây câu hỏi trên máy người còn lại biến
+       * mất". Câu CHỈ XEM là câu của NGƯỜI TỚI LƯỢT - `CurrentAction` của máy này không bao giờ là 6,
+       * nên đối chiếu với máy mình là dọn nhầm ngay lần state về đầu tiên sau 5 s. Đối chiếu với
+       * người tới lượt: còn đang trả lời (6) thì khung còn đúng.
+       */
+      const owner = question.readOnly
+        ? snapshot?.Players.find((p) => p.Id === snapshot?.Game.CurrentTurnPlayerId)
+        : mine;
       const stale =
         question.kind === 'turn' &&
-        mine.CurrentAction !== CASE_ACTION.ShowSubCategoriesAndQuestions &&
-        mine.CurrentAction !== CASE_ACTION.OtherPlayersAnswering;
+        !!owner &&
+        owner.CurrentAction !== CASE_ACTION.ShowSubCategoriesAndQuestions &&
+        owner.CurrentAction !== CASE_ACTION.OtherPlayersAnswering;
       if (stale) setQuestion(null);
     }
 

@@ -169,7 +169,7 @@ export const en = {
   'seat.takenTitle': 'Another player has already chosen this character. Please pick a different one to join.',
   'seat.takenCta': 'Choose Another Character',
   'waiting.gameDuration': 'Game duration: {duration}',
-  'waiting.leaderboard': 'Leaderboard Challenge',
+  'waiting.leaderboard': 'Leaderboard match',
   'waiting.minutes': '{minutes} minutes',
 
   /* K118: TV = gương của màn hình phụ trên phone chủ phòng - chỉ hướng dẫn bật mirror. */
@@ -988,7 +988,7 @@ const vi: Record<TranslationKey, string> = {
   'seat.takenTitle': 'Người chơi khác đã chọn nhân vật này rồi. Hãy chọn nhân vật khác để vào ván.',
   'seat.takenCta': 'Chọn nhân vật khác',
   'waiting.gameDuration': 'Thời lượng: {duration}',
-  'waiting.leaderboard': 'Leaderboard Challenge',
+  'waiting.leaderboard': 'Leaderboard match',
   'waiting.minutes': '{minutes} phút',
   'join.subtitle': 'Nhập mã phòng mà chủ phòng đọc\nhoặc gửi cho bạn.',
   'join.codeLabel': 'MÃ PHÒNG',

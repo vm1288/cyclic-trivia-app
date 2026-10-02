@@ -179,11 +179,11 @@ export function TurnResultOverlay({
       ? t('result.earned', { point: result.point, unit: result.point === 1 && oneUnit ? oneUnit : unit })
       : result.kind === 'wrong' || result.kind === 'timeout'
         /* Tấm của NGƯỜI KHÁC sai/hết giờ (K100): người xem chính là người sắp tranh trả lời.
-           Mình sai mà chỉ là người TRANH (K103): không có dòng dưới. */
-        ? result.name
-          ? t('result.wrongBodyOthers')
-          : result.main === false
-            ? ''
+           Người sai chỉ là người TRANH - mình (K103) hay người khác (Tony 2/10): không có dòng dưới. */
+        ? result.main === false
+          ? ''
+          : result.name
+            ? t('result.wrongBodyOthers')
             : t('result.wrongBody')
         : result.kind === 'challengeFail'
           ? ''
