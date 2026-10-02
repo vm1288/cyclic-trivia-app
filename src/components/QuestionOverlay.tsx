@@ -3,6 +3,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
+  FadeOut,
+  LinearTransition,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -68,6 +70,14 @@ const CYAN = '#5FE6FF';
 
 /** A, B, C, D... */
 const letter = (index: number) => String.fromCharCode(65 + index);
+
+/**
+ * Câu nào ĐÃ mở đáp án trên máy này (Tony 2/10). Giữ đáp án 10 s (K148) chỉ một lần cho mỗi câu:
+ *   - câu TRANH là đúng câu người chơi vừa xem ở ghế chỉ xem → không bắt đọc lại, đếm đủ giờ server;
+ *   - Eliminator gửi lại CÙNG câu (thời gian +5 s) → trước đây giữ thêm 10 s, đáp án biến mất ~10 s.
+ * Cấp module để sống qua lúc khung câu hỏi gỡ/dựng lại giữa ghế chỉ xem và câu tranh.
+ */
+const revealedQuestionIds = new Set<string>();
 
 const mmss = (seconds: number) => {
   const m = Math.floor(seconds / 60);
@@ -174,12 +184,22 @@ export function QuestionOverlay({
 }) {
   const t = useT();
 
+  /** Câu này còn phải giữ đáp án không - đã mở một lần trên máy này thì thôi (`revealedQuestionIds`). */
+  const mustHold = revealDelaySeconds > 0 && !revealedQuestionIds.has(question.Id);
   /* Đếm phần CÒN LẠI sau khi đã trừ khoảng giữ đáp án — xem `revealDelaySeconds`. */
-  const answerSeconds = Math.max(1, durationSeconds - revealDelaySeconds);
+  const answerSeconds = Math.max(1, durationSeconds - (mustHold ? revealDelaySeconds : 0));
   const [left, setLeft] = useState(answerSeconds);
   const [chosen, setChosen] = useState<string | null>(null);
   /** Đang giữ đáp án (K148): câu hỏi đã hiện, đáp án thì chưa. */
-  const [holding, setHolding] = useState(revealDelaySeconds > 0);
+  const [holding, setHolding] = useState(mustHold);
+  /**
+   * Chữ A/B/C theo lần hiện ĐẦU TIÊN của câu - Eliminator bỏ bớt đáp án thì những đáp án còn lại giữ
+   * nguyên chữ, không đổi tên dưới tay người đang chọn.
+   */
+  const letters = useRef<{ id: string; byAnswer: Map<string, string> }>({ id: '', byAnswer: new Map() });
+  if (letters.current.id !== question.Id) {
+    letters.current = { id: question.Id, byAnswer: new Map(question.Answers.map((a, i) => [a.Id, letter(i)])) };
+  }
   /* Đọc trong `setInterval` nên phải là ref, không thì phải dựng lại đồng hồ mỗi lần đổi. */
   const holdingRef = useRef(holding);
   holdingRef.current = holding;
@@ -200,12 +220,23 @@ export function QuestionOverlay({
   useEffect(() => {
     sent.current = false;
     setChosen(null);
-    setLeft(answerSeconds);
-    setHolding(revealDelaySeconds > 0);
-    if (revealDelaySeconds <= 0) return;
-    const reveal = setTimeout(() => setHolding(false), revealDelaySeconds * 1000);
+    const hold = revealDelaySeconds > 0 && !revealedQuestionIds.has(question.Id);
+    setLeft(Math.max(1, durationSeconds - (hold ? revealDelaySeconds : 0)));
+    setHolding(hold);
+    if (!hold) {
+      revealedQuestionIds.add(question.Id);
+      return;
+    }
+    const reveal = setTimeout(() => {
+      revealedQuestionIds.add(question.Id);
+      setHolding(false);
+    }, revealDelaySeconds * 1000);
     return () => clearTimeout(reveal);
-  }, [question.Id, answerSeconds, revealDelaySeconds]);
+    /*
+     * ⚠️ Phụ thuộc `durationSeconds`, KHÔNG phải `answerSeconds`: lúc mở đáp án `mustHold` thành false
+     * làm `answerSeconds` đổi - phụ thuộc vào nó là đồng hồ bị đặt lại về đầu.
+     */
+  }, [question.Id, durationSeconds, revealDelaySeconds]);
 
   useEffect(() => {
     const tick = setInterval(() => {
@@ -348,9 +379,13 @@ export function QuestionOverlay({
               const picked = chosen === answer.Id;
               const color = picked ? PICKED : ANSWER_COLOR;
 
+              /*
+               * Tony 2/10: Eliminator bỏ đáp án sai thì cho nó MỜ DẦN đi (`exiting`), những ô còn lại
+               * trượt lên (`layout`) - không để cả cột biến mất rồi hiện lại.
+               */
               return (
+                <Animated.View key={answer.Id} exiting={FadeOut.duration(450)} layout={LinearTransition.duration(300)}>
                 <Pressable
-                  key={answer.Id}
                   onPress={() => !sent.current && !frozen && setChosen(answer.Id)}
                   disabled={sent.current || frozen}
                   style={({ pressed }) => [
@@ -377,7 +412,9 @@ export function QuestionOverlay({
                   {picked ? <PickedPulse radius={10} /> : null}
 
                   <View style={[styles.optionBadge, { borderColor: color }]}>
-                    <Text style={[styles.optionBadgeText, { color }]}>{letter(i)}</Text>
+                    <Text style={[styles.optionBadgeText, { color }]}>
+                      {letters.current.byAnswer.get(answer.Id) ?? letter(i)}
+                    </Text>
                   </View>
 
                   {/*
@@ -392,6 +429,7 @@ export function QuestionOverlay({
                     {htmlToText(answer.Content)}
                   </Text>
                 </Pressable>
+                </Animated.View>
               );
             })}
           </View>

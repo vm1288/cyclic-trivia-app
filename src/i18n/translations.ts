@@ -174,7 +174,8 @@ export const en = {
 
   /* K118: TV = gương của màn hình phụ trên phone chủ phòng - chỉ hướng dẫn bật mirror. */
   'bigScreen.title': 'Go big!',
-  'bigScreen.tvCodeBody': 'Open Cyclic on your LG TV and type the 4-digit code shown on the TV:',
+  'bigScreen.tvUrlBody': "On your TV, open the web browser and go to:",
+  'bigScreen.tvCodeBody': 'Then type the 4-digit code shown on the TV:',
   'bigScreen.tvLink': 'LINK TV',
   'bigScreen.linkError': 'Wrong or expired code. Check the number on the TV and try again.',
   'bigScreen.tvLinked': 'TV linked ✓',
@@ -1019,7 +1020,8 @@ const vi: Record<TranslationKey, string> = {
   'waiting.subtitle': 'Bạn đã vào. Chủ phòng sẽ bắt đầu\nkhi mọi người đã có mặt.',
 
   'bigScreen.title': 'Chơi lớn!',
-  'bigScreen.tvCodeBody': 'Mở Cyclic trên TV LG rồi nhập mã 4 số hiện trên TV:',
+  'bigScreen.tvUrlBody': 'Trên TV, mở trình duyệt web và vào:',
+  'bigScreen.tvCodeBody': 'Rồi nhập mã 4 số hiện trên TV:',
   'bigScreen.tvLink': 'NỐI TV',
   'bigScreen.linkError': 'Mã sai hoặc đã hết hạn. Xem lại số trên TV rồi thử lại.',
   'bigScreen.tvLinked': 'Đã nối TV ✓',

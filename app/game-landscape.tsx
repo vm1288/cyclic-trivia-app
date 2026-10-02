@@ -614,6 +614,17 @@ export default function GameLandscapeScreen() {
   /** Thử thách hiện tại - nhánh xử lý gói (ngoài vòng render) đọc để không phát lại tiếng (bên dưới). */
   const challengeRef = useRef(challenge);
   challengeRef.current = challenge;
+  /*
+   * Đã phát tiếng hiện đề cho thử thách này chưa. `challengeRef` chỉ cập nhật sau lần vẽ kế tiếp, mà
+   * hai gói đề (gương + gói 42) có thể tới trong CÙNG một nhịp - đo trên A17 2/10: kêu hai lần cách 12 ms.
+   * Cờ này bật ngay lúc phát; tắt khi thử thách đóng (effect bên dưới).
+   */
+  const challengeSounded = useRef(false);
+  const playChallengeOnce = () => {
+    if (challengeRef.current || challengeSounded.current) return;
+    challengeSounded.current = true;
+    playSound('challenge');
+  };
   const challengeTickToken = useRef(0);
   /* Thử thách đóng (bỏ qua, có phán quyết, hết ván…) thì đồng hồ của nó cũng thôi. */
   useEffect(() => {
@@ -621,6 +632,7 @@ export default function GameLandscapeScreen() {
       challengeTickToken.current++;
       setChallengeTicking(false);
     }
+    if (!challenge) challengeSounded.current = false;
   }, [challenge]);
   const ticking = battleAsking || challengeTicking;
   useEffect(() => {
@@ -1390,6 +1402,8 @@ export default function GameLandscapeScreen() {
         switch (viewName) {
           /* Vào ô 10 giây: đề bài cho cả phòng (`TenSecondsChallenge.cshtml`) + vai của máy này. */
           case 'TenSecondsChallenge':
+            /* Tiếng hiện đề: đường nào tới trước thì phát (gói 42 hay gương này) - xem gói 42. */
+            playChallengeOnce();
             setChallenge({
               phase: 'assign',
               words: Array.isArray(model.Words) ? (model.Words as string[]) : [],
@@ -1538,10 +1552,12 @@ export default function GameLandscapeScreen() {
          * Tony 1/10 (lỗi tiếng 1): lúc HIỆN ĐỀ là tiếng `challenge`, KHÔNG phải tiếng súng - súng là
          * lúc trọng tài bấm Start (gói 30, như `handleTenSecondsChallenge` của web). Lệnh
          * `playAudioChallenge` của server chỉ tới máy chủ phòng, nên các máy khác tự phát ở đây.
-         * Đề ĐANG hiện thì thôi: máy nối lại (rớt mạng) được server phát lại gói này (`HostResume`),
-         * đo trên A17 2/10 - nghe lần hai là tưởng một thử thách mới.
+         * Phát khi một đề MỚI xuất hiện mà trước đó chưa có đề nào: đề tới bằng HAI đường (gương bàn cờ
+         * `TenSecondsChallenge` và gói này), đường nào trước thì kêu. Máy nối lại (rớt mạng) được server
+         * phát lại gói này (`HostResume`) - đề đang hiện nên không kêu lần hai. (Đo trên A17 2/10: chặn
+         * theo `phase === 'assign'` thì im luôn, vì gương thường tới TRƯỚC và đã đặt 'assign'.)
          */
-        if (challengeRef.current?.phase !== 'assign') playSound('challenge');
+        playChallengeOnce();
         const fromStart = {
           words: Array.isArray(packet.Words) ? (packet.Words as string[]) : [],
           isJudge: packet.IsJudge === true,
@@ -3578,7 +3594,7 @@ export default function GameLandscapeScreen() {
     return true;
   };
 
-  const useCardInQuestion = async (card: GameCard, secondsLeft: number) => {
+  const useCardInQuestion = async (card: GameCard) => {
     if (!canUseCardInQuestion(card)) return;
 
     /*
@@ -3608,9 +3624,14 @@ export default function GameLandscapeScreen() {
       setQuestion((prev) => (prev ? { ...prev, swapping: true } : prev));
       setTimeout(() => setQuestion((prev) => (prev?.swapping ? { ...prev, swapping: false } : prev)), 6000);
     }
+    /*
+     * ⚠️ Tính giây còn lại SAU khi xác nhận, không phải lúc chạm thẻ: server lấy số này +5 làm đồng hồ
+     * mới (Eliminator). Đo trên A17 2/10: chạm lúc còn 68, nghĩ 23 s ở hộp xác nhận rồi mới USE →
+     * server nhận 68 → đồng hồ nhảy 45 → 73 (cho không 23 s).
+     */
     void connection.current?.send(TYPE_ID.UseCardInQuestion, {
       selectedCardId: card.Id,
-      countdown: Math.max(0, Math.round(secondsLeft)),
+      countdown: Math.max(0, Math.round(secondsLeftNow())),
     });
   };
 
@@ -4178,7 +4199,14 @@ export default function GameLandscapeScreen() {
                  * `turn` là câu thường. Ghế chỉ xem (`readOnly`) cũng giữ, để màn của người xem
                  * không hiện đáp án trước màn của người đang trả lời.
                  */
-                revealDelaySeconds={question.kind === 'turn' ? QUESTION_REVEAL_SECONDS : 0}
+                /*
+                 * Chỉ câu của CHÍNH người tới lượt (`isQuestionOwner`) và ghế chỉ xem câu đó (`readOnly`).
+                 * Câu TRANH (người khác trả lời sau khi người chính sai) KHÔNG giữ: đo trên A17 2/10, bot
+                 * trả lời sai sau 3 s là câu tranh bị giữ thêm 10 s, thấy 20 s thay vì 30 (Tony: phải 30).
+                 */
+                revealDelaySeconds={
+                  question.kind === 'turn' && (question.isQuestionOwner || question.readOnly) ? QUESTION_REVEAL_SECONDS : 0
+                }
               />
             ) : null}
 
@@ -4596,7 +4624,7 @@ export default function GameLandscapeScreen() {
                         active={st.active}
                         onPress={
                           st.usable && card
-                            ? () => void useCardInQuestion(card, secondsLeftNow())
+                            ? () => void useCardInQuestion(card)
                             : undefined
                         }
                         compact

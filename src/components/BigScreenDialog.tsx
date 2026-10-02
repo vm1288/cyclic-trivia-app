@@ -2,7 +2,15 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { NeonSheet, SheetButton } from './NeonSheet';
+import { API_BASE_URL } from '../api/config';
 import { useT } from '../i18n/I18nProvider';
+
+/**
+ * Địa chỉ trang TV, lấy từ chính server app đang nối (Tony 2/10: "trên popup cần hiện link url để
+ * player biết và nhập trên TV"). Bỏ `https://` - gõ trên điều khiển TV thì càng ngắn càng tốt, trình
+ * duyệt TV tự thêm.
+ */
+const TV_URL = `${API_BASE_URL.replace(/\/+$/, '')}/tv/`.replace(/^https?:\/\//, '');
 
 /**
  * "Go big!" (K107 → K118 → K120, Tony 2026-09-20) - nút "Play on the Big screen" ở phòng chờ.
@@ -57,6 +65,10 @@ export function BigScreenDialog({
         </View>
       ) : (
         <>
+          <Text style={styles.body}>{t('bigScreen.tvUrlBody')}</Text>
+          <Text style={styles.url} selectable>
+            {TV_URL}
+          </Text>
           <Text style={styles.body}>{t('bigScreen.tvCodeBody')}</Text>
           <View style={styles.codeRow}>
             <TextInput
@@ -89,6 +101,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontWeight: '500', color: '#FFFFFF', textAlign: 'center' },
   body: { fontSize: 13.5, lineHeight: 18, color: '#FFFFFF', textAlign: 'center' },
   warn: { fontSize: 13, lineHeight: 18, color: '#FF7A88', textAlign: 'center' },
+  url: { fontSize: 17, fontWeight: '800', color: '#5FE6FF', textAlign: 'center', letterSpacing: 0.3 },
   codeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
   codeInput: {
     width: 130,
